@@ -26,6 +26,9 @@
 
 - Follow test-driven development (TDD): write a focused failing Vitest unit test first, implement the smallest behavior that passes it, then refactor while the test suite stays green.
 - Use Vitest for all unit tests. Add focused tests for rules and deterministic replay behavior whenever core behavior changes.
+- Do not use magic numbers. Give every non-obvious numeric value a domain-specific named constant or place it in scenario, theme, or configuration data.
+- Keep production files to 1000 lines or fewer and `*.test.ts` files to 1500 lines or fewer. Split by responsibility before a file reaches its limit.
+- Keep functions within 75 non-blank lines and a cognitive-complexity score of 15 or less; extract intent-revealing helpers rather than adding deeply nested branching.
 - Test AI action legality and deterministic simulations. Run `npm run simulate` when simulation behavior changes.
 - Run applicable type, formatting, lint, and test commands before handoff.
 - Do not overwrite or revert unrelated user changes.

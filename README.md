@@ -26,6 +26,10 @@ The project will be initialized with `npm create vite@latest ai-war-game -- --te
 
 Development follows test-driven development (TDD). Each rule, action, AI decision rule, and replay behavior starts with a focused failing Vitest unit test; implementation makes it pass, followed by safe refactoring. Vitest is the project's unit-testing tool.
 
+## Code quality limits
+
+Biome rejects magic numbers, production files over 1000 lines, and test files over 1500 lines. Functions are limited to 75 non-blank lines and a cognitive-complexity score of 15. Name numeric values in configuration, scenario data, UI themes, or local domain constants.
+
 ## Architecture at a glance
 
 ```text
