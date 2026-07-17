@@ -1,0 +1,31 @@
+# AI War Game Contributor Guide
+
+## Core rules
+
+- Keep `src/core` and `src/ai` deterministic, headless-capable, and independent of Phaser and `src/game`.
+- Route every human and AI order through the same public `GameAction` API, `validateAction`, and `applyAction` path. Agents must not mutate `GameState` directly.
+- Keep match state in `GameState`; keep selection, hover, animation, and input-lock state inside Phaser scenes or controllers.
+- Preserve replayability: seeded simulations with the same scenario and action sequence must produce the same result.
+
+## Canvas-only presentation
+
+- Phaser is responsible for rendering, input, scenes, cameras, Canvas UI, effects, audio, and animation only.
+- Do not add React, Vue, Svelte, DOM overlays, DOM controls, CSS layout for game UI, or a global UI-state library.
+- The HTML shell contains only `<div id="game"></div>`.
+- Keep UI theme values centralized. Use integer coordinates, `pixelArt`, `roundPixels`, and nearest-neighbour scaling.
+- HUD objects use `setScrollFactor(0)` and must consume pointer input so a HUD click cannot also select a board cell.
+
+## Assets
+
+- Inspect existing project assets before requesting new art. `grass.png` at the repository root is not a runtime asset or approved visual reference.
+- Request user-generated assets only when the current implementation stage needs them; use the request template in `docs/assets.md`.
+- Register paths and frame metadata only in the central asset manifest. `BootScene` loads assets from that manifest.
+- Never use unlicensed web assets, Base64-embedded images, emoji, or programmatic geometry as final artwork. Diagnostic placeholders must be explicit, debug-only, and excluded from production.
+
+## Quality checks
+
+- Follow test-driven development (TDD): write a focused failing Vitest unit test first, implement the smallest behavior that passes it, then refactor while the test suite stays green.
+- Use Vitest for all unit tests. Add focused tests for rules and deterministic replay behavior whenever core behavior changes.
+- Test AI action legality and deterministic simulations. Run `npm run simulate` when simulation behavior changes.
+- Run applicable type, formatting, lint, and test commands before handoff.
+- Do not overwrite or revert unrelated user changes.

@@ -1,0 +1,83 @@
+# Architecture
+
+## Dependency boundaries
+
+`src/core` owns game rules and state. `src/ai` owns decisions and simulations. `src/game` owns Phaser scenes, rendering, Canvas UI, input, cameras, animation, sound, and effects.
+
+Allowed dependencies are `game -> core`, `game -> ai`, and `ai -> core`. Neither `core` nor `ai` may import Phaser or anything from `game`.
+
+```text
+Phaser Canvas input
+  -> BattleInputController creates GameAction
+  -> validateAction(state, action)
+  -> applyAction(state, action)
+  -> next GameState and action events
+  -> BattleScene.renderGameState(previousState, nextState)
+```
+
+The AI submits the same `GameAction` values through the same validation and application functions. No caller may edit match state directly.
+
+## Core contracts
+
+```ts
+interface GameState {
+  scenarioId: string;
+  turn: number;
+  activeSide: SideId;
+  units: Record<string, UnitState>;
+  controlPoints: Record<string, ControlPointState>;
+  winner: SideId | null;
+}
+
+type GameAction = MoveAction | AttackAction | CaptureAction | WaitAction | EndTurnAction;
+
+function validateAction(state: GameState, action: GameAction): ValidationResult;
+function applyAction(state: GameState, action: GameAction): ApplyActionResult;
+```
+
+`applyAction` returns a new state and ordered domain events for the renderer, replay recorder, and event log. It must not depend on time, random global state, or Phaser objects.
+
+Agents receive a state snapshot and return an action candidate:
+
+```ts
+interface Agent {
+  readonly id: string;
+  chooseAction(state: GameState): GameAction;
+}
+```
+
+Randomness is injected through a seeded source stored in scenario or simulation configuration. A replay records scenario identity, seed, and accepted actions; replaying them must reproduce the final state.
+
+Display models cross into Phaser as plain data only:
+
+```ts
+interface SelectedUnitViewModel {
+  name: string;
+  health: number;
+  maxHealth: number;
+  movementPoints: number;
+  attackRange: string;
+  hasActed: boolean;
+}
+```
+
+## Phaser structure
+
+- `BootScene` loads manifest-defined assets, fonts, audio, and temporary diagnostic textures, then opens the menu.
+- `MainMenuScene` renders the title, scenario and AI selection, and the start button in Canvas.
+- `BattleScene` owns `GameState`, selected unit ID, legal action previews, input lock, world rendering, Canvas HUD, and action animation.
+- `ResultScene` renders match outcome, turn count, summary statistics, replay, and menu controls in Canvas.
+
+`BattleScene` keeps separate `worldContainer` and `hudContainer` containers. World objects move with the map camera. HUD objects call `setScrollFactor(0)` and do not move or zoom with the board. The first version uses one bounded world camera; a separate UI camera is allowed only if needed later.
+
+`renderGameState(previousState, nextState)` incrementally reconciles unit views by ID, terrain/control-point views, HUD data, event log entries, and legal-action indicators. It must not recreate the entire scene after each action.
+
+## Canvas UI contracts
+
+`Button` supports normal, hover, pressed, and disabled states; pointer handling; label changes; and destruction. `Panel` supports background, border, title, padding, children, resize, visibility, and destruction. `ProgressBar` represents bounded numeric progress. `ScrollableList` is a bounded event log showing the last 6–10 events in v1; full scrolling is out of scope.
+
+All UI values come from one `UiTheme`. UI components never hold or mutate core entities: they receive view data and emit callbacks that create actions.
+
+## Testing boundary
+
+Use Vitest for unit tests and follow TDD: write a failing behavior-level test, implement the minimum code needed to pass it, then refactor with the suite green. Core and AI tests run without Phaser. Phaser tests focus on input-to-action wiring and presentation contracts, while rules correctness remains covered at the core boundary.
