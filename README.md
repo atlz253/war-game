@@ -20,7 +20,7 @@ npm run simulate
 npm run build
 ```
 
-The project will be initialized with `npm create vite@latest ai-war-game -- --template vanilla-ts`, then Phaser, Vitest, and Biome will be configured. `npm run simulate` will run a graphics-free match once the core and AI phases are available.
+`npm run simulate` runs a deterministic graphics-free match between two Heuristic agents and prints its outcome as JSON.
 
 ## Testing approach
 

@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 
+import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
+import { BATTLE_SCENE_KEY } from "./scene-keys";
 
 const MENU_CENTER_X = 480;
 const MENU_PANEL_CENTER_Y = 270;
@@ -14,6 +16,7 @@ const MENU_START_BUTTON_WIDTH = 280;
 const MENU_START_BUTTON_HEIGHT = 44;
 const CENTER_ORIGIN = 0.5;
 const TOP_ORIGIN = 0;
+const HALF_DIMENSION = 2;
 
 export class MainMenuScene extends Phaser.Scene {
   public constructor() {
@@ -49,30 +52,20 @@ export class MainMenuScene extends Phaser.Scene {
       .setOrigin(CENTER_ORIGIN)
       .setScrollFactor(0);
 
-    this.add
-      .rectangle(
-        centerX,
-        MENU_START_BUTTON_Y,
-        MENU_START_BUTTON_WIDTH,
-        MENU_START_BUTTON_HEIGHT,
-        colors.panelBorder,
-      )
-      .setScrollFactor(0);
-
-    this.add
-      .text(centerX, MENU_START_BUTTON_Y, "START MATCH", {
-        color: colors.mutedText,
-        fontFamily: font.family,
-        fontSize: `${font.normalSize}px`,
-      })
-      .setOrigin(CENTER_ORIGIN)
-      .setScrollFactor(0);
+    new Button(this, {
+      x: centerX,
+      y: MENU_START_BUTTON_Y,
+      width: MENU_START_BUTTON_WIDTH,
+      height: MENU_START_BUTTON_HEIGHT,
+      label: "START MATCH",
+      onClick: () => this.scene.start(BATTLE_SCENE_KEY),
+    });
 
     this.add
       .text(
         centerX,
         MENU_START_BUTTON_Y + MENU_START_BUTTON_HEIGHT + spacing.sm,
-        "Battle implementation follows in the next phase.",
+        "Click Start Match to command the Blue army.",
         {
           color: colors.mutedText,
           fontFamily: font.family,
@@ -81,5 +74,20 @@ export class MainMenuScene extends Phaser.Scene {
       )
       .setOrigin(CENTER_ORIGIN, TOP_ORIGIN)
       .setScrollFactor(0);
+
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+      if (isInsideStartButton(pointer.x, pointer.y)) {
+        this.scene.start(BATTLE_SCENE_KEY);
+      }
+    });
   }
+}
+
+function isInsideStartButton(x: number, y: number): boolean {
+  return (
+    x >= MENU_CENTER_X - MENU_START_BUTTON_WIDTH / HALF_DIMENSION &&
+    x <= MENU_CENTER_X + MENU_START_BUTTON_WIDTH / HALF_DIMENSION &&
+    y >= MENU_START_BUTTON_Y - MENU_START_BUTTON_HEIGHT / HALF_DIMENSION &&
+    y <= MENU_START_BUTTON_Y + MENU_START_BUTTON_HEIGHT / HALF_DIMENSION
+  );
 }
