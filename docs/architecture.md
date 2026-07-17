@@ -33,9 +33,15 @@ type GameAction = MoveAction | AttackAction | CaptureAction | WaitAction | EndTu
 
 function validateAction(state: GameState, action: GameAction): ValidationResult;
 function applyAction(state: GameState, action: GameAction): ApplyActionResult;
+
+interface ApplyActionResult {
+  accepted: boolean;
+  state: GameState;
+  events: GameEvent[];
+}
 ```
 
-`applyAction` returns a new state and ordered domain events for the renderer, replay recorder, and event log. It must not depend on time, random global state, or Phaser objects.
+`ValidationResult` is a discriminated valid/invalid result with a stable reason code. `applyAction` returns a new state and ordered domain events for accepted actions; rejected actions return the exact input state with no events. It must not depend on time, random global state, or Phaser objects.
 
 Agents receive a state snapshot and return an action candidate:
 

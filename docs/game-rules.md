@@ -17,11 +17,10 @@ Each side begins with the following units. Values are scenario configuration dat
 
 Sides alternate turns. During its turn, a side may issue legal orders to its units in any order and then submit `EndTurnAction`.
 
-A unit may spend movement points to move through legal cells, then take one main action: attack, capture, or wait. A unit that has taken its main action cannot take another main action until its side's next turn. Movement, range, occupancy, ownership, and action availability are validated by `validateAction`.
+A unit may spend movement points to move through legal cells, then take one main action: attack, capture, or wait. A unit that has taken its main action cannot move or take another main action until its side's next turn. Movement uses all eight neighbouring cells; every step costs one movement point. A diagonal step cannot pass between two occupied or impassable orthogonal cells. Attack range uses adjacent cells in all eight directions. Movement, range, occupancy, ownership, and action availability are validated by `validateAction`.
 
 Terrain and control-point modifiers must be expressed as scenario data when introduced. The initial balance does not hardwire terrain combat or movement effects.
 
 ## Events and visibility
 
 Accepted actions emit ordered domain events, such as movement, attack, damage, capture, destruction, turn end, and victory. The Canvas event log displays human-readable versions of the most recent events. The renderer may animate an event, but an animation never changes rules state.
-
