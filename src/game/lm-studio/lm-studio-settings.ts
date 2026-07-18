@@ -1,11 +1,21 @@
 import type { LmStudioConnection } from "../../ai/lm-studio/lm-studio-client";
+import type { SideId } from "../../core/model/game-state";
 
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
 
-export type LmStudioSettings = LmStudioConnection;
+export interface LmStudioSettings {
+  readonly baseUrl: string;
+  readonly blueModelId: string;
+  readonly redModelId: string;
+}
+
+interface LegacyLmStudioSettings {
+  readonly baseUrl: string;
+  readonly modelId: string;
+}
 
 const STORAGE_KEY = "ai-war-game.lm-studio-settings.v1";
 const DEFAULT_BASE_URL = "/lm-studio-api/v1";
@@ -38,30 +48,68 @@ export class BrowserLmStudioSettings {
 }
 
 export function createDefaultLmStudioSettings(): LmStudioSettings {
-  return { baseUrl: DEFAULT_BASE_URL, modelId: EMPTY_MODEL_ID };
+  return {
+    baseUrl: DEFAULT_BASE_URL,
+    blueModelId: EMPTY_MODEL_ID,
+    redModelId: EMPTY_MODEL_ID,
+  };
 }
 
-export function isLmStudioSettingsReady(settings: LmStudioSettings): boolean {
-  return settings.baseUrl.trim().length > 0 && settings.modelId.trim().length > 0;
+export function isLmStudioSideReady(settings: LmStudioSettings, side: SideId): boolean {
+  return settings.baseUrl.trim().length > 0 && getModelId(settings, side).trim().length > 0;
+}
+
+export function createLmStudioConnection(
+  settings: LmStudioSettings,
+  side: SideId,
+): LmStudioConnection {
+  return { baseUrl: settings.baseUrl, modelId: getModelId(settings, side) };
 }
 
 export function getBrowserLmStudioSettings(): BrowserLmStudioSettings {
   return new BrowserLmStudioSettings(window.localStorage);
 }
 
-function isLmStudioSettings(value: unknown): value is LmStudioSettings {
+function isLmStudioSettings(value: unknown): value is LmStudioSettings | LegacyLmStudioSettings {
   return (
     typeof value === "object" &&
     value !== null &&
     "baseUrl" in value &&
-    "modelId" in value &&
     typeof value.baseUrl === "string" &&
-    typeof value.modelId === "string"
+    (("blueModelId" in value &&
+      "redModelId" in value &&
+      typeof value.blueModelId === "string" &&
+      typeof value.redModelId === "string") ||
+      ("modelId" in value && typeof value.modelId === "string"))
   );
 }
 
-function migrateLmStudioSettings(settings: LmStudioSettings): LmStudioSettings {
-  return settings.baseUrl === LEGACY_DIRECT_LOCAL_BASE_URL
-    ? { ...settings, baseUrl: DEFAULT_BASE_URL }
-    : settings;
+function migrateLmStudioSettings(
+  settings: LmStudioSettings | LegacyLmStudioSettings,
+): LmStudioSettings {
+  const baseUrl =
+    settings.baseUrl === LEGACY_DIRECT_LOCAL_BASE_URL ? DEFAULT_BASE_URL : settings.baseUrl;
+  if (isLegacyLmStudioSettings(settings)) {
+    return {
+      baseUrl,
+      blueModelId: settings.modelId,
+      redModelId: settings.modelId,
+    };
+  }
+
+  return {
+    baseUrl,
+    blueModelId: settings.blueModelId,
+    redModelId: settings.redModelId,
+  };
+}
+
+function isLegacyLmStudioSettings(
+  settings: LmStudioSettings | LegacyLmStudioSettings,
+): settings is LegacyLmStudioSettings {
+  return "modelId" in settings;
+}
+
+function getModelId(settings: LmStudioSettings, side: SideId): string {
+  return side === "blue" ? settings.blueModelId : settings.redModelId;
 }

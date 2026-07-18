@@ -3,15 +3,13 @@ import Phaser from "phaser";
 import type { MapDefinition } from "../../core/maps/map-definition";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
-import {
-  getBrowserLmStudioSettings,
-  isLmStudioSettingsReady,
-} from "../lm-studio/lm-studio-settings";
+import { getBrowserLmStudioSettings, isLmStudioSideReady } from "../lm-studio/lm-studio-settings";
 import { getBrowserMapLibrary } from "../maps/map-library";
 import {
   createDefaultMatchConfiguration,
   getParticipantLabel,
   toggleParticipant,
+  withLmStudioSettings,
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -24,8 +22,9 @@ const MENU_PANEL_HEIGHT = 1900;
 const MENU_PANEL_BORDER_WIDTH = 8;
 const MENU_TITLE_Y = 560;
 const SIDE_LABEL_X = 1280;
-const BLUE_SIDE_Y = 920;
-const RED_SIDE_Y = 1120;
+const BLUE_SIDE_Y = 820;
+const RED_SIDE_Y = 1040;
+const MODEL_LABEL_TOP_OFFSET = 88;
 const ROLE_BUTTON_X = 2580;
 const ROLE_BUTTON_WIDTH = 920;
 const ROLE_BUTTON_HEIGHT = 128;
@@ -58,6 +57,8 @@ export class MainMenuScene extends Phaser.Scene {
   private selectedMapId: string | null = null;
   private blueRoleButton!: Button;
   private redRoleButton!: Button;
+  private blueModelText!: Phaser.GameObjects.Text;
+  private redModelText!: Phaser.GameObjects.Text;
   private selectedMapText!: Phaser.GameObjects.Text;
   private startButton!: Button;
   private instructionsText!: Phaser.GameObjects.Text;
@@ -67,7 +68,11 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   public create(data: MainMenuSceneData = {}): void {
-    this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
+    const settings = this.lmStudioSettings.load();
+    this.matchConfiguration = withLmStudioSettings(
+      data.matchConfiguration ?? createDefaultMatchConfiguration(settings),
+      settings,
+    );
     const children = [
       ...this.createStaticElements(),
       ...this.createRoleControls(),
@@ -81,6 +86,7 @@ export class MainMenuScene extends Phaser.Scene {
       .setOrigin(0);
     this.presentationContainer = this.add.container(0, 0, children);
     this.refreshSelectedMapText();
+    this.refreshParticipantControls();
     this.refreshLaunchAvailability();
     this.updatePresentationViewport();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
@@ -116,7 +122,14 @@ export class MainMenuScene extends Phaser.Scene {
   private createRoleControls(): Phaser.GameObjects.GameObject[] {
     this.blueRoleButton = this.createRoleButton(BLUE_SIDE_Y, "blue");
     this.redRoleButton = this.createRoleButton(RED_SIDE_Y, "red");
-    return [this.blueRoleButton.container, this.redRoleButton.container];
+    this.blueModelText = this.createModelText(BLUE_SIDE_Y);
+    this.redModelText = this.createModelText(RED_SIDE_Y);
+    return [
+      this.blueRoleButton.container,
+      this.redRoleButton.container,
+      this.blueModelText,
+      this.redModelText,
+    ];
   }
 
   private createMapControls(): Phaser.GameObjects.GameObject[] {
@@ -201,6 +214,16 @@ export class MainMenuScene extends Phaser.Scene {
     });
   }
 
+  private createModelText(y: number): Phaser.GameObjects.Text {
+    return this.add
+      .text(ROLE_BUTTON_X, y + MODEL_LABEL_TOP_OFFSET, "", {
+        color: uiTheme.colors.mutedText,
+        fontFamily: uiTheme.font.family,
+        fontSize: `${uiTheme.font.smallSize}px`,
+      })
+      .setOrigin(CENTER_ORIGIN);
+  }
+
   private createMapButton(x: number, label: string, direction: number): Button {
     return new Button(this, {
       x,
@@ -224,6 +247,10 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private startMatch(): void {
+    this.matchConfiguration = withLmStudioSettings(
+      this.matchConfiguration,
+      this.lmStudioSettings.load(),
+    );
     if (this.isLmStudioConfigurationMissing()) {
       this.refreshLaunchAvailability();
       return;
@@ -250,9 +277,22 @@ export class MainMenuScene extends Phaser.Scene {
 
   private toggleRole(side: "blue" | "red"): void {
     this.matchConfiguration = toggleParticipant(this.matchConfiguration, side);
+    this.refreshParticipantControls();
+    this.refreshLaunchAvailability();
+  }
+
+  private refreshParticipantControls(): void {
     this.blueRoleButton.setLabel(getParticipantLabel(this.matchConfiguration.blue));
     this.redRoleButton.setLabel(getParticipantLabel(this.matchConfiguration.red));
-    this.refreshLaunchAvailability();
+    this.refreshModelText("blue", this.blueModelText);
+    this.refreshModelText("red", this.redModelText);
+  }
+
+  private refreshModelText(side: "blue" | "red", text: Phaser.GameObjects.Text): void {
+    const usesLmStudio = this.matchConfiguration[side] === "lm-studio-ai";
+    const modelId = this.matchConfiguration.lmStudioConnections[side].modelId;
+
+    text.setVisible(usesLmStudio).setText(`MODEL: ${modelId || "<not selected>"}`);
   }
 
   private changeSelectedMap(direction: number): void {
@@ -287,11 +327,12 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private isLmStudioConfigurationMissing(): boolean {
-    const usesLmStudio =
-      this.matchConfiguration.blue === "lm-studio-ai" ||
-      this.matchConfiguration.red === "lm-studio-ai";
+    const settings = this.lmStudioSettings.load();
 
-    return usesLmStudio && !isLmStudioSettingsReady(this.lmStudioSettings.load());
+    return (
+      (this.matchConfiguration.blue === "lm-studio-ai" && !isLmStudioSideReady(settings, "blue")) ||
+      (this.matchConfiguration.red === "lm-studio-ai" && !isLmStudioSideReady(settings, "red"))
+    );
   }
 
   private unbindPresentationResize(): void {

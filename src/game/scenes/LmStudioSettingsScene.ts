@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 
 import { LmStudioClient } from "../../ai/lm-studio/lm-studio-client";
+import type { SideId } from "../../core/model/game-state";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
 import { getBrowserLmStudioSettings, type LmStudioSettings } from "../lm-studio/lm-studio-settings";
@@ -16,29 +17,30 @@ const PANEL_WIDTH = 2800;
 const PANEL_HEIGHT = 1760;
 const CONTENT_LEFT_INSET = 160;
 const TITLE_TOP_OFFSET = 180;
-const BASE_URL_TOP_OFFSET = 460;
-const MODEL_TOP_OFFSET = 720;
-const STATUS_TOP_OFFSET = 1120;
-const BUTTON_TOP_OFFSET = 1420;
+const BASE_URL_TOP_OFFSET = 420;
+const BLUE_MODEL_TOP_OFFSET = 700;
+const RED_MODEL_TOP_OFFSET = 980;
+const STATUS_TOP_OFFSET = 1300;
+const BUTTON_TOP_OFFSET = 1500;
 const FIRST_BUTTON_LEFT_OFFSET = 240;
-const MODEL_SELECTOR_TOP_OFFSET = 180;
-const FIELD_WIDTH = 1800;
+const FIELD_WIDTH = 1568;
 const FIELD_HEIGHT = 112;
 const CONTENT_X = PANEL_X + CONTENT_LEFT_INSET;
 const TITLE_Y = PANEL_Y + TITLE_TOP_OFFSET;
 const FIELD_X = CONTENT_X;
 const BASE_URL_Y = PANEL_Y + BASE_URL_TOP_OFFSET;
-const MODEL_Y = PANEL_Y + MODEL_TOP_OFFSET;
+const BLUE_MODEL_Y = PANEL_Y + BLUE_MODEL_TOP_OFFSET;
+const RED_MODEL_Y = PANEL_Y + RED_MODEL_TOP_OFFSET;
 const STATUS_Y = PANEL_Y + STATUS_TOP_OFFSET;
 const BUTTON_Y = PANEL_Y + BUTTON_TOP_OFFSET;
 const BUTTON_SPACING = 540;
 const FIRST_BUTTON_X = CONTENT_X + FIRST_BUTTON_LEFT_OFFSET;
 const BUTTON_WIDTH = 480;
 const BUTTON_HEIGHT = 104;
-const SMALL_BUTTON_Y = MODEL_Y + MODEL_SELECTOR_TOP_OFFSET;
 const SMALL_BUTTON_WIDTH = 256;
-const PREVIOUS_MODEL_X = CONTENT_X + CONTENT_LEFT_INSET;
-const NEXT_MODEL_X = CONTENT_X + BUTTON_WIDTH;
+const MODEL_SELECTOR_GAP = 96;
+const PREVIOUS_MODEL_X = FIELD_X + FIELD_WIDTH + MODEL_SELECTOR_GAP;
+const NEXT_MODEL_X = PREVIOUS_MODEL_X + SMALL_BUTTON_WIDTH + uiTheme.spacing.md;
 const FIELD_BORDER_WIDTH = 8;
 const TOP_LEFT_ORIGIN = 0;
 const MAX_INPUT_LENGTH = 160;
@@ -46,8 +48,8 @@ const BACKSPACE_KEY = "Backspace";
 const ENTER_KEY = "Enter";
 const ESCAPE_KEY = "Escape";
 
-type EditingField = "base-url" | "model-id" | null;
-const DEFAULT_EDITING_FIELD: Exclude<EditingField, null> = "model-id";
+type EditingField = "base-url" | "blue-model-id" | "red-model-id" | null;
+const DEFAULT_EDITING_FIELD: Exclude<EditingField, null> = "blue-model-id";
 
 export class LmStudioSettingsScene extends Phaser.Scene {
   private readonly settingsStore = getBrowserLmStudioSettings();
@@ -56,7 +58,8 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   private presentationContainer!: Phaser.GameObjects.Container;
   private safeAreaBackground!: Phaser.GameObjects.Rectangle;
   private baseUrlText!: Phaser.GameObjects.Text;
-  private modelText!: Phaser.GameObjects.Text;
+  private blueModelText!: Phaser.GameObjects.Text;
+  private redModelText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private modelIds: readonly string[] = [];
   private editingField: EditingField = null;
@@ -97,11 +100,22 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       BASE_URL_Y - uiTheme.spacing.md,
       "SERVER BASE URL",
     );
-    const modelLabel = this.createText(CONTENT_X, MODEL_Y - uiTheme.spacing.md, "MODEL ID");
+    const blueModelLabel = this.createText(
+      CONTENT_X,
+      BLUE_MODEL_Y - uiTheme.spacing.md,
+      "BLUE MODEL ID",
+    );
+    const redModelLabel = this.createText(
+      CONTENT_X,
+      RED_MODEL_Y - uiTheme.spacing.md,
+      "RED MODEL ID",
+    );
     const baseUrlField = this.createEditableField(BASE_URL_Y, "base-url");
-    const modelField = this.createEditableField(MODEL_Y, "model-id");
+    const blueModelField = this.createEditableField(BLUE_MODEL_Y, "blue-model-id");
+    const redModelField = this.createEditableField(RED_MODEL_Y, "red-model-id");
     this.baseUrlText = baseUrlField.text;
-    this.modelText = modelField.text;
+    this.blueModelText = blueModelField.text;
+    this.redModelText = redModelField.text;
     this.statusText = this.createText(
       CONTENT_X,
       STATUS_Y,
@@ -114,11 +128,14 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       panel.container,
       title,
       baseUrlLabel,
-      modelLabel,
+      blueModelLabel,
+      redModelLabel,
       baseUrlField.background,
       this.baseUrlText,
-      modelField.background,
-      this.modelText,
+      blueModelField.background,
+      this.blueModelText,
+      redModelField.background,
+      this.redModelText,
       this.statusText,
       ...buttons,
     ];
@@ -144,30 +161,35 @@ export class LmStudioSettingsScene extends Phaser.Scene {
         this.saveAndReturn();
       },
     );
-    const previousModelButton = this.createButton(
-      "<",
-      PREVIOUS_MODEL_X,
-      SMALL_BUTTON_Y,
-      () => {
-        this.changeModel(-1);
-      },
-      SMALL_BUTTON_WIDTH,
-    );
-    const nextModelButton = this.createButton(
-      ">",
-      NEXT_MODEL_X,
-      SMALL_BUTTON_Y,
-      () => this.changeModel(1),
-      SMALL_BUTTON_WIDTH,
-    );
+    const blueSelectors = this.createModelSelectors("blue", BLUE_MODEL_Y);
+    const redSelectors = this.createModelSelectors("red", RED_MODEL_Y);
 
     return [
       refreshButton.container,
       testButton.container,
       saveButton.container,
-      previousModelButton.container,
-      nextModelButton.container,
+      ...blueSelectors,
+      ...redSelectors,
     ];
+  }
+
+  private createModelSelectors(side: SideId, y: number): Phaser.GameObjects.GameObject[] {
+    const previousModelButton = this.createButton(
+      "<",
+      PREVIOUS_MODEL_X,
+      y,
+      () => this.changeModel(side, -1),
+      SMALL_BUTTON_WIDTH,
+    );
+    const nextModelButton = this.createButton(
+      ">",
+      NEXT_MODEL_X,
+      y,
+      () => this.changeModel(side, 1),
+      SMALL_BUTTON_WIDTH,
+    );
+
+    return [previousModelButton.container, nextModelButton.container];
   }
 
   private createEditableField(
@@ -209,9 +231,8 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     this.setStatus("Loading models from LM Studio...");
     try {
       this.modelIds = await this.client.listModels(this.settings.baseUrl);
-      if (this.modelIds.length > 0 && !this.modelIds.includes(this.settings.modelId)) {
-        this.settings = { ...this.settings, modelId: this.modelIds[0] ?? this.settings.modelId };
-      }
+      this.selectFirstAvailableModel("blue");
+      this.selectFirstAvailableModel("red");
       this.refreshFields();
       this.setStatus(this.modelIds.length > 0 ? "Models loaded." : "Server returned no models.");
     } catch {
@@ -229,17 +250,14 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     }
   }
 
-  private changeModel(direction: number): void {
+  private changeModel(side: SideId, direction: number): void {
     if (this.modelIds.length === 0) {
       this.setStatus("Refresh models first, or edit the model ID manually.");
       return;
     }
-    const selectedIndex = this.modelIds.indexOf(this.settings.modelId);
+    const selectedIndex = this.modelIds.indexOf(this.getModelId(side));
     const nextIndex = (selectedIndex + direction + this.modelIds.length) % this.modelIds.length;
-    this.settings = {
-      ...this.settings,
-      modelId: this.modelIds[nextIndex] ?? this.settings.modelId,
-    };
+    this.setModelId(side, this.modelIds[nextIndex] ?? this.getModelId(side));
     this.refreshFields();
   }
 
@@ -265,23 +283,47 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   }
 
   private currentEditingValue(): string {
-    return this.editingField === "base-url" ? this.settings.baseUrl : this.settings.modelId;
+    if (this.editingField === "base-url") return this.settings.baseUrl;
+    return this.editingField === "blue-model-id"
+      ? this.settings.blueModelId
+      : this.settings.redModelId;
   }
 
   private updateEditingValue(value: string): void {
-    this.settings =
-      this.editingField === "base-url"
-        ? { ...this.settings, baseUrl: value }
-        : { ...this.settings, modelId: value };
+    if (this.editingField === "base-url") {
+      this.settings = { ...this.settings, baseUrl: value };
+      return;
+    }
+    this.setModelId(this.editingField === "blue-model-id" ? "blue" : "red", value);
   }
 
   private refreshFields(): void {
     this.baseUrlText.setText(
       formatEditableText(this.settings.baseUrl, this.editingField === "base-url"),
     );
-    this.modelText.setText(
-      formatEditableText(this.settings.modelId, this.editingField === "model-id"),
+    this.blueModelText.setText(
+      formatEditableText(this.settings.blueModelId, this.editingField === "blue-model-id"),
     );
+    this.redModelText.setText(
+      formatEditableText(this.settings.redModelId, this.editingField === "red-model-id"),
+    );
+  }
+
+  private selectFirstAvailableModel(side: SideId): void {
+    if (this.modelIds.length > 0 && !this.modelIds.includes(this.getModelId(side))) {
+      this.setModelId(side, this.modelIds[0] ?? this.getModelId(side));
+    }
+  }
+
+  private getModelId(side: SideId): string {
+    return side === "blue" ? this.settings.blueModelId : this.settings.redModelId;
+  }
+
+  private setModelId(side: SideId, modelId: string): void {
+    this.settings =
+      side === "blue"
+        ? { ...this.settings, blueModelId: modelId }
+        : { ...this.settings, redModelId: modelId };
   }
 
   private setStatus(message: string): void {

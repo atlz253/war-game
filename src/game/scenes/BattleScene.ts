@@ -26,7 +26,6 @@ import {
 } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
-import { getBrowserLmStudioSettings } from "../lm-studio/lm-studio-settings";
 import { decideAiAction } from "../match/choose-ai-action";
 import {
   createAgentForParticipant,
@@ -137,7 +136,6 @@ export class BattleScene extends Phaser.Scene {
   private gameState!: GameState;
   private mapDefinition: MapDefinition | null = null;
   private matchConfiguration = createDefaultMatchConfiguration();
-  private readonly lmStudioSettings = getBrowserLmStudioSettings();
   private mapZoom = INITIAL_MAP_ZOOM;
   private targetMapZoom = INITIAL_MAP_ZOOM;
   private zoomAnchor: ZoomAnchor | null = null;
@@ -622,7 +620,10 @@ export class BattleScene extends Phaser.Scene {
   private async executeAiAction(): Promise<void> {
     const participant = this.matchConfiguration[this.gameState.activeSide];
     const fallbackAgent = new HeuristicAgent();
-    const agent = createAgentForParticipant(participant, this.lmStudioSettings.load());
+    const agent = createAgentForParticipant(
+      participant,
+      this.matchConfiguration.lmStudioConnections[this.gameState.activeSide],
+    );
     const context = { actionsThisTurn: this.aiTurnActions };
     const decision = agent
       ? await decideAiAction(this.gameState, context, agent, fallbackAgent)
@@ -638,7 +639,9 @@ export class BattleScene extends Phaser.Scene {
     this.recordTurnAction(decision.action);
     this.clearSelectionAfterTurnEnd(decision.action);
     if (decision.usedFallback && participant === "lm-studio-ai") {
-      this.eventLog.push("LM Studio unavailable — Heuristic AI order used.");
+      this.eventLog.push(
+        `${this.gameState.activeSide.toUpperCase()} LM Studio unavailable — Heuristic AI order used.`,
+      );
     }
     this.addEventMessages(result.events);
     this.renderGameState(previousState, this.gameState);

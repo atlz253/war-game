@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   BrowserLmStudioSettings,
   createDefaultLmStudioSettings,
-  isLmStudioSettingsReady,
+  createLmStudioConnection,
+  isLmStudioSideReady,
 } from "./lm-studio-settings";
 
 class MemoryStorage {
@@ -22,18 +23,44 @@ describe("LM Studio settings", () => {
   it("uses the local OpenAI-compatible endpoint by default", () => {
     expect(createDefaultLmStudioSettings()).toEqual({
       baseUrl: "/lm-studio-api/v1",
-      modelId: "",
+      blueModelId: "",
+      redModelId: "",
     });
   });
 
-  it("requires a selected model before an LM Studio match can start", () => {
-    expect(isLmStudioSettingsReady(createDefaultLmStudioSettings())).toBe(false);
-    expect(isLmStudioSettingsReady({ baseUrl: "/lm-studio-api/v1", modelId: "model" })).toBe(true);
+  it("requires a selected model only for the LM Studio-controlled side", () => {
+    const settings = { baseUrl: "/lm-studio-api/v1", blueModelId: "blue-model", redModelId: "" };
+
+    expect(isLmStudioSideReady(settings, "blue")).toBe(true);
+    expect(isLmStudioSideReady(settings, "red")).toBe(false);
+    expect(createLmStudioConnection(settings, "blue")).toEqual({
+      baseUrl: "/lm-studio-api/v1",
+      modelId: "blue-model",
+    });
   });
 
-  it("persists settings independently from map data", () => {
+  it("migrates the legacy single model to both competitors", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      "ai-war-game.lm-studio-settings.v1",
+      JSON.stringify({ baseUrl: "/lm-studio-api/v1", modelId: "model" }),
+    );
+    const settings = new BrowserLmStudioSettings(storage);
+
+    expect(settings.load()).toEqual({
+      baseUrl: "/lm-studio-api/v1",
+      blueModelId: "model",
+      redModelId: "model",
+    });
+  });
+
+  it("persists separate model selections independently from map data", () => {
     const settings = new BrowserLmStudioSettings(new MemoryStorage());
-    const saved = { baseUrl: "/lm-studio-api/v1", modelId: "model" };
+    const saved = {
+      baseUrl: "/lm-studio-api/v1",
+      blueModelId: "blue-model",
+      redModelId: "red-model",
+    };
 
     settings.save(saved);
 

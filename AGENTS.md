@@ -15,7 +15,7 @@
 - Do not add React, Vue, Svelte, DOM overlays, DOM controls, CSS layout for game UI, or a global UI-state library.
 - The HTML shell contains only `<div id="game"></div>`.
 - Map import and export may create a temporary native browser file picker or download link only after a Canvas-button click. These elements must be removed immediately and must never become visible game UI.
-- LM Studio configuration and all settings controls are Phaser Canvas scenes. Persist only the local endpoint and model ID in browser storage; never add a DOM settings form or a cloud-provider credential flow.
+- LM Studio configuration and all settings controls are Phaser Canvas scenes. Persist one local endpoint and independent Blue/Red model IDs in browser storage; snapshot both selections into a match before play. Never add a DOM settings form or a cloud-provider credential flow.
 - Keep UI theme values centralized. Use integer coordinates, `pixelArt`, `roundPixels`, and nearest-neighbour scaling.
 - HUD objects use `setScrollFactor(0)` and must consume pointer input so a HUD click cannot also select a board cell.
 

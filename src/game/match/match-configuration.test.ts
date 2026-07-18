@@ -6,28 +6,39 @@ import {
   getParticipantLabel,
   isHumanTurn,
   toggleParticipant,
+  withLmStudioSettings,
 } from "./match-configuration";
 
 describe("match configuration", () => {
   it("defaults to a human Blue commander and a Heuristic AI Red commander", () => {
-    expect(createDefaultMatchConfiguration()).toEqual({
+    expect(
+      createDefaultMatchConfiguration({
+        baseUrl: "/lm-studio-api/v1",
+        blueModelId: "blue-model",
+        redModelId: "red-model",
+      }),
+    ).toEqual({
       blue: "human",
       red: "heuristic-ai",
+      lmStudioConnections: {
+        blue: { baseUrl: "/lm-studio-api/v1", modelId: "blue-model" },
+        red: { baseUrl: "/lm-studio-api/v1", modelId: "red-model" },
+      },
     });
   });
 
   it("cycles either side through every available participant without changing its opponent", () => {
     const configuration = createDefaultMatchConfiguration();
 
-    expect(toggleParticipant(configuration, "blue")).toEqual({
+    expect(toggleParticipant(configuration, "blue")).toMatchObject({
       blue: "heuristic-ai",
       red: "heuristic-ai",
     });
-    expect(toggleParticipant(toggleParticipant(configuration, "blue"), "blue")).toEqual({
+    expect(toggleParticipant(toggleParticipant(configuration, "blue"), "blue")).toMatchObject({
       blue: "lm-studio-ai",
       red: "heuristic-ai",
     });
-    expect(toggleParticipant(configuration, "red")).toEqual({
+    expect(toggleParticipant(configuration, "red")).toMatchObject({
       blue: "human",
       red: "lm-studio-ai",
     });
@@ -55,5 +66,16 @@ describe("match configuration", () => {
     expect(getParticipantLabel("human")).toBe("HUMAN");
     expect(getParticipantLabel("heuristic-ai")).toBe("HEURISTIC AI");
     expect(getParticipantLabel("lm-studio-ai")).toBe("LM STUDIO AI");
+  });
+
+  it("snapshots a separate LM Studio model for each side", () => {
+    const configuration = withLmStudioSettings(createDefaultMatchConfiguration(), {
+      baseUrl: "/lm-studio-api/v1",
+      blueModelId: "blue-model",
+      redModelId: "red-model",
+    });
+
+    expect(configuration.lmStudioConnections.blue.modelId).toBe("blue-model");
+    expect(configuration.lmStudioConnections.red.modelId).toBe("red-model");
   });
 });
