@@ -2,7 +2,7 @@
 
 ## 1. Initialization
 
-Create a vanilla TypeScript Vite app with npm. Add Phaser, Vitest, and Biome; configure Vitest as the unit-testing tool and establish the TDD red-green-refactor workflow. Configure the 960×540 fixed internal Canvas with `Phaser.Scale.FIT`, `CENTER_BOTH`, `pixelArt`, and `roundPixels`. Add `BootScene` and `MainMenuScene`; retain only `#game` in HTML.
+Create a vanilla TypeScript Vite app with npm. Add Phaser, Vitest, and Biome; configure Vitest as the unit-testing tool and establish the TDD red-green-refactor workflow. Configure the 3840×2160 fixed internal Canvas with `Phaser.Scale.FIT`, `CENTER_BOTH`, `pixelArt`, and `roundPixels`. Add `BootScene` and `MainMenuScene`; retain only `#game` in HTML.
 
 ## 2. Deterministic core
 

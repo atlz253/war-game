@@ -10,6 +10,7 @@ import {
   BOARD_WIDTH,
   createSkirmishGameState,
 } from "../../core/scenarios/skirmish-12x8";
+import { assetManifest } from "../assets/asset-manifest";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
@@ -17,39 +18,39 @@ import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
 import { RESULT_SCENE_KEY } from "./scene-keys";
 
-const TILE_SIZE = 32;
-const BOARD_ORIGIN_X = 32;
-const BOARD_ORIGIN_Y = 120;
+const TILE_SIZE = 512;
+const BOARD_ORIGIN_X = 0;
+const BOARD_ORIGIN_Y = 56;
 const TILE_CENTER = TILE_SIZE / 2;
-const BOARD_BORDER_WIDTH = 1;
-const HUD_X = 456;
-const HUD_WIDTH = 472;
-const TOP_PANEL_Y = 24;
-const TOP_PANEL_HEIGHT = 76;
-const SELECTED_PANEL_Y = 116;
-const SELECTED_PANEL_HEIGHT = 132;
-const LOG_PANEL_Y = 264;
-const LOG_PANEL_HEIGHT = 240;
+const BOARD_BORDER_WIDTH = 8;
+const HUD_X = 3104;
+const HUD_WIDTH = 704;
+const TOP_PANEL_Y = 56;
+const TOP_PANEL_HEIGHT = 300;
+const SELECTED_PANEL_Y = 388;
+const SELECTED_PANEL_HEIGHT = 480;
+const LOG_PANEL_Y = 900;
+const LOG_PANEL_HEIGHT = 1204;
 const PANEL_CONTENT_X = HUD_X + uiTheme.spacing.md;
-const TOP_TEXT_OFFSET = 38;
+const TOP_TEXT_OFFSET = 128;
 const TOP_TEXT_Y = TOP_PANEL_Y + TOP_TEXT_OFFSET;
-const SELECTED_TEXT_OFFSET = 38;
+const SELECTED_TEXT_OFFSET = 128;
 const SELECTED_TEXT_Y = SELECTED_PANEL_Y + SELECTED_TEXT_OFFSET;
-const SELECTED_HEALTH_BAR_OFFSET = 76;
+const SELECTED_HEALTH_BAR_OFFSET = 264;
 const SELECTED_HEALTH_BAR_Y = SELECTED_PANEL_Y + SELECTED_HEALTH_BAR_OFFSET;
-const SELECTED_HEALTH_BAR_WIDTH = 180;
-const SELECTED_HEALTH_BAR_HEIGHT = 12;
-const LOG_TEXT_OFFSET = 36;
+const SELECTED_HEALTH_BAR_WIDTH = 256;
+const SELECTED_HEALTH_BAR_HEIGHT = 32;
+const LOG_TEXT_OFFSET = 128;
 const LOG_TEXT_Y = LOG_PANEL_Y + LOG_TEXT_OFFSET;
-const END_BUTTON_X = 848;
-const END_BUTTON_Y = 61;
-const WAIT_BUTTON_X = 736;
-const WAIT_BUTTON_Y = 61;
-const BUTTON_WIDTH = 96;
-const BUTTON_HEIGHT = 32;
+const END_BUTTON_X = 3652;
+const END_BUTTON_Y = 292;
+const WAIT_BUTTON_X = 3392;
+const WAIT_BUTTON_Y = 292;
+const BUTTON_WIDTH = 224;
+const BUTTON_HEIGHT = 96;
 const EVENT_LOG_ENTRIES = 10;
-const AI_ACTION_DELAY = 350;
-const CAMERA_SCROLL_SPEED = 300;
+const AI_ACTION_DELAY = 500;
+const CAMERA_SCROLL_SPEED = 900;
 const MILLISECONDS_PER_SECOND = 1000;
 const WHEEL_ZOOM_STEP = 0.001;
 const MIN_ZOOM = 1;
@@ -81,6 +82,8 @@ export class BattleScene extends Phaser.Scene {
   private endTurnButton!: Button;
   private selectionView: Phaser.GameObjects.Rectangle | null = null;
   private diagnosticUnitLayer: Phaser.GameObjects.Graphics | null = null;
+  private readonly unitViews = new Map<string, Phaser.GameObjects.Image>();
+  private readonly controlPointViews = new Map<string, Phaser.GameObjects.Image>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
 
@@ -89,6 +92,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   public create(): void {
+    this.resetRenderingState();
     this.gameState = createSkirmishGameState();
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
@@ -97,6 +101,13 @@ export class BattleScene extends Phaser.Scene {
     this.createHud();
     this.bindInput();
     this.renderGameState(null, this.gameState);
+  }
+
+  private resetRenderingState(): void {
+    this.unitViews.clear();
+    this.controlPointViews.clear();
+    this.selectionView = null;
+    this.diagnosticUnitLayer = null;
   }
 
   public update(_time: number, delta: number): void {
@@ -142,6 +153,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createWorld(): void {
+    if (this.hasLoadedAssets()) {
+      this.createAssetWorld();
+      return;
+    }
+
     if (!DIAGNOSTIC_MODE) {
       return;
     }
@@ -168,6 +184,18 @@ export class BattleScene extends Phaser.Scene {
     this.diagnosticUnitLayer = this.add.graphics();
     this.uiCamera.ignore(this.diagnosticUnitLayer);
     this.drawDiagnosticUnitMarkers(this.gameState);
+  }
+
+  private createAssetWorld(): void {
+    for (let y = 0; y < BOARD_HEIGHT; y += 1) {
+      for (let x = 0; x < BOARD_WIDTH; x += 1) {
+        const point = this.toScreenPosition({ x, y });
+        const tile = this.add.image(point.x, point.y, assetManifest.terrain.plain.textureKey);
+        this.uiCamera.ignore(tile);
+      }
+    }
+
+    this.updateControlPointViews(this.gameState);
   }
 
   private addDiagnosticTile(x: number, y: number): void {
@@ -412,12 +440,65 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateUnitViews(_previousState: GameState | null, nextState: GameState): void {
+    if (this.hasLoadedAssets()) {
+      this.updateAssetUnitViews(nextState);
+      this.updateControlPointViews(nextState);
+      this.updateSelectionView(nextState);
+      return;
+    }
+
     if (!DIAGNOSTIC_MODE) {
       return;
     }
 
     this.drawDiagnosticUnitMarkers(nextState);
     this.updateSelectionView(nextState);
+  }
+
+  private updateAssetUnitViews(state: GameState): void {
+    const remainingUnitIds = new Set(Object.keys(state.units));
+
+    for (const [unitId, view] of this.unitViews) {
+      if (!remainingUnitIds.has(unitId)) {
+        view.destroy();
+        this.unitViews.delete(unitId);
+      }
+    }
+
+    for (const unit of Object.values(state.units)) {
+      const point = this.toScreenPosition(unit.position);
+      const existingView = this.unitViews.get(unit.id);
+
+      if (existingView) {
+        existingView.setPosition(point.x, point.y);
+        continue;
+      }
+
+      const view = this.add.image(point.x, point.y, getUnitTextureKey(unit));
+      this.uiCamera.ignore(view);
+      this.unitViews.set(unit.id, view);
+    }
+  }
+
+  private updateControlPointViews(state: GameState): void {
+    for (const controlPoint of Object.values(state.controlPoints)) {
+      const point = this.toScreenPosition(controlPoint.position);
+      const textureKey = getControlPointTextureKey(controlPoint.owner);
+      const existingView = this.controlPointViews.get(controlPoint.id);
+
+      if (existingView) {
+        existingView.setTexture(textureKey).setPosition(point.x, point.y);
+        continue;
+      }
+
+      const view = this.add.image(point.x, point.y, textureKey);
+      this.uiCamera.ignore(view);
+      this.controlPointViews.set(controlPoint.id, view);
+    }
+  }
+
+  private hasLoadedAssets(): boolean {
+    return this.textures.exists(assetManifest.terrain.plain.textureKey);
   }
 
   private drawDiagnosticUnitMarkers(state: GameState): void {
@@ -552,4 +633,14 @@ function isInsideButton(pointer: Phaser.Input.Pointer, centerX: number, centerY:
     pointer.y >= centerY - halfHeight &&
     pointer.y <= centerY + halfHeight
   );
+}
+
+function getUnitTextureKey(unit: UnitState): string {
+  return assetManifest.units[`${unit.side}-${unit.type}`]?.textureKey ?? "";
+}
+
+function getControlPointTextureKey(owner: "blue" | "red" | null): string {
+  const controlPointKey = `control-point-${owner ?? "neutral"}`;
+
+  return assetManifest.terrain[controlPointKey]?.textureKey ?? "";
 }

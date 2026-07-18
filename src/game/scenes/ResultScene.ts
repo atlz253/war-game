@@ -11,17 +11,17 @@ interface ResultSceneData {
   readonly turn: number;
 }
 
-const CENTER_X = 480;
-const CENTER_Y = 270;
-const PANEL_WIDTH = 420;
-const PANEL_HEIGHT = 260;
-const TITLE_Y = 185;
-const STATS_Y = 250;
-const BUTTON_Y = 330;
-const REPLAY_BUTTON_X = 380;
-const MENU_BUTTON_X = 580;
-const BUTTON_WIDTH = 160;
-const BUTTON_HEIGHT = 40;
+const CENTER_X = 1920;
+const CENTER_Y = 1080;
+const PANEL_WIDTH = 1680;
+const PANEL_HEIGHT = 1040;
+const TITLE_Y = 740;
+const STATS_Y = 1000;
+const BUTTON_Y = 1320;
+const REPLAY_BUTTON_X = 1520;
+const MENU_BUTTON_X = 2320;
+const BUTTON_WIDTH = 640;
+const BUTTON_HEIGHT = 160;
 const CENTER_ORIGIN = 0.5;
 const HALF_DIMENSION = 2;
 

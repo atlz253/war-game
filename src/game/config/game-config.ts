@@ -11,8 +11,8 @@ export interface CanvasGameConfig {
 }
 
 export const GAME_CANVAS_PARENT = "game";
-export const GAME_CANVAS_WIDTH = 960;
-export const GAME_CANVAS_HEIGHT = 540;
+export const GAME_CANVAS_WIDTH = 3840;
+export const GAME_CANVAS_HEIGHT = 2160;
 
 export function createGameConfig(): CanvasGameConfig {
   return {

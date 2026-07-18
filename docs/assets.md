@@ -49,7 +49,7 @@ Only the manifest contains runtime asset paths. `BootScene` loads textures from 
 
 ## Request assets incrementally
 
-First request terrain tiles: `plain.png`, `forest.png`, `road.png`, `water.png`, `mountain.png`, and neutral/blue/red control points in `public/assets/terrain/`. Each is a 32×32 transparent PNG where transparency is appropriate, strict top-down, cohesive with `docs/art-direction.md`, and seamless where tiling requires it.
+First request terrain tiles: `plain.png`, `forest.png`, `road.png`, `water.png`, `mountain.png`, and neutral/blue/red control points in `public/assets/terrain/`. Each is a native 512×512 PNG, strict top-down, cohesive with `docs/art-direction.md`, and seamless where tiling requires it. Runtime assets are not downscaled.
 
 Next request blue infantry and tank. Attempt a palette swap for Red only if it preserves material, skin, metal, and shadow colors; otherwise request separate Red variants. Request muzzle flash, explosion, hit, and destroyed-marker effects only after the playable core works.
 
@@ -81,6 +81,6 @@ Additional notes / reference images:
 
 After a file appears, check its expected path, supported PNG format, dimensions, alpha background where required, frame-grid divisibility, excess transparent margins, cell fit, manifest naming, and successful `BootScene` loading.
 
-`npm run assets:validate` will eventually check required files, dimensions, transparency, frame grids, and unexpected formats. `npm run assets:process` may crop transparent margins, center a sprite on 32×32, use nearest-neighbour resizing, convert to PNG, create palette variants, or build an atlas. It never deletes original source files.
+`npm run assets:validate` will eventually check required files, dimensions, transparency, frame grids, and unexpected formats. `npm run assets:process` may crop transparent margins, center a sprite on a 512×512 canvas, convert to PNG, create palette variants, or build an atlas. It never deletes original source files.
 
 If a mismatch is safe to correct without quality loss, create a processing step. Otherwise report it and request regeneration; do not silently alter tile sizes or compromise the art direction.

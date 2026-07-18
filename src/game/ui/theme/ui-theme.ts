@@ -11,15 +11,15 @@ export const uiTheme: UiTheme = {
     mutedText: "#b7c2c9",
   },
   spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
+    xs: 16,
+    sm: 32,
+    md: 64,
+    lg: 96,
   },
   font: {
     family: "monospace",
-    smallSize: 12,
-    normalSize: 16,
-    titleSize: 32,
+    smallSize: 32,
+    normalSize: 48,
+    titleSize: 96,
   },
 };

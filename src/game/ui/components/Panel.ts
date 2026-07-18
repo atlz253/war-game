@@ -11,7 +11,7 @@ export interface PanelOptions {
 }
 
 const TOP_LEFT_ORIGIN = 0;
-const BORDER_WIDTH = 2;
+const BORDER_WIDTH = 8;
 
 export class Panel {
   public readonly container: Phaser.GameObjects.Container;

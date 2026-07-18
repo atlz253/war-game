@@ -13,8 +13,8 @@ export interface ButtonOptions {
 }
 
 const CENTER_ORIGIN = 0.5;
-const BORDER_WIDTH = 2;
-const PRESSED_OFFSET = 1;
+const BORDER_WIDTH = 8;
+const PRESSED_OFFSET = 4;
 const ENABLED_ALPHA = 1;
 const DISABLED_ALPHA = 0.55;
 
