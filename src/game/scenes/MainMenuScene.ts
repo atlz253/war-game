@@ -34,6 +34,7 @@ const EDITOR_BUTTON_Y = 1580;
 const MENU_START_BUTTON_Y = 1800;
 const MENU_START_BUTTON_WIDTH = 1120;
 const MENU_START_BUTTON_HEIGHT = 176;
+const MENU_INSTRUCTIONS_Y = 1940;
 const CENTER_ORIGIN = 0.5;
 const TOP_ORIGIN = 0;
 
@@ -142,7 +143,7 @@ export class MainMenuScene extends Phaser.Scene {
     const instructions = this.add
       .text(
         MENU_CENTER_X,
-        MENU_START_BUTTON_Y + MENU_START_BUTTON_HEIGHT + uiTheme.spacing.sm,
+        MENU_INSTRUCTIONS_Y,
         "Choose commanders and a map, then start the match.",
         {
           color: uiTheme.colors.mutedText,
