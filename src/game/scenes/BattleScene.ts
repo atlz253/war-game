@@ -12,6 +12,7 @@ import {
 } from "../../core/scenarios/skirmish-12x8";
 import { assetManifest } from "../assets/asset-manifest";
 import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
@@ -50,6 +51,10 @@ const WAIT_BUTTON_X = 3392;
 const WAIT_BUTTON_Y = 292;
 const BUTTON_WIDTH = 224;
 const BUTTON_HEIGHT = 96;
+const CAPTURE_BUTTON_WIDTH = 448;
+const CAPTURE_BUTTON_OFFSET_Y = 388;
+const CAPTURE_BUTTON_X = HUD_X + HUD_WIDTH / 2;
+const CAPTURE_BUTTON_Y = SELECTED_PANEL_Y + CAPTURE_BUTTON_OFFSET_Y;
 const EVENT_LOG_ENTRIES = 10;
 const AI_ACTION_DELAY = 500;
 const CAMERA_SCROLL_SPEED = 900;
@@ -82,6 +87,7 @@ export class BattleScene extends Phaser.Scene {
   private eventLog!: ScrollableList;
   private waitButton!: Button;
   private endTurnButton!: Button;
+  private captureButton!: Button;
   private selectionView: Phaser.GameObjects.Rectangle | null = null;
   private diagnosticUnitLayer: Phaser.GameObjects.Graphics | null = null;
   private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
@@ -277,6 +283,14 @@ export class BattleScene extends Phaser.Scene {
       label: "END TURN",
       onClick: () => this.endPlayerTurn(),
     });
+    this.captureButton = new Button(this, {
+      x: CAPTURE_BUTTON_X,
+      y: CAPTURE_BUTTON_Y,
+      width: CAPTURE_BUTTON_WIDTH,
+      height: BUTTON_HEIGHT,
+      label: "CAPTURE POINT",
+      onClick: () => this.captureSelectedControlPoint(),
+    });
     this.hudContainer.add([
       turnPanel.container,
       selectedPanel.container,
@@ -287,6 +301,7 @@ export class BattleScene extends Phaser.Scene {
       this.eventLog.container,
       this.waitButton.container,
       this.endTurnButton.container,
+      this.captureButton.container,
     ]);
   }
 
@@ -332,13 +347,17 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleHudClick(pointer: Phaser.Input.Pointer): boolean {
-    if (isInsideButton(pointer, WAIT_BUTTON_X, WAIT_BUTTON_Y)) {
-      this.waitSelectedUnit();
-      return true;
-    }
-
-    if (isInsideButton(pointer, END_BUTTON_X, END_BUTTON_Y)) {
-      this.endPlayerTurn();
+    if (
+      isInsideRectangle(pointer, WAIT_BUTTON_X, WAIT_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT) ||
+      isInsideRectangle(pointer, END_BUTTON_X, END_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT) ||
+      isInsideRectangle(
+        pointer,
+        CAPTURE_BUTTON_X,
+        CAPTURE_BUTTON_Y,
+        CAPTURE_BUTTON_WIDTH,
+        BUTTON_HEIGHT,
+      )
+    ) {
       return true;
     }
 
@@ -378,25 +397,24 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const controlPoint = Object.values(this.gameState.controlPoints).find((point) =>
-      positionsEqual(point.position, position),
-    );
-
-    if (controlPoint) {
-      this.submitAction({
-        type: "capture",
-        unitId: this.selectedUnitId,
-        controlPointId: controlPoint.id,
-      });
-      return;
-    }
-
     this.submitAction({ type: "move", unitId: this.selectedUnitId, destination: position });
   }
 
   private waitSelectedUnit(): void {
     if (this.selectedUnitId) {
       this.submitAction({ type: "wait", unitId: this.selectedUnitId });
+    }
+  }
+
+  private captureSelectedControlPoint(): void {
+    const controlPointId = getCapturableControlPointId(
+      this.gameState,
+      this.selectedUnitId,
+      this.inputLocked,
+    );
+
+    if (this.selectedUnitId && controlPointId) {
+      this.submitAction({ type: "capture", unitId: this.selectedUnitId, controlPointId });
     }
   }
 
@@ -621,6 +639,9 @@ export class BattleScene extends Phaser.Scene {
       canIssueOrders && selectedUnit !== undefined && !selectedUnit.hasTakenMainAction,
     );
     this.endTurnButton.setEnabled(canIssueOrders);
+    this.captureButton.setEnabled(
+      getCapturableControlPointId(state, this.selectedUnitId, this.inputLocked) !== null,
+    );
   }
 
   private addEventMessages(events: readonly GameEvent[]): void {
@@ -689,9 +710,15 @@ function formatEvent(event: GameEvent): string {
   }
 }
 
-function isInsideButton(pointer: Phaser.Input.Pointer, centerX: number, centerY: number): boolean {
-  const halfWidth = BUTTON_WIDTH / 2;
-  const halfHeight = BUTTON_HEIGHT / 2;
+function isInsideRectangle(
+  pointer: Phaser.Input.Pointer,
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+): boolean {
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
 
   return (
     pointer.x >= centerX - halfWidth &&

@@ -118,6 +118,29 @@ describe("movement rules", () => {
   });
 });
 
+describe("control point movement", () => {
+  it("allows a unit to move onto a control point before capturing it", () => {
+    const state = createSkirmishGameState();
+    const controlPoint = state.controlPoints[CONTROL_POINT_ID];
+    const moveResult = applyAction(state, {
+      type: "move",
+      unitId: BLUE_INFANTRY_TWO_ID,
+      destination: controlPoint?.position,
+    });
+
+    const captureResult = applyAction(moveResult.state, {
+      type: "capture",
+      unitId: BLUE_INFANTRY_TWO_ID,
+      controlPointId: CONTROL_POINT_ID,
+    });
+
+    expect(moveResult.accepted).toBe(true);
+    expect(moveResult.state.units[BLUE_INFANTRY_TWO_ID]?.position).toEqual(controlPoint?.position);
+    expect(captureResult.accepted).toBe(true);
+    expect(captureResult.state.controlPoints[CONTROL_POINT_ID]?.owner).toBe("blue");
+  });
+});
+
 describe("main action rules", () => {
   it("accepts an adjacent diagonal attack and destroys the final enemy", () => {
     const state = createSkirmishGameState();
