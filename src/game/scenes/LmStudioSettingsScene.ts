@@ -1,10 +1,19 @@
 import Phaser from "phaser";
 
-import { LmStudioClient } from "../../ai/lm-studio/lm-studio-client";
+import {
+  DEFAULT_LM_STUDIO_REQUEST_TIMEOUT_MS,
+  LmStudioClient,
+} from "../../ai/lm-studio/lm-studio-client";
 import type { SideId } from "../../core/model/game-state";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
-import { getBrowserLmStudioSettings, type LmStudioSettings } from "../lm-studio/lm-studio-settings";
+import {
+  getBrowserLmStudioSettings,
+  isValidLmStudioTimeout,
+  type LmStudioSettings,
+  MAX_LM_STUDIO_TIMEOUT_MS,
+  MIN_LM_STUDIO_TIMEOUT_MS,
+} from "../lm-studio/lm-studio-settings";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -17,20 +26,23 @@ const PANEL_WIDTH = 2800;
 const PANEL_HEIGHT = 1760;
 const CONTENT_LEFT_INSET = 160;
 const TITLE_TOP_OFFSET = 180;
-const BASE_URL_TOP_OFFSET = 420;
-const BLUE_MODEL_TOP_OFFSET = 700;
-const RED_MODEL_TOP_OFFSET = 980;
-const STATUS_TOP_OFFSET = 1300;
+const BASE_URL_TOP_OFFSET = 360;
+const BLUE_MODEL_TOP_OFFSET = 600;
+const RED_MODEL_TOP_OFFSET = 840;
+const TIMEOUT_TOP_OFFSET = 1080;
+const STATUS_TOP_OFFSET = 1320;
 const BUTTON_TOP_OFFSET = 1500;
 const FIRST_BUTTON_LEFT_OFFSET = 240;
 const FIELD_WIDTH = 1568;
 const FIELD_HEIGHT = 112;
+const FIELD_CENTER_Y_OFFSET = FIELD_HEIGHT / 2;
 const CONTENT_X = PANEL_X + CONTENT_LEFT_INSET;
 const TITLE_Y = PANEL_Y + TITLE_TOP_OFFSET;
 const FIELD_X = CONTENT_X;
 const BASE_URL_Y = PANEL_Y + BASE_URL_TOP_OFFSET;
 const BLUE_MODEL_Y = PANEL_Y + BLUE_MODEL_TOP_OFFSET;
 const RED_MODEL_Y = PANEL_Y + RED_MODEL_TOP_OFFSET;
+const TIMEOUT_Y = PANEL_Y + TIMEOUT_TOP_OFFSET;
 const STATUS_Y = PANEL_Y + STATUS_TOP_OFFSET;
 const BUTTON_Y = PANEL_Y + BUTTON_TOP_OFFSET;
 const BUTTON_SPACING = 540;
@@ -38,17 +50,24 @@ const FIRST_BUTTON_X = CONTENT_X + FIRST_BUTTON_LEFT_OFFSET;
 const BUTTON_WIDTH = 480;
 const BUTTON_HEIGHT = 104;
 const SMALL_BUTTON_WIDTH = 256;
+const TIMEOUT_BUTTON_WIDTH = 544;
 const MODEL_SELECTOR_GAP = 96;
-const PREVIOUS_MODEL_X = FIELD_X + FIELD_WIDTH + MODEL_SELECTOR_GAP;
+const MODEL_SELECTOR_LEFT_X = FIELD_X + FIELD_WIDTH + MODEL_SELECTOR_GAP;
+const PREVIOUS_MODEL_X = MODEL_SELECTOR_LEFT_X + SMALL_BUTTON_WIDTH / 2;
 const NEXT_MODEL_X = PREVIOUS_MODEL_X + SMALL_BUTTON_WIDTH + uiTheme.spacing.md;
+const TIMEOUT_BUTTON_X = MODEL_SELECTOR_LEFT_X + TIMEOUT_BUTTON_WIDTH / 2;
 const FIELD_BORDER_WIDTH = 8;
 const TOP_LEFT_ORIGIN = 0;
 const MAX_INPUT_LENGTH = 160;
+const MAX_TIMEOUT_INPUT_LENGTH = 6;
 const BACKSPACE_KEY = "Backspace";
 const ENTER_KEY = "Enter";
 const ESCAPE_KEY = "Escape";
+const DISABLE_TIMEOUT_LABEL = "DISABLE TIMEOUT";
+const ENABLE_TIMEOUT_LABEL = "ENABLE TIMEOUT";
+const DISABLED_TIMEOUT_LABEL = "DISABLED";
 
-type EditingField = "base-url" | "blue-model-id" | "red-model-id" | null;
+type EditingField = "base-url" | "blue-model-id" | "red-model-id" | "timeout-ms" | null;
 const DEFAULT_EDITING_FIELD: Exclude<EditingField, null> = "blue-model-id";
 
 export class LmStudioSettingsScene extends Phaser.Scene {
@@ -60,9 +79,12 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   private baseUrlText!: Phaser.GameObjects.Text;
   private blueModelText!: Phaser.GameObjects.Text;
   private redModelText!: Phaser.GameObjects.Text;
+  private timeoutText!: Phaser.GameObjects.Text;
+  private timeoutToggleButton!: Button;
   private statusText!: Phaser.GameObjects.Text;
   private modelIds: readonly string[] = [];
   private editingField: EditingField = null;
+  private timeoutInput = "";
   private returnData: MainMenuSceneData = {};
   private readonly nativeKeyDownHandler = (event: KeyboardEvent): void => this.handleKeyDown(event);
 
@@ -73,6 +95,7 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   public create(data: MainMenuSceneData = {}): void {
     this.returnData = data;
     this.settings = this.settingsStore.load();
+    this.timeoutInput = formatTimeout(this.settings.requestTimeoutMs);
     this.editingField = DEFAULT_EDITING_FIELD;
     this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
     this.safeAreaBackground = this.add
@@ -110,12 +133,19 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       RED_MODEL_Y - uiTheme.spacing.md,
       "RED MODEL ID",
     );
+    const timeoutLabel = this.createText(
+      CONTENT_X,
+      TIMEOUT_Y - uiTheme.spacing.md,
+      "REQUEST TIMEOUT (MS)",
+    );
     const baseUrlField = this.createEditableField(BASE_URL_Y, "base-url");
     const blueModelField = this.createEditableField(BLUE_MODEL_Y, "blue-model-id");
     const redModelField = this.createEditableField(RED_MODEL_Y, "red-model-id");
+    const timeoutField = this.createEditableField(TIMEOUT_Y, "timeout-ms");
     this.baseUrlText = baseUrlField.text;
     this.blueModelText = blueModelField.text;
     this.redModelText = redModelField.text;
+    this.timeoutText = timeoutField.text;
     this.statusText = this.createText(
       CONTENT_X,
       STATUS_Y,
@@ -130,12 +160,15 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       baseUrlLabel,
       blueModelLabel,
       redModelLabel,
+      timeoutLabel,
       baseUrlField.background,
       this.baseUrlText,
       blueModelField.background,
       this.blueModelText,
       redModelField.background,
       this.redModelText,
+      timeoutField.background,
+      this.timeoutText,
       this.statusText,
       ...buttons,
     ];
@@ -163,6 +196,13 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     );
     const blueSelectors = this.createModelSelectors("blue", BLUE_MODEL_Y);
     const redSelectors = this.createModelSelectors("red", RED_MODEL_Y);
+    this.timeoutToggleButton = this.createButton(
+      this.settings.requestTimeoutMs === null ? ENABLE_TIMEOUT_LABEL : DISABLE_TIMEOUT_LABEL,
+      TIMEOUT_BUTTON_X,
+      TIMEOUT_Y + FIELD_CENTER_Y_OFFSET,
+      () => this.toggleTimeout(),
+      TIMEOUT_BUTTON_WIDTH,
+    );
 
     return [
       refreshButton.container,
@@ -170,6 +210,7 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       saveButton.container,
       ...blueSelectors,
       ...redSelectors,
+      this.timeoutToggleButton.container,
     ];
   }
 
@@ -177,14 +218,14 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     const previousModelButton = this.createButton(
       "<",
       PREVIOUS_MODEL_X,
-      y,
+      y + FIELD_CENTER_Y_OFFSET,
       () => this.changeModel(side, -1),
       SMALL_BUTTON_WIDTH,
     );
     const nextModelButton = this.createButton(
       ">",
       NEXT_MODEL_X,
-      y,
+      y + FIELD_CENTER_Y_OFFSET,
       () => this.changeModel(side, 1),
       SMALL_BUTTON_WIDTH,
     );
@@ -230,7 +271,10 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   private async refreshModels(): Promise<void> {
     this.setStatus("Loading models from LM Studio...");
     try {
-      this.modelIds = await this.client.listModels(this.settings.baseUrl);
+      this.modelIds = await this.client.listModels(
+        this.settings.baseUrl,
+        this.settings.requestTimeoutMs,
+      );
       this.selectFirstAvailableModel("blue");
       this.selectFirstAvailableModel("red");
       this.refreshFields();
@@ -243,7 +287,7 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   private async testConnection(): Promise<void> {
     this.setStatus("Testing LM Studio connection...");
     try {
-      await this.client.listModels(this.settings.baseUrl);
+      await this.client.listModels(this.settings.baseUrl, this.settings.requestTimeoutMs);
       this.setStatus("Connection succeeded. Save settings to use this server.");
     } catch {
       this.setStatus("Connection failed. Start LM Studio server and restart npm run dev.");
@@ -264,8 +308,10 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   private handleKeyDown(event: KeyboardEvent): void {
     if (!this.editingField) return;
     event.preventDefault();
-    if (event.key === ENTER_KEY || event.key === ESCAPE_KEY) {
-      this.editingField = null;
+    if (event.key === ENTER_KEY) {
+      this.finishEditing();
+    } else if (event.key === ESCAPE_KEY) {
+      this.cancelEditing();
     } else if (event.key === BACKSPACE_KEY) {
       this.updateEditingValue(this.currentEditingValue().slice(0, -1));
     } else if (isPrintableCharacter(event)) {
@@ -277,13 +323,19 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   }
 
   private startEditing(field: Exclude<EditingField, null>): void {
+    if (field === "timeout-ms" && this.settings.requestTimeoutMs === null) {
+      this.setStatus("Enable the timeout before editing its value.");
+      return;
+    }
     this.editingField = field;
+    if (field === "timeout-ms") this.timeoutInput = formatTimeout(this.settings.requestTimeoutMs);
     this.setStatus("Type text. ENTER confirms field.");
     this.refreshFields();
   }
 
   private currentEditingValue(): string {
     if (this.editingField === "base-url") return this.settings.baseUrl;
+    if (this.editingField === "timeout-ms") return this.timeoutInput;
     return this.editingField === "blue-model-id"
       ? this.settings.blueModelId
       : this.settings.redModelId;
@@ -292,6 +344,10 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   private updateEditingValue(value: string): void {
     if (this.editingField === "base-url") {
       this.settings = { ...this.settings, baseUrl: value };
+      return;
+    }
+    if (this.editingField === "timeout-ms") {
+      this.timeoutInput = value.replace(/\D/g, "").slice(0, MAX_TIMEOUT_INPUT_LENGTH);
       return;
     }
     this.setModelId(this.editingField === "blue-model-id" ? "blue" : "red", value);
@@ -306,6 +362,58 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     );
     this.redModelText.setText(
       formatEditableText(this.settings.redModelId, this.editingField === "red-model-id"),
+    );
+    const timeoutValue =
+      this.editingField === "timeout-ms"
+        ? this.timeoutInput
+        : formatTimeout(this.settings.requestTimeoutMs);
+    this.timeoutText.setText(formatEditableText(timeoutValue, this.editingField === "timeout-ms"));
+  }
+
+  private finishEditing(): void {
+    if (this.editingField === "timeout-ms" && !this.commitTimeout()) return;
+    this.editingField = null;
+  }
+
+  private cancelEditing(): void {
+    this.timeoutInput = formatTimeout(this.settings.requestTimeoutMs);
+    this.editingField = null;
+  }
+
+  private commitTimeout(): boolean {
+    const timeoutMs = Number(this.timeoutInput);
+
+    if (!isValidLmStudioTimeout(timeoutMs)) {
+      this.setStatus(`Timeout must be ${MIN_LM_STUDIO_TIMEOUT_MS}–${MAX_LM_STUDIO_TIMEOUT_MS} ms.`);
+      return false;
+    }
+
+    this.settings = { ...this.settings, requestTimeoutMs: timeoutMs };
+    this.timeoutInput = String(timeoutMs);
+    return true;
+  }
+
+  private toggleTimeout(): void {
+    this.editingField = null;
+    const enteredTimeoutMs = Number(this.timeoutInput);
+    this.settings = {
+      ...this.settings,
+      requestTimeoutMs:
+        this.settings.requestTimeoutMs === null
+          ? isValidLmStudioTimeout(enteredTimeoutMs)
+            ? enteredTimeoutMs
+            : DEFAULT_LM_STUDIO_REQUEST_TIMEOUT_MS
+          : null,
+    };
+    this.timeoutInput = formatTimeout(this.settings.requestTimeoutMs);
+    this.timeoutToggleButton.setLabel(
+      this.settings.requestTimeoutMs === null ? ENABLE_TIMEOUT_LABEL : DISABLE_TIMEOUT_LABEL,
+    );
+    this.refreshFields();
+    this.setStatus(
+      this.settings.requestTimeoutMs === null
+        ? "Timeout disabled. Requests may wait indefinitely."
+        : "Timeout enabled.",
     );
   }
 
@@ -331,6 +439,7 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   }
 
   private saveAndReturn(): void {
+    if (this.editingField === "timeout-ms" && !this.commitTimeout()) return;
     this.settingsStore.save(this.settings);
     this.scene.start(MAIN_MENU_SCENE_KEY, this.returnData);
   }
@@ -359,4 +468,8 @@ function isPrintableCharacter(event: KeyboardEvent): boolean {
 
 function formatEditableText(value: string, isEditing: boolean): string {
   return `${value || "<empty>"}${isEditing ? "_" : ""}`;
+}
+
+function formatTimeout(timeoutMs: number | null): string {
+  return timeoutMs === null ? DISABLED_TIMEOUT_LABEL : String(timeoutMs);
 }

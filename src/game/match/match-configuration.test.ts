@@ -9,6 +9,8 @@ import {
   withLmStudioSettings,
 } from "./match-configuration";
 
+const REQUEST_TIMEOUT_MS = 45_000;
+
 describe("match configuration", () => {
   it("defaults to a human Blue commander and a Heuristic AI Red commander", () => {
     expect(
@@ -16,13 +18,22 @@ describe("match configuration", () => {
         baseUrl: "/lm-studio-api/v1",
         blueModelId: "blue-model",
         redModelId: "red-model",
+        requestTimeoutMs: REQUEST_TIMEOUT_MS,
       }),
     ).toEqual({
       blue: "human",
       red: "heuristic-ai",
       lmStudioConnections: {
-        blue: { baseUrl: "/lm-studio-api/v1", modelId: "blue-model" },
-        red: { baseUrl: "/lm-studio-api/v1", modelId: "red-model" },
+        blue: {
+          baseUrl: "/lm-studio-api/v1",
+          modelId: "blue-model",
+          timeoutMs: REQUEST_TIMEOUT_MS,
+        },
+        red: {
+          baseUrl: "/lm-studio-api/v1",
+          modelId: "red-model",
+          timeoutMs: REQUEST_TIMEOUT_MS,
+        },
       },
     });
   });
@@ -73,9 +84,11 @@ describe("match configuration", () => {
       baseUrl: "/lm-studio-api/v1",
       blueModelId: "blue-model",
       redModelId: "red-model",
+      requestTimeoutMs: REQUEST_TIMEOUT_MS,
     });
 
     expect(configuration.lmStudioConnections.blue.modelId).toBe("blue-model");
     expect(configuration.lmStudioConnections.red.modelId).toBe("red-model");
+    expect(configuration.lmStudioConnections.blue.timeoutMs).toBe(REQUEST_TIMEOUT_MS);
   });
 });

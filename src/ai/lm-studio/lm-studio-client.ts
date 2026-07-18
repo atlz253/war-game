@@ -4,6 +4,7 @@ import type { GameState } from "../../core/model/game-state";
 export interface LmStudioConnection {
   readonly baseUrl: string;
   readonly modelId: string;
+  readonly timeoutMs?: number | null;
 }
 
 export interface LmStudioActionRequest extends LmStudioConnection {
@@ -33,7 +34,7 @@ const HTTP_METHOD_POST = "POST";
 const JSON_CONTENT_TYPE = "application/json";
 const TEMPERATURE = 0.2;
 const MAX_TOKENS = 64;
-export const DEFAULT_LM_STUDIO_REQUEST_TIMEOUT_MS = 15_000;
+export const DEFAULT_LM_STUDIO_REQUEST_TIMEOUT_MS = 60_000;
 const DECISION_SCHEMA_NAME = "ai_war_game_action";
 const SYSTEM_PROMPT =
   "You are a turn-based strategy opponent. Select exactly one actionId from legalActions. Return JSON only.";
@@ -44,9 +45,14 @@ export class LmStudioClient implements LmStudioDecisionClient {
     private readonly requestTimeoutMs = DEFAULT_LM_STUDIO_REQUEST_TIMEOUT_MS,
   ) {}
 
-  public async listModels(baseUrl: string): Promise<readonly string[]> {
+  public async listModels(
+    baseUrl: string,
+    timeoutMs: number | null = this.requestTimeoutMs,
+  ): Promise<readonly string[]> {
     const response = await this.fetchWithTimeout(
       `${normalizeLmStudioBaseUrl(baseUrl)}${MODELS_PATH}`,
+      undefined,
+      timeoutMs,
     );
     const body: unknown = await response.json();
 
@@ -61,6 +67,7 @@ export class LmStudioClient implements LmStudioDecisionClient {
     const response = await this.fetchWithTimeout(
       `${normalizeLmStudioBaseUrl(request.baseUrl)}${CHAT_COMPLETIONS_PATH}`,
       createChatRequest(request),
+      request.timeoutMs === undefined ? this.requestTimeoutMs : request.timeoutMs,
     );
     const body: unknown = await response.json();
 
@@ -71,9 +78,17 @@ export class LmStudioClient implements LmStudioDecisionClient {
     return readActionId(body);
   }
 
-  private async fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  private async fetchWithTimeout(
+    url: string,
+    init: RequestInit | undefined,
+    timeoutMs: number | null,
+  ): Promise<Response> {
+    if (timeoutMs === null) {
+      return this.fetcher(url, init);
+    }
+
     const controller = new AbortController();
-    const timeout = globalThis.setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       return await this.fetcher(url, { ...init, signal: controller.signal });

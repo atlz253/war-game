@@ -1,6 +1,7 @@
 import type { Agent } from "../../ai/agents/Agent";
 import { HeuristicAgent } from "../../ai/agents/HeuristicAgent";
 import { LmStudioAgent } from "../../ai/agents/LmStudioAgent";
+import type { LmStudioConnection } from "../../ai/lm-studio/lm-studio-client";
 import type { SideId } from "../../core/model/game-state";
 import {
   createDefaultLmStudioSettings,
@@ -16,7 +17,7 @@ export interface MatchConfiguration {
   readonly lmStudioConnections: Readonly<Record<SideId, LmStudioSettingsConnection>>;
 }
 
-type LmStudioSettingsConnection = Readonly<{ baseUrl: string; modelId: string }>;
+type LmStudioSettingsConnection = LmStudioConnection;
 
 const DEFAULT_MATCH_CONFIGURATION: MatchConfiguration = {
   blue: "human",

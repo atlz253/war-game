@@ -65,10 +65,10 @@ the shared action path. Network, JSON, timeout, and legality failures use `Heuri
 single decision. Remote inference is not deterministic; deterministic replays record its accepted
 actions and do not issue HTTP requests.
 
-The browser stores one local LM Studio endpoint and independent Blue/Red model IDs. Before a match,
-the menu copies them into side-specific connections in `MatchConfiguration`; `BattleScene` uses only
-that snapshot. Therefore a running match and `PLAY AGAIN` retain their competitors even if global
-settings are later changed.
+The browser stores one local LM Studio endpoint, an optional request timeout, and independent Blue/Red
+model IDs. Before a match, the menu copies them into side-specific connections in `MatchConfiguration`;
+`BattleScene` uses only that snapshot. Therefore a running match and `PLAY AGAIN` retain their
+competitors and timeout even if global settings are later changed.
 
 Display models cross into Phaser as plain data only:
 

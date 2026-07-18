@@ -28,12 +28,13 @@ Start the local server in LM Studio, then run the game with `npm run dev` and op
 in the Canvas menu. The default endpoint is `/lm-studio-api/v1`: Vite proxies it to
 `http://127.0.0.1:1234/v1`, avoiding browser CORS restrictions. Restart `npm run dev` after updating
 the project so the proxy is active. Refresh the model list or type a model ID manually, test the
-connection, then choose a separate Blue and Red model ID and save. Either commander can then use
+connection, set a request timeout between 1,000 and 300,000 ms (or disable it), then choose a separate Blue and Red model ID and save. Either commander can then use
 `LM STUDIO AI`, including an AI-versus-AI match with two different local models on the same server.
 
 The model receives one decision at a time, the latest game state, and orders already issued in its
 current turn. It can select only an offered legal action. If the local server, response, or action is
-invalid, the game visibly records a side-specific Heuristic AI fallback and continues. Match launch
+invalid, the game visibly records a side-specific Heuristic AI fallback and continues. The default
+timeout is 60 seconds to allow local models to load. Match launch
 snapshots both model selections, so `PLAY AGAIN` retains the same competitors. Replays record the
 accepted actions and never contact LM Studio.
 

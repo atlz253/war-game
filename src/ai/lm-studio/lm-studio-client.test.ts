@@ -6,6 +6,7 @@ import { LmStudioClient, normalizeLmStudioBaseUrl } from "./lm-studio-client";
 const MODEL_ID = "local-model";
 const ACTION_ID = "action-1";
 const DEFAULT_BASE_URL = "http://127.0.0.1:1234/v1";
+const REQUEST_TIMEOUT_MS = 45_000;
 
 describe("normalizeLmStudioBaseUrl", () => {
   it("normalizes a local server URL to the OpenAI-compatible v1 base", () => {
@@ -35,6 +36,7 @@ describe("LmStudioClient", () => {
       client.chooseActionId({
         baseUrl: DEFAULT_BASE_URL,
         modelId: MODEL_ID,
+        timeoutMs: REQUEST_TIMEOUT_MS,
         state,
         actionsThisTurn: [{ type: "wait", unitId: "blue-infantry-1" }],
         legalActions: [{ id: ACTION_ID, action: { type: "end-turn" } }],
@@ -60,6 +62,15 @@ describe("LmStudioClient", () => {
         legalActions: [{ id: ACTION_ID, action: { type: "end-turn" } }],
       }),
     ).rejects.toThrow("LM Studio response did not contain an action ID.");
+  });
+
+  it("does not attach an abort signal when the request timeout is disabled", async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: MODEL_ID }] }));
+    const client = new LmStudioClient(fetcher);
+
+    await client.listModels(DEFAULT_BASE_URL, null);
+
+    expect(fetcher).toHaveBeenCalledWith(`${DEFAULT_BASE_URL}/models`, undefined);
   });
 });
 
