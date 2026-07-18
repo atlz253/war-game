@@ -17,7 +17,12 @@ import {
   type PresentationViewport,
 } from "../config/presentation-layout";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
-import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import {
+  calculateAnchoredScroll,
+  calculateInertialZoom,
+  calculateNextZoom,
+  INITIAL_MAP_ZOOM,
+} from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
 import {
@@ -71,6 +76,7 @@ const EVENT_LOG_ENTRIES = 10;
 const AI_ACTION_DELAY = 500;
 const CAMERA_SCROLL_SPEED = 2400;
 const CAMERA_DECELERATION = 8;
+const ZOOM_RESPONSE_PER_SECOND = 8;
 const MILLISECONDS_PER_SECOND = 1000;
 const NO_UNIT_COUNT = 0;
 const DIAGNOSTIC_TILE_COLOR_A = 0x31513a;
@@ -101,6 +107,11 @@ interface UnitHealthView {
   readonly text: Phaser.GameObjects.Text;
 }
 
+interface ZoomAnchor {
+  readonly pointerX: number;
+  readonly pointerY: number;
+}
+
 export interface BattleSceneData {
   readonly matchConfiguration?: MatchConfiguration;
   readonly mapDefinition?: MapDefinition;
@@ -115,6 +126,8 @@ export class BattleScene extends Phaser.Scene {
   private mapDefinition: MapDefinition | null = null;
   private matchConfiguration = createDefaultMatchConfiguration();
   private mapZoom = INITIAL_MAP_ZOOM;
+  private targetMapZoom = INITIAL_MAP_ZOOM;
+  private zoomAnchor: ZoomAnchor | null = null;
   private cameraVelocity = { x: 0, y: 0 };
   private selectedUnitId: string | null = null;
   private inputLocked = false;
@@ -146,6 +159,7 @@ export class BattleScene extends Phaser.Scene {
       : createSkirmishGameState();
     this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     this.mapZoom = INITIAL_MAP_ZOOM;
+    this.targetMapZoom = INITIAL_MAP_ZOOM;
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
     this.configureCameras();
@@ -166,10 +180,12 @@ export class BattleScene extends Phaser.Scene {
     this.selectedUnitId = null;
     this.inputLocked = false;
     this.cameraVelocity = { x: 0, y: 0 };
+    this.zoomAnchor = null;
   }
 
   public update(_time: number, delta: number): void {
     this.updateKeyboardCamera(delta);
+    this.updateInertialZoom(delta);
   }
 
   private configureCameras(): void {
@@ -390,26 +406,46 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const camera = this.cameras.main;
-    const nextMapZoom = calculateNextZoom(this.mapZoom, wheelDeltaY);
+    const nextMapZoom = calculateNextZoom(this.targetMapZoom, wheelDeltaY);
 
-    if (nextMapZoom === this.mapZoom) {
+    if (nextMapZoom === this.targetMapZoom) {
       return;
     }
 
+    this.targetMapZoom = nextMapZoom;
+    this.zoomAnchor = {
+      pointerX: pointer.x - this.presentationViewport.x,
+      pointerY: pointer.y - this.presentationViewport.y,
+    };
+    this.stopCameraMotion();
+  }
+
+  private updateInertialZoom(delta: number): void {
+    if (!this.zoomAnchor || this.mapZoom === this.targetMapZoom) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const nextMapZoom = calculateInertialZoom({
+      currentZoom: this.mapZoom,
+      targetZoom: this.targetMapZoom,
+      deltaMs: delta,
+      responsePerSecond: ZOOM_RESPONSE_PER_SECOND,
+    });
     const nextZoom = nextMapZoom * this.presentationViewport.scale;
     const nextScroll = calculateAnchoredScroll({
       scrollX: camera.scrollX,
       scrollY: camera.scrollY,
-      pointerX: pointer.x - this.presentationViewport.x,
-      pointerY: pointer.y - this.presentationViewport.y,
+      pointerX: this.zoomAnchor.pointerX,
+      pointerY: this.zoomAnchor.pointerY,
       previousZoom: camera.zoom,
       nextZoom,
     });
+
     this.mapZoom = nextMapZoom;
     camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
-    this.stopCameraMotion();
     this.updateUnitHealthLabelScales(nextMapZoom);
+    if (this.mapZoom === this.targetMapZoom) this.zoomAnchor = null;
   }
 
   private updateKeyboardCamera(delta: number): void {

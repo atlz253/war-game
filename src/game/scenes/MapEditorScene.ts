@@ -15,7 +15,12 @@ import {
 } from "../config/presentation-layout";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateDraggedScroll } from "../input/camera-pan";
-import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import {
+  calculateAnchoredScroll,
+  calculateInertialZoom,
+  calculateNextZoom,
+  INITIAL_MAP_ZOOM,
+} from "../input/camera-zoom";
 import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
 import {
   applyEditorTool,
@@ -60,6 +65,7 @@ const MAP_NAME_SEPARATOR = " ";
 const INITIAL_MAP_NUMBER = 1;
 const CAMERA_SCROLL_SPEED = 2400;
 const CAMERA_DECELERATION = 8;
+const ZOOM_RESPONSE_PER_SECOND = 8;
 const MILLISECONDS_PER_SECOND = 1000;
 const BUTTON_ROW = {
   widthDecrease: 0,
@@ -107,6 +113,11 @@ interface CameraDrag {
   readonly scrollY: number;
 }
 
+interface ZoomAnchor {
+  readonly pointerX: number;
+  readonly pointerY: number;
+}
+
 export class MapEditorScene extends Phaser.Scene {
   private readonly library = getBrowserMapLibrary();
   private map!: MapDefinition;
@@ -116,6 +127,8 @@ export class MapEditorScene extends Phaser.Scene {
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private presentationViewport!: PresentationViewport;
   private mapZoom = INITIAL_MAP_ZOOM;
+  private targetMapZoom = INITIAL_MAP_ZOOM;
+  private zoomAnchor: ZoomAnchor | null = null;
   private cameraVelocity = { x: 0, y: 0 };
   private tool: EditorTool = { kind: "unit", side: "blue", unitType: "infantry" };
   private statusText!: Phaser.GameObjects.Text;
@@ -133,6 +146,9 @@ export class MapEditorScene extends Phaser.Scene {
   public create(data: MapEditorSceneData = {}): void {
     this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     this.map = this.loadMap(data.mapId);
+    this.mapZoom = INITIAL_MAP_ZOOM;
+    this.targetMapZoom = INITIAL_MAP_ZOOM;
+    this.zoomAnchor = null;
     this.renameDialog = null;
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
@@ -150,6 +166,7 @@ export class MapEditorScene extends Phaser.Scene {
     }
 
     this.updateKeyboardCamera(delta);
+    this.updateInertialZoom(delta);
   }
 
   private loadMap(mapId: string | undefined): MapDefinition {
@@ -336,21 +353,38 @@ export class MapEditorScene extends Phaser.Scene {
   private zoom(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
     if (this.renameDialog) return;
     if (!this.isMapPointer(pointer)) return;
-    const nextMapZoom = calculateNextZoom(this.mapZoom, wheelDeltaY);
-    if (nextMapZoom === this.mapZoom) return;
+    const nextMapZoom = calculateNextZoom(this.targetMapZoom, wheelDeltaY);
+    if (nextMapZoom === this.targetMapZoom) return;
+    this.targetMapZoom = nextMapZoom;
+    this.zoomAnchor = {
+      pointerX: pointer.x - this.presentationViewport.x,
+      pointerY: pointer.y - this.presentationViewport.y,
+    };
+    this.stopCameraMotion();
+  }
+
+  private updateInertialZoom(delta: number): void {
+    if (!this.zoomAnchor || this.mapZoom === this.targetMapZoom) return;
     const camera = this.cameras.main;
+    const nextMapZoom = calculateInertialZoom({
+      currentZoom: this.mapZoom,
+      targetZoom: this.targetMapZoom,
+      deltaMs: delta,
+      responsePerSecond: ZOOM_RESPONSE_PER_SECOND,
+    });
     const nextZoom = nextMapZoom * this.presentationViewport.scale;
     const scroll = calculateAnchoredScroll({
       scrollX: camera.scrollX,
       scrollY: camera.scrollY,
-      pointerX: pointer.x - this.presentationViewport.x,
-      pointerY: pointer.y - this.presentationViewport.y,
+      pointerX: this.zoomAnchor.pointerX,
+      pointerY: this.zoomAnchor.pointerY,
       previousZoom: camera.zoom,
       nextZoom,
     });
+
     this.mapZoom = nextMapZoom;
     camera.setZoom(nextZoom).setScroll(scroll.x, scroll.y);
-    this.stopCameraMotion();
+    if (this.mapZoom === this.targetMapZoom) this.zoomAnchor = null;
   }
 
   private updateKeyboardCamera(delta: number): void {
