@@ -11,6 +11,11 @@ import {
   createSkirmishGameState,
 } from "../../core/scenarios/skirmish-12x8";
 import { assetManifest } from "../assets/asset-manifest";
+import {
+  calculateUnitHealthLabelScale,
+  calculateUnitHealthLabelY,
+  formatUnitHealthLabel,
+} from "../board/unit-health-label";
 import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
@@ -71,7 +76,22 @@ const MOVEMENT_HIGHLIGHT_COLOR = 0x3dd6b1;
 const MOVEMENT_HIGHLIGHT_FILL_ALPHA = 0.28;
 const MOVEMENT_HIGHLIGHT_BORDER_ALPHA = 0.85;
 const MOVEMENT_HIGHLIGHT_BORDER_WIDTH = 8;
+const UNIT_HEALTH_LABEL_GAP = 24;
+const UNIT_HEALTH_LABEL_PADDING_X = 16;
+const UNIT_HEALTH_LABEL_PADDING_Y = 8;
+const UNIT_HEALTH_LABEL_BACKGROUND_COLOR = 0x101820;
+const UNIT_HEALTH_LABEL_BACKGROUND_ALPHA = 0.85;
+const UNIT_HEALTH_LABEL_BORDER_COLOR = 0xeaf4ff;
+const UNIT_HEALTH_LABEL_BORDER_WIDTH = 4;
+const CENTER_ORIGIN = 0.5;
+const DOUBLE_SIZE_MULTIPLIER = 2;
 const DIAGNOSTIC_MODE = import.meta.env.DEV;
+
+interface UnitHealthView {
+  readonly container: Phaser.GameObjects.Container;
+  readonly background: Phaser.GameObjects.Rectangle;
+  readonly text: Phaser.GameObjects.Text;
+}
 
 export class BattleScene extends Phaser.Scene {
   private worldContainer!: Phaser.GameObjects.Container;
@@ -92,6 +112,7 @@ export class BattleScene extends Phaser.Scene {
   private diagnosticUnitLayer: Phaser.GameObjects.Graphics | null = null;
   private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private readonly unitViews = new Map<string, Phaser.GameObjects.Image>();
+  private readonly unitHealthViews = new Map<string, UnitHealthView>();
   private readonly controlPointViews = new Map<string, Phaser.GameObjects.Image>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
@@ -114,6 +135,7 @@ export class BattleScene extends Phaser.Scene {
 
   private resetRenderingState(): void {
     this.unitViews.clear();
+    this.unitHealthViews.clear();
     this.controlPointViews.clear();
     this.selectionView = null;
     this.diagnosticUnitLayer = null;
@@ -344,6 +366,7 @@ export class BattleScene extends Phaser.Scene {
       nextZoom,
     });
     camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
+    this.updateUnitHealthLabelScales(nextZoom);
   }
 
   private handleHudClick(pointer: Phaser.Input.Pointer): boolean {
@@ -545,7 +568,9 @@ export class BattleScene extends Phaser.Scene {
     for (const [unitId, view] of this.unitViews) {
       if (!remainingUnitIds.has(unitId)) {
         view.destroy();
+        this.unitHealthViews.get(unitId)?.container.destroy();
         this.unitViews.delete(unitId);
+        this.unitHealthViews.delete(unitId);
       }
     }
 
@@ -555,13 +580,55 @@ export class BattleScene extends Phaser.Scene {
 
       if (existingView) {
         existingView.setPosition(point.x, point.y);
+        this.upsertUnitHealthView(unit, point);
         continue;
       }
 
       const view = this.add.image(point.x, point.y, getUnitTextureKey(unit));
       this.worldContainer.add(view);
       this.unitViews.set(unit.id, view);
+      this.upsertUnitHealthView(unit, point);
     }
+  }
+
+  private upsertUnitHealthView(unit: UnitState, point: Position): void {
+    const label = formatUnitHealthLabel(unit.health);
+    const labelY = calculateUnitHealthLabelY(point.y, TILE_SIZE, UNIT_HEALTH_LABEL_GAP);
+    const existingView = this.unitHealthViews.get(unit.id);
+
+    if (existingView) {
+      existingView.container.setPosition(point.x, labelY);
+      existingView.text.setText(label);
+      this.layoutUnitHealthView(existingView);
+      return;
+    }
+
+    const text = this.addText(0, 0, label).setOrigin(CENTER_ORIGIN);
+    const background = this.add
+      .rectangle(0, 0, 0, 0, UNIT_HEALTH_LABEL_BACKGROUND_COLOR, UNIT_HEALTH_LABEL_BACKGROUND_ALPHA)
+      .setStrokeStyle(UNIT_HEALTH_LABEL_BORDER_WIDTH, UNIT_HEALTH_LABEL_BORDER_COLOR);
+    const container = this.add.container(point.x, labelY, [background, text]);
+    const healthView = { container, background, text };
+
+    container.setScale(calculateUnitHealthLabelScale(this.cameras.main.zoom));
+    this.layoutUnitHealthView(healthView);
+    this.worldContainer.add(container);
+    this.unitHealthViews.set(unit.id, healthView);
+  }
+
+  private updateUnitHealthLabelScales(cameraZoom: number): void {
+    const labelScale = calculateUnitHealthLabelScale(cameraZoom);
+
+    for (const healthView of this.unitHealthViews.values()) {
+      healthView.container.setScale(labelScale);
+    }
+  }
+
+  private layoutUnitHealthView(healthView: UnitHealthView): void {
+    healthView.background.setSize(
+      healthView.text.width + UNIT_HEALTH_LABEL_PADDING_X * DOUBLE_SIZE_MULTIPLIER,
+      healthView.text.height + UNIT_HEALTH_LABEL_PADDING_Y * DOUBLE_SIZE_MULTIPLIER,
+    );
   }
 
   private updateControlPointViews(state: GameState): void {
