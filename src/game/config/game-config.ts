@@ -4,15 +4,16 @@ export interface CanvasGameConfig {
   height: number;
   pixelArt: boolean;
   roundPixels: boolean;
+  backgroundColor: number;
   scale: {
-    mode: "FIT";
-    autoCenter: "CENTER_BOTH";
+    mode: "RESIZE";
   };
 }
 
 export const GAME_CANVAS_PARENT = "game";
 export const GAME_CANVAS_WIDTH = 3840;
 export const GAME_CANVAS_HEIGHT = 2160;
+export const GAME_CANVAS_BACKGROUND_COLOR = 0x000000;
 
 export function createGameConfig(): CanvasGameConfig {
   return {
@@ -21,9 +22,9 @@ export function createGameConfig(): CanvasGameConfig {
     height: GAME_CANVAS_HEIGHT,
     pixelArt: true,
     roundPixels: true,
+    backgroundColor: GAME_CANVAS_BACKGROUND_COLOR,
     scale: {
-      mode: "FIT",
-      autoCenter: "CENTER_BOTH",
+      mode: "RESIZE",
     },
   };
 }

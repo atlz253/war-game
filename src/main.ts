@@ -5,6 +5,7 @@ import { BattleScene } from "./game/scenes/BattleScene";
 import { BootScene } from "./game/scenes/BootScene";
 import { MainMenuScene } from "./game/scenes/MainMenuScene";
 import { ResultScene } from "./game/scenes/ResultScene";
+import "./style.css";
 
 const canvasConfig = createGameConfig();
 
@@ -15,9 +16,9 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   height: canvasConfig.height,
   pixelArt: canvasConfig.pixelArt,
   roundPixels: canvasConfig.roundPixels,
+  backgroundColor: canvasConfig.backgroundColor,
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    mode: Phaser.Scale.RESIZE,
   },
   scene: [BootScene, MainMenuScene, BattleScene, ResultScene],
 };

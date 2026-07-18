@@ -16,6 +16,10 @@ import {
   calculateUnitHealthLabelY,
   formatUnitHealthLabel,
 } from "../board/unit-health-label";
+import {
+  calculatePresentationViewport,
+  type PresentationViewport,
+} from "../config/presentation-layout";
 import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
@@ -97,7 +101,9 @@ export class BattleScene extends Phaser.Scene {
   private worldContainer!: Phaser.GameObjects.Container;
   private hudContainer!: Phaser.GameObjects.Container;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
+  private presentationViewport!: PresentationViewport;
   private gameState!: GameState;
+  private mapZoom = INITIAL_MAP_ZOOM;
   private selectedUnitId: string | null = null;
   private inputLocked = false;
   private selectedUnitText!: Phaser.GameObjects.Text;
@@ -124,6 +130,7 @@ export class BattleScene extends Phaser.Scene {
   public create(): void {
     this.resetRenderingState();
     this.gameState = createSkirmishGameState();
+    this.mapZoom = INITIAL_MAP_ZOOM;
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
     this.configureCameras();
@@ -164,13 +171,14 @@ export class BattleScene extends Phaser.Scene {
     const boardWidth = BOARD_WIDTH * TILE_SIZE;
     const boardHeight = BOARD_HEIGHT * TILE_SIZE;
     const worldCamera = this.cameras.main;
-    this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+    this.uiCamera = this.cameras.add();
 
-    worldCamera
-      .setBounds(BOARD_ORIGIN_X, BOARD_ORIGIN_Y, boardWidth, boardHeight)
-      .setZoom(INITIAL_MAP_ZOOM);
+    worldCamera.setBounds(BOARD_ORIGIN_X, BOARD_ORIGIN_Y, boardWidth, boardHeight);
     worldCamera.ignore(this.hudContainer);
     this.uiCamera.ignore(this.worldContainer);
+    this.updatePresentationViewport();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.unbindPresentationResize, this);
     const keyboard = this.input.keyboard;
 
     if (keyboard) {
@@ -182,6 +190,29 @@ export class BattleScene extends Phaser.Scene {
         right: Phaser.Input.Keyboard.KeyCodes.D,
       }) as Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
     }
+  }
+
+  private updatePresentationViewport(): void {
+    this.presentationViewport = calculatePresentationViewport(this.scale.width, this.scale.height);
+    this.configureWorldCameraViewport();
+    this.configureUiCameraViewport();
+  }
+
+  private configureWorldCameraViewport(): void {
+    const { x, y, width, height, scale } = this.presentationViewport;
+
+    this.cameras.main.setViewport(x, y, width, height).setZoom(this.mapZoom * scale);
+  }
+
+  private configureUiCameraViewport(): void {
+    const { x, y, scale } = this.presentationViewport;
+
+    this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
+    this.hudContainer.setPosition(x, y).setScale(scale);
+  }
+
+  private unbindPresentationResize(): void {
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
   }
 
   private createWorld(): void {
@@ -333,9 +364,7 @@ export class BattleScene extends Phaser.Scene {
         return;
       }
 
-      if (pointer.x < HUD_X) {
-        this.handleBoardClick(pointer);
-      }
+      this.handleBoardClick(pointer);
     });
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
@@ -346,35 +375,51 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private zoomWorldCamera(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
-    if (pointer.x >= HUD_X) {
+    const logicalPointer = this.toLogicalPointer(pointer);
+
+    if (!logicalPointer || logicalPointer.x >= HUD_X) {
       return;
     }
 
     const camera = this.cameras.main;
-    const nextZoom = calculateNextZoom(camera.zoom, wheelDeltaY);
+    const nextMapZoom = calculateNextZoom(this.mapZoom, wheelDeltaY);
 
-    if (nextZoom === camera.zoom) {
+    if (nextMapZoom === this.mapZoom) {
       return;
     }
 
+    const nextZoom = nextMapZoom * this.presentationViewport.scale;
     const nextScroll = calculateAnchoredScroll({
       scrollX: camera.scrollX,
       scrollY: camera.scrollY,
-      pointerX: pointer.x,
-      pointerY: pointer.y,
+      pointerX: pointer.x - this.presentationViewport.x,
+      pointerY: pointer.y - this.presentationViewport.y,
       previousZoom: camera.zoom,
       nextZoom,
     });
+    this.mapZoom = nextMapZoom;
     camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
-    this.updateUnitHealthLabelScales(nextZoom);
+    this.updateUnitHealthLabelScales(nextMapZoom);
   }
 
   private handleHudClick(pointer: Phaser.Input.Pointer): boolean {
+    const logicalPointer = this.toLogicalPointer(pointer);
+
+    if (!logicalPointer) {
+      return true;
+    }
+
     if (
-      isInsideRectangle(pointer, WAIT_BUTTON_X, WAIT_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT) ||
-      isInsideRectangle(pointer, END_BUTTON_X, END_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT) ||
       isInsideRectangle(
-        pointer,
+        logicalPointer,
+        WAIT_BUTTON_X,
+        WAIT_BUTTON_Y,
+        BUTTON_WIDTH,
+        BUTTON_HEIGHT,
+      ) ||
+      isInsideRectangle(logicalPointer, END_BUTTON_X, END_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT) ||
+      isInsideRectangle(
+        logicalPointer,
         CAPTURE_BUTTON_X,
         CAPTURE_BUTTON_Y,
         CAPTURE_BUTTON_WIDTH,
@@ -384,7 +429,7 @@ export class BattleScene extends Phaser.Scene {
       return true;
     }
 
-    return pointer.x >= HUD_X;
+    return logicalPointer.x >= HUD_X;
   }
 
   private handleBoardClick(pointer: Phaser.Input.Pointer): void {
@@ -610,7 +655,7 @@ export class BattleScene extends Phaser.Scene {
     const container = this.add.container(point.x, labelY, [background, text]);
     const healthView = { container, background, text };
 
-    container.setScale(calculateUnitHealthLabelScale(this.cameras.main.zoom));
+    container.setScale(calculateUnitHealthLabelScale(this.mapZoom));
     this.layoutUnitHealthView(healthView);
     this.worldContainer.add(container);
     this.unitHealthViews.set(unit.id, healthView);
@@ -731,6 +776,18 @@ export class BattleScene extends Phaser.Scene {
     return x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT ? { x, y } : null;
   }
 
+  private toLogicalPointer(pointer: Phaser.Input.Pointer): Position | null {
+    const { x, y, width, height, scale } = this.presentationViewport;
+    const pointerX = pointer.x - x;
+    const pointerY = pointer.y - y;
+
+    if (pointerX < 0 || pointerX >= width || pointerY < 0 || pointerY >= height) {
+      return null;
+    }
+
+    return { x: Math.floor(pointerX / scale), y: Math.floor(pointerY / scale) };
+  }
+
   private addText(x: number, y: number, text: string): Phaser.GameObjects.Text {
     return this.add.text(x, y, text, {
       color: uiTheme.colors.text,
@@ -778,7 +835,7 @@ function formatEvent(event: GameEvent): string {
 }
 
 function isInsideRectangle(
-  pointer: Phaser.Input.Pointer,
+  pointer: Position,
   centerX: number,
   centerY: number,
   width: number,

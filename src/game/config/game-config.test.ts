@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createGameConfig,
+  GAME_CANVAS_BACKGROUND_COLOR,
   GAME_CANVAS_HEIGHT,
   GAME_CANVAS_PARENT,
   GAME_CANVAS_WIDTH,
@@ -22,8 +23,8 @@ describe("createGameConfig", () => {
     expect(config.pixelArt).toBe(true);
     expect(config.roundPixels).toBe(true);
     expect(config.scale).toMatchObject({
-      mode: "FIT",
-      autoCenter: "CENTER_BOTH",
+      mode: "RESIZE",
     });
+    expect(config.backgroundColor).toBe(GAME_CANVAS_BACKGROUND_COLOR);
   });
 });
