@@ -11,6 +11,7 @@ import {
   createSkirmishGameState,
 } from "../../core/scenarios/skirmish-12x8";
 import { assetManifest } from "../assets/asset-manifest";
+import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
@@ -52,10 +53,6 @@ const EVENT_LOG_ENTRIES = 10;
 const AI_ACTION_DELAY = 500;
 const CAMERA_SCROLL_SPEED = 900;
 const MILLISECONDS_PER_SECOND = 1000;
-const WHEEL_ZOOM_STEP = 0.001;
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 2;
-const INITIAL_ZOOM = 1;
 const NO_UNIT_COUNT = 0;
 const DIAGNOSTIC_TILE_COLOR_A = 0x31513a;
 const DIAGNOSTIC_TILE_COLOR_B = 0x2a4633;
@@ -136,7 +133,7 @@ export class BattleScene extends Phaser.Scene {
 
     worldCamera
       .setBounds(BOARD_ORIGIN_X, BOARD_ORIGIN_Y, boardWidth, boardHeight)
-      .setZoom(INITIAL_ZOOM);
+      .setZoom(INITIAL_MAP_ZOOM);
     worldCamera.ignore(this.hudContainer);
     this.uiCamera.ignore(this.worldContainer);
     const keyboard = this.input.keyboard;
@@ -289,11 +286,33 @@ export class BattleScene extends Phaser.Scene {
     });
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
-      (_pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) => {
-        const camera = this.cameras.main;
-        camera.setZoom(Phaser.Math.Clamp(camera.zoom - y * WHEEL_ZOOM_STEP, MIN_ZOOM, MAX_ZOOM));
+      (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) => {
+        this.zoomWorldCamera(pointer, y);
       },
     );
+  }
+
+  private zoomWorldCamera(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
+    if (pointer.x >= HUD_X) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const nextZoom = calculateNextZoom(camera.zoom, wheelDeltaY);
+
+    if (nextZoom === camera.zoom) {
+      return;
+    }
+
+    const nextScroll = calculateAnchoredScroll({
+      scrollX: camera.scrollX,
+      scrollY: camera.scrollY,
+      pointerX: pointer.x,
+      pointerY: pointer.y,
+      previousZoom: camera.zoom,
+      nextZoom,
+    });
+    camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
   }
 
   private handleHudClick(pointer: Phaser.Input.Pointer): boolean {
