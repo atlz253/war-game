@@ -54,4 +54,16 @@ describe("getMovementHighlightPositions", () => {
     expect(getMovementHighlightPositions(state, RED_INFANTRY_ID, false)).toEqual([]);
     expect(getMovementHighlightPositions(state, BLUE_INFANTRY_ID, true)).toEqual([]);
   });
+
+  it("returns legal destinations for the active Red human unit", () => {
+    const state = {
+      ...createSkirmishGameState(),
+      activeSide: "red" as const,
+    };
+
+    expect(getMovementHighlightPositions(state, RED_INFANTRY_ID, false)).toContainEqual({
+      x: 9,
+      y: 1,
+    });
+  });
 });

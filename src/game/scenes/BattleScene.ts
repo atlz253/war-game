@@ -1,9 +1,8 @@
 import Phaser from "phaser";
 
-import { HeuristicAgent } from "../../ai/agents/HeuristicAgent";
 import type { GameAction } from "../../core/actions/game-actions";
 import type { GameEvent } from "../../core/model/game-events";
-import type { GameState, Position, UnitState } from "../../core/model/game-state";
+import type { GameState, Position, SideId, UnitState } from "../../core/model/game-state";
 import { applyAction } from "../../core/rules/apply-action";
 import {
   BOARD_HEIGHT,
@@ -23,6 +22,12 @@ import {
 import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
+import {
+  createAgentForParticipant,
+  createDefaultMatchConfiguration,
+  isHumanTurn,
+  type MatchConfiguration,
+} from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
@@ -97,18 +102,22 @@ interface UnitHealthView {
   readonly text: Phaser.GameObjects.Text;
 }
 
+export interface BattleSceneData {
+  readonly matchConfiguration?: MatchConfiguration;
+}
+
 export class BattleScene extends Phaser.Scene {
   private worldContainer!: Phaser.GameObjects.Container;
   private hudContainer!: Phaser.GameObjects.Container;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private presentationViewport!: PresentationViewport;
   private gameState!: GameState;
+  private matchConfiguration = createDefaultMatchConfiguration();
   private mapZoom = INITIAL_MAP_ZOOM;
   private selectedUnitId: string | null = null;
   private inputLocked = false;
   private selectedUnitText!: Phaser.GameObjects.Text;
   private activeTurnText!: Phaser.GameObjects.Text;
-  private readonly aiAgent = new HeuristicAgent();
   private healthBar!: ProgressBar;
   private eventLog!: ScrollableList;
   private waitButton!: Button;
@@ -127,9 +136,10 @@ export class BattleScene extends Phaser.Scene {
     super("battle");
   }
 
-  public create(): void {
+  public create(data: BattleSceneData = {}): void {
     this.resetRenderingState();
     this.gameState = createSkirmishGameState();
+    this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     this.mapZoom = INITIAL_MAP_ZOOM;
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
@@ -138,6 +148,7 @@ export class BattleScene extends Phaser.Scene {
     this.createHud();
     this.bindInput();
     this.renderGameState(null, this.gameState);
+    this.startAiTurnIfNeeded();
   }
 
   private resetRenderingState(): void {
@@ -147,6 +158,8 @@ export class BattleScene extends Phaser.Scene {
     this.selectionView = null;
     this.diagnosticUnitLayer = null;
     this.movementHighlightLayer = null;
+    this.selectedUnitId = null;
+    this.inputLocked = false;
   }
 
   public update(_time: number, delta: number): void {
@@ -433,7 +446,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleBoardClick(pointer: Phaser.Input.Pointer): void {
-    if (this.inputLocked || this.gameState.activeSide !== "blue") {
+    if (!this.canHumanIssueOrders()) {
       return;
     }
 
@@ -446,7 +459,7 @@ export class BattleScene extends Phaser.Scene {
 
     const clickedUnit = findUnitAt(this.gameState, position);
 
-    if (clickedUnit?.side === "blue") {
+    if (clickedUnit?.side === this.gameState.activeSide) {
       this.selectedUnitId = clickedUnit.id;
       this.renderGameState(this.gameState, this.gameState);
       return;
@@ -487,7 +500,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private endPlayerTurn(): void {
-    if (!this.inputLocked && this.gameState.activeSide === "blue") {
+    if (this.canHumanIssueOrders()) {
       this.submitAction({ type: "end-turn" });
     }
   }
@@ -502,31 +515,32 @@ export class BattleScene extends Phaser.Scene {
 
     const previousState = this.gameState;
     this.gameState = result.state;
+    this.clearSelectionAfterTurnEnd(action);
     this.addEventMessages(result.events);
     this.renderGameState(previousState, this.gameState);
     this.checkForResult();
 
-    if (
-      action.type === "end-turn" &&
-      this.gameState.activeSide === "red" &&
-      !this.gameState.winner
-    ) {
-      this.inputLocked = true;
-      this.runAiAction();
-    }
+    this.startAiTurnIfNeeded();
   }
 
   private runAiAction(): void {
     this.time.delayedCall(AI_ACTION_DELAY, () => {
-      const action = this.aiAgent.chooseAction(this.gameState);
+      const agent = createAgentForParticipant(this.matchConfiguration[this.gameState.activeSide]);
+
+      if (!agent) {
+        throw new Error("A human participant cannot issue an automatic action.");
+      }
+
+      const action = agent.chooseAction(this.gameState);
       const result = applyAction(this.gameState, action);
 
       if (!result.accepted) {
-        throw new Error("HeuristicAgent returned an invalid action.");
+        throw new Error(`${agent.id} returned an invalid action.`);
       }
 
       const previousState = this.gameState;
       this.gameState = result.state;
+      this.clearSelectionAfterTurnEnd(action);
       this.addEventMessages(result.events);
       this.renderGameState(previousState, this.gameState);
 
@@ -534,12 +548,32 @@ export class BattleScene extends Phaser.Scene {
         return;
       }
 
-      if (this.gameState.activeSide === "red") {
-        this.runAiAction();
-      } else {
-        this.inputLocked = false;
-      }
+      this.startAiTurnIfNeeded();
     });
+  }
+
+  private startAiTurnIfNeeded(): void {
+    if (this.gameState.winner || this.isActiveSideHuman()) {
+      this.inputLocked = false;
+      return;
+    }
+
+    this.inputLocked = true;
+    this.runAiAction();
+  }
+
+  private clearSelectionAfterTurnEnd(action: GameAction): void {
+    if (action.type === "end-turn") {
+      this.selectedUnitId = null;
+    }
+  }
+
+  private canHumanIssueOrders(): boolean {
+    return !this.inputLocked && this.isActiveSideHuman();
+  }
+
+  private isActiveSideHuman(): boolean {
+    return isHumanTurn(this.matchConfiguration, this.gameState.activeSide);
   }
 
   private checkForResult(): boolean {
@@ -550,6 +584,7 @@ export class BattleScene extends Phaser.Scene {
     this.scene.start(RESULT_SCENE_KEY, {
       winner: this.gameState.winner,
       turn: this.gameState.turn,
+      matchConfiguration: this.matchConfiguration,
     });
 
     return true;
@@ -736,9 +771,11 @@ export class BattleScene extends Phaser.Scene {
   private updateHud(state: GameState): void {
     const selectedUnit = this.selectedUnitId ? state.units[this.selectedUnitId] : undefined;
     this.activeTurnText.setText(
-      `Turn ${state.turn} — ${state.activeSide.toUpperCase()}${this.inputLocked ? " AI thinking" : ""}`,
+      `Turn ${state.turn} — ${state.activeSide.toUpperCase()}${this.isActiveSideHuman() ? "" : " AI thinking"}`,
     );
-    this.selectedUnitText.setText(formatSelectedUnit(selectedUnit));
+    this.selectedUnitText.setText(
+      formatSelectedUnit(selectedUnit, state.activeSide, this.isActiveSideHuman()),
+    );
 
     if (selectedUnit) {
       this.healthBar.setValue(selectedUnit.health, selectedUnit.maxHealth);
@@ -746,7 +783,7 @@ export class BattleScene extends Phaser.Scene {
       this.healthBar.setValue(NO_UNIT_COUNT, NO_UNIT_COUNT);
     }
 
-    const canIssueOrders = state.activeSide === "blue" && !this.inputLocked;
+    const canIssueOrders = this.canHumanIssueOrders();
     this.waitButton.setEnabled(
       canIssueOrders && selectedUnit !== undefined && !selectedUnit.hasTakenMainAction,
     );
@@ -805,9 +842,15 @@ function positionsEqual(first: Position, second: Position): boolean {
   return first.x === second.x && first.y === second.y;
 }
 
-function formatSelectedUnit(unit: UnitState | undefined): string {
+function formatSelectedUnit(
+  unit: UnitState | undefined,
+  activeSide: SideId,
+  activeSideIsHuman: boolean,
+): string {
   if (!unit) {
-    return "Select a Blue unit.";
+    return activeSideIsHuman
+      ? `Select a ${activeSide.toUpperCase()} unit.`
+      : `${activeSide.toUpperCase()} AI is taking its turn.`;
   }
 
   return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nRange ${unit.attackRange}  Action ${unit.hasTakenMainAction ? "used" : "ready"}`;

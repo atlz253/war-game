@@ -7,14 +7,9 @@ export function getMovementHighlightPositions(
   selectedUnitId: string | null,
   inputLocked: boolean,
 ): readonly Position[] {
-  const selectedUnit = getSelectedBlueUnit(state, selectedUnitId);
+  const selectedUnit = getSelectedActiveUnit(state, selectedUnitId);
 
-  if (
-    !selectedUnit ||
-    inputLocked ||
-    state.activeSide !== "blue" ||
-    selectedUnit.hasTakenMainAction
-  ) {
+  if (!selectedUnit || inputLocked || selectedUnit.hasTakenMainAction) {
     return [];
   }
 
@@ -24,14 +19,14 @@ export function getMovementHighlightPositions(
     .filter((position) => !positionsEqual(position, selectedUnit.position));
 }
 
-function getSelectedBlueUnit(state: GameState, unitId: string | null): UnitState | undefined {
+function getSelectedActiveUnit(state: GameState, unitId: string | null): UnitState | undefined {
   if (!unitId) {
     return undefined;
   }
 
   const unit = state.units[unitId];
 
-  return unit?.side === "blue" ? unit : undefined;
+  return unit?.side === state.activeSide ? unit : undefined;
 }
 
 function isSelectedUnitMove(

@@ -5,21 +5,14 @@ import type {
   UnitState,
 } from "../../core/model/game-state";
 
-const PLAYER_SIDE = "blue";
-
 export function getCapturableControlPointId(
   state: GameState,
   selectedUnitId: string | null,
   inputLocked: boolean,
 ): string | null {
-  const selectedUnit = getSelectedPlayerUnit(state, selectedUnitId);
+  const selectedUnit = getSelectedActiveUnit(state, selectedUnitId);
 
-  if (
-    !selectedUnit ||
-    inputLocked ||
-    state.activeSide !== PLAYER_SIDE ||
-    selectedUnit.hasTakenMainAction
-  ) {
+  if (!selectedUnit || inputLocked || selectedUnit.hasTakenMainAction) {
     return null;
   }
 
@@ -30,14 +23,14 @@ export function getCapturableControlPointId(
   );
 }
 
-function getSelectedPlayerUnit(state: GameState, unitId: string | null): UnitState | undefined {
+function getSelectedActiveUnit(state: GameState, unitId: string | null): UnitState | undefined {
   if (!unitId) {
     return undefined;
   }
 
   const unit = state.units[unitId];
 
-  return unit?.side === PLAYER_SIDE ? unit : undefined;
+  return unit?.side === state.activeSide ? unit : undefined;
 }
 
 function canCaptureControlPoint(unit: UnitState, controlPoint: ControlPointState): boolean {

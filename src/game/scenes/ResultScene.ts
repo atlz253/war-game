@@ -3,6 +3,10 @@ import Phaser from "phaser";
 import type { SideId } from "../../core/model/game-state";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import {
+  createDefaultMatchConfiguration,
+  type MatchConfiguration,
+} from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -11,6 +15,7 @@ import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY } from "./scene-keys";
 interface ResultSceneData {
   readonly winner: SideId;
   readonly turn: number;
+  readonly matchConfiguration?: MatchConfiguration;
 }
 
 const CENTER_X = 1920;
@@ -36,6 +41,7 @@ export class ResultScene extends Phaser.Scene {
   }
 
   public create(data: ResultSceneData): void {
+    const matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     const panel = new Panel(this, {
       x: CENTER_X - PANEL_WIDTH / HALF_DIMENSION,
       y: CENTER_Y - PANEL_HEIGHT / HALF_DIMENSION,
@@ -62,7 +68,7 @@ export class ResultScene extends Phaser.Scene {
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
       label: "PLAY AGAIN",
-      onClick: () => this.scene.start(BATTLE_SCENE_KEY),
+      onClick: () => this.scene.start(BATTLE_SCENE_KEY, { matchConfiguration }),
     });
     const menuButton = new Button(this, {
       x: MENU_BUTTON_X,

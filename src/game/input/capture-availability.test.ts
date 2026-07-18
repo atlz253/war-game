@@ -4,6 +4,7 @@ import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
 import { getCapturableControlPointId } from "./capture-availability";
 
 const BLUE_INFANTRY_ID = "blue-infantry-1";
+const RED_INFANTRY_ID = "red-infantry-1";
 const CONTROL_POINT_ID = "control-point-1";
 
 describe("getCapturableControlPointId", () => {
@@ -62,6 +63,25 @@ describe("getCapturableControlPointId", () => {
     expect(getCapturableControlPointId(aiTurnState, BLUE_INFANTRY_ID, false)).toBeNull();
     expect(getCapturableControlPointId(unitOnPointState, BLUE_INFANTRY_ID, true)).toBeNull();
     expect(getCapturableControlPointId(unitOnPointState, null, false)).toBeNull();
+  });
+
+  it("allows an active Red human unit to capture a point", () => {
+    const state = createSkirmishGameState();
+    const redTurnState = {
+      ...state,
+      activeSide: "red" as const,
+      units: {
+        ...state.units,
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: state.controlPoints[CONTROL_POINT_ID]?.position,
+        },
+      },
+    };
+
+    expect(getCapturableControlPointId(redTurnState, RED_INFANTRY_ID, false)).toBe(
+      CONTROL_POINT_ID,
+    );
   });
 });
 
