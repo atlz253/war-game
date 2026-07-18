@@ -12,6 +12,7 @@ import {
 } from "../../core/scenarios/skirmish-12x8";
 import { assetManifest } from "../assets/asset-manifest";
 import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import { getMovementHighlightPositions } from "../input/movement-highlights";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
@@ -61,6 +62,10 @@ const DIAGNOSTIC_RED_UNIT_COLOR = 0xc64d4d;
 const DIAGNOSTIC_SELECTION_COLOR = 0xf2f5f7;
 const DIAGNOSTIC_CONTROL_POINT_COLOR = 0xe0bd5b;
 const DIAGNOSTIC_TILE_ALTERNATION = 2;
+const MOVEMENT_HIGHLIGHT_COLOR = 0x3dd6b1;
+const MOVEMENT_HIGHLIGHT_FILL_ALPHA = 0.28;
+const MOVEMENT_HIGHLIGHT_BORDER_ALPHA = 0.85;
+const MOVEMENT_HIGHLIGHT_BORDER_WIDTH = 8;
 const DIAGNOSTIC_MODE = import.meta.env.DEV;
 
 export class BattleScene extends Phaser.Scene {
@@ -79,6 +84,7 @@ export class BattleScene extends Phaser.Scene {
   private endTurnButton!: Button;
   private selectionView: Phaser.GameObjects.Rectangle | null = null;
   private diagnosticUnitLayer: Phaser.GameObjects.Graphics | null = null;
+  private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private readonly unitViews = new Map<string, Phaser.GameObjects.Image>();
   private readonly controlPointViews = new Map<string, Phaser.GameObjects.Image>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -105,6 +111,7 @@ export class BattleScene extends Phaser.Scene {
     this.controlPointViews.clear();
     this.selectionView = null;
     this.diagnosticUnitLayer = null;
+    this.movementHighlightLayer = null;
   }
 
   public update(_time: number, delta: number): void {
@@ -165,6 +172,8 @@ export class BattleScene extends Phaser.Scene {
       }
     }
 
+    this.createMovementHighlightLayer();
+
     for (const controlPoint of Object.values(this.gameState.controlPoints)) {
       const point = this.toScreenPosition(controlPoint.position);
       this.worldContainer.add(
@@ -179,7 +188,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.diagnosticUnitLayer = this.add.graphics();
-    this.uiCamera.ignore(this.diagnosticUnitLayer);
+    this.worldContainer.add(this.diagnosticUnitLayer);
     this.drawDiagnosticUnitMarkers(this.gameState);
   }
 
@@ -188,11 +197,18 @@ export class BattleScene extends Phaser.Scene {
       for (let x = 0; x < BOARD_WIDTH; x += 1) {
         const point = this.toScreenPosition({ x, y });
         const tile = this.add.image(point.x, point.y, assetManifest.terrain.plain.textureKey);
-        this.uiCamera.ignore(tile);
+        this.worldContainer.add(tile);
       }
     }
 
+    this.createMovementHighlightLayer();
     this.updateControlPointViews(this.gameState);
+  }
+
+  private createMovementHighlightLayer(): void {
+    this.movementHighlightLayer = this.add.graphics();
+    this.worldContainer.add(this.movementHighlightLayer);
+    this.uiCamera.ignore(this.movementHighlightLayer);
   }
 
   private addDiagnosticTile(x: number, y: number): void {
@@ -454,8 +470,39 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private renderGameState(previousState: GameState | null, nextState: GameState): void {
+    this.updateMovementHighlights(nextState);
     this.updateUnitViews(previousState, nextState);
     this.updateHud(nextState);
+  }
+
+  private updateMovementHighlights(state: GameState): void {
+    if (!this.movementHighlightLayer) {
+      return;
+    }
+
+    this.movementHighlightLayer.clear();
+
+    for (const position of getMovementHighlightPositions(
+      state,
+      this.selectedUnitId,
+      this.inputLocked,
+    )) {
+      const point = this.toScreenPosition(position);
+      const tileX = point.x - TILE_CENTER;
+      const tileY = point.y - TILE_CENTER;
+
+      this.movementHighlightLayer.fillStyle(
+        MOVEMENT_HIGHLIGHT_COLOR,
+        MOVEMENT_HIGHLIGHT_FILL_ALPHA,
+      );
+      this.movementHighlightLayer.fillRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
+      this.movementHighlightLayer.lineStyle(
+        MOVEMENT_HIGHLIGHT_BORDER_WIDTH,
+        MOVEMENT_HIGHLIGHT_COLOR,
+        MOVEMENT_HIGHLIGHT_BORDER_ALPHA,
+      );
+      this.movementHighlightLayer.strokeRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
+    }
   }
 
   private updateUnitViews(_previousState: GameState | null, nextState: GameState): void {
@@ -494,7 +541,7 @@ export class BattleScene extends Phaser.Scene {
       }
 
       const view = this.add.image(point.x, point.y, getUnitTextureKey(unit));
-      this.uiCamera.ignore(view);
+      this.worldContainer.add(view);
       this.unitViews.set(unit.id, view);
     }
   }
@@ -511,7 +558,7 @@ export class BattleScene extends Phaser.Scene {
       }
 
       const view = this.add.image(point.x, point.y, textureKey);
-      this.uiCamera.ignore(view);
+      this.worldContainer.add(view);
       this.controlPointViews.set(controlPoint.id, view);
     }
   }
@@ -553,7 +600,7 @@ export class BattleScene extends Phaser.Scene {
     this.selectionView = this.add
       .rectangle(point.x, point.y, TILE_SIZE, TILE_SIZE)
       .setStrokeStyle(BOARD_BORDER_WIDTH, DIAGNOSTIC_SELECTION_COLOR);
-    this.uiCamera.ignore(this.selectionView);
+    this.worldContainer.add(this.selectionView);
   }
 
   private updateHud(state: GameState): void {
