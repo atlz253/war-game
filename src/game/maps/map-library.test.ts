@@ -34,6 +34,19 @@ describe("BrowserMapLibrary", () => {
     expect(imported.name).toBe("My Map 2");
     expect(library.list()).toHaveLength(2);
   });
+
+  it("reports whether a map name is available without conflicting with another map", () => {
+    const library = new BrowserMapLibrary(new MemoryStorage());
+    const map = createMapDefinition(MAP_ID, MAP_NAME, WIDTH, HEIGHT);
+    const otherMap = createMapDefinition("other", "Other Map", WIDTH, HEIGHT);
+
+    library.save(map);
+    library.save(otherMap);
+
+    expect(library.isNameAvailable(map.id, MAP_NAME)).toBe(true);
+    expect(library.isNameAvailable(map.id, otherMap.name)).toBe(false);
+    expect(library.isNameAvailable(map.id, "   ")).toBe(false);
+  });
 });
 
 class MemoryStorage implements StorageLike {

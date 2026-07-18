@@ -13,6 +13,7 @@ const STORAGE_KEY = "ai-war-game.maps.v1";
 const COPY_SUFFIX = " Copy";
 const FIRST_DUPLICATE_SUFFIX = 2;
 const EMPTY_MAP_LIST = "[]";
+const EMPTY_NAME_LENGTH = 0;
 const ID_DUPLICATE_SEPARATOR = "-";
 const NAME_DUPLICATE_SEPARATOR = " ";
 
@@ -42,6 +43,15 @@ export class BrowserMapLibrary {
     }
 
     this.persist(nextMaps);
+  }
+
+  public isNameAvailable(id: string, name: string): boolean {
+    const trimmedName = name.trim();
+
+    return (
+      trimmedName.length > EMPTY_NAME_LENGTH &&
+      !this.list().some((map) => map.id !== id && map.name === trimmedName)
+    );
   }
 
   public copy(id: string): MapDefinition {

@@ -23,11 +23,13 @@ import {
   wouldTrimPlacements,
 } from "../maps/editor-map-operations";
 import { getBrowserMapLibrary } from "../maps/map-library";
+import { confirmMapNameEdit } from "../maps/map-name-editor";
 import {
   createDefaultMatchConfiguration,
   type MatchConfiguration,
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
+import { MapRenameDialog } from "../ui/components/MapRenameDialog";
 import { Panel } from "../ui/components/Panel";
 import { uiTheme } from "../ui/theme/ui-theme";
 import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY } from "./scene-keys";
@@ -47,7 +49,7 @@ const BUTTON_HEIGHT = 64;
 const BUTTON_GAP = 80;
 const FIRST_BUTTON_Y = 332;
 const TOOL_TITLE_Y = 148;
-const STATUS_Y = 1940;
+const STATUS_Y = 2052;
 const DEFAULT_WIDTH = 12;
 const DEFAULT_HEIGHT = 8;
 const MAP_ID_PREFIX = "map";
@@ -71,6 +73,7 @@ const BUTTON_ROW = {
   bluePoint: 11,
   redPoint: 12,
   erase: 13,
+  rename: 14,
   save: 15,
   saveCopy: 16,
   testMatch: 17,
@@ -79,6 +82,11 @@ const BUTTON_ROW = {
   delete: 20,
   back: 21,
 } as const;
+
+const SINGLE_CHARACTER_KEY_LENGTH = 1;
+const ENTER_KEY = "Enter";
+const ESCAPE_KEY = "Escape";
+const BACKSPACE_KEY = "Backspace";
 
 interface MapEditorSceneData {
   readonly mapId?: string;
@@ -113,6 +121,7 @@ export class MapEditorScene extends Phaser.Scene {
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
   private cameraDrag: CameraDrag | null = null;
+  private renameDialog: MapRenameDialog | null = null;
 
   public constructor() {
     super("map-editor");
@@ -121,6 +130,7 @@ export class MapEditorScene extends Phaser.Scene {
   public create(data: MapEditorSceneData = {}): void {
     this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     this.map = this.loadMap(data.mapId);
+    this.renameDialog = null;
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
     this.configureCameras();
@@ -131,6 +141,7 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
+    if (this.renameDialog) return;
     const distance = (CAMERA_SCROLL_SPEED * delta) / MILLISECONDS_PER_SECOND;
     const camera = this.cameras.main;
 
@@ -235,6 +246,7 @@ export class MapEditorScene extends Phaser.Scene {
         this.selectControlPointTool("red"),
       ),
       this.createButton("ERASE CELL", BUTTON_ROW.erase, () => this.setTool({ kind: "erase" })),
+      this.createButton("RENAME MAP", BUTTON_ROW.rename, () => this.openRenameDialog()),
       this.createButton("SAVE", BUTTON_ROW.save, () => this.save()),
       this.createButton("SAVE AS COPY", BUTTON_ROW.saveCopy, () => this.saveCopy()),
       this.createButton("TEST MATCH", BUTTON_ROW.testMatch, () => this.startTestMatch()),
@@ -267,6 +279,7 @@ export class MapEditorScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+      if (this.renameDialog) return;
       if (pointer.middleButtonDown() && this.isMapPointer(pointer)) {
         this.startCameraDrag(pointer);
         return;
@@ -312,11 +325,13 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   private isMapPointer(pointer: Phaser.Input.Pointer): boolean {
+    if (this.renameDialog) return false;
     const logical = this.toLogicalPointer(pointer);
     return logical !== null && logical.x >= EDITOR_PANEL_RESERVED_WIDTH;
   }
 
   private zoom(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
+    if (this.renameDialog) return;
     if (!this.isMapPointer(pointer)) return;
     const nextMapZoom = calculateNextZoom(this.mapZoom, wheelDeltaY);
     if (nextMapZoom === this.mapZoom) return;
@@ -396,6 +411,79 @@ export class MapEditorScene extends Phaser.Scene {
     this.updatePresentationViewport();
     this.render();
   }
+
+  private openRenameDialog(): void {
+    if (this.renameDialog) return;
+    this.cameraDrag = null;
+    this.renameDialog = new MapRenameDialog(this, {
+      initialName: this.map.name,
+      onConfirm: () => this.confirmRename(),
+      onCancel: () => this.cancelRename(),
+    });
+    this.hudContainer.add(this.renameDialog.container);
+    this.input.keyboard?.on(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, this.handleRenameKey, this);
+  }
+
+  private confirmRename(): void {
+    const dialog = this.renameDialog;
+    if (!dialog) return;
+    const name = confirmMapNameEdit(dialog.editState);
+
+    if (!name) {
+      dialog.setError("Enter a map name.");
+      return;
+    }
+    if (!this.library.isNameAvailable(this.map.id, name)) {
+      dialog.setError("Another local map already uses this name.");
+      return;
+    }
+
+    this.map = { ...this.map, name };
+    this.closeRenameDialog();
+    this.render();
+    this.statusText.setText("Name changed. Click SAVE to keep it.");
+  }
+
+  private cancelRename(): void {
+    if (!this.renameDialog) return;
+    this.closeRenameDialog();
+    this.statusText.setText("Rename cancelled.");
+  }
+
+  private handleRenameKey(event: KeyboardEvent): void {
+    if (!this.renameDialog) return;
+    event.preventDefault();
+
+    if (event.key === ENTER_KEY) {
+      this.confirmRename();
+      return;
+    }
+    if (event.key === ESCAPE_KEY) {
+      this.cancelRename();
+      return;
+    }
+    if (event.key === BACKSPACE_KEY) {
+      this.renameDialog.deleteLastCharacter();
+      return;
+    }
+    if (this.isMapNameCharacter(event)) this.renameDialog.appendCharacter(event.key);
+  }
+
+  private isMapNameCharacter(event: KeyboardEvent): boolean {
+    return (
+      event.key.length === SINGLE_CHARACTER_KEY_LENGTH &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey
+    );
+  }
+
+  private closeRenameDialog(): void {
+    this.input.keyboard?.off(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, this.handleRenameKey, this);
+    this.renameDialog?.destroy();
+    this.renameDialog = null;
+  }
+
   private startTestMatch(): void {
     if (!isMapReadyForMatch(this.map)) {
       this.statusText.setText("Add at least one Blue and Red unit to test this map.");
@@ -472,6 +560,7 @@ export class MapEditorScene extends Phaser.Scene {
   }
   private unbindResize(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
+    this.closeRenameDialog();
   }
 
   private nextMapNumber(): number {

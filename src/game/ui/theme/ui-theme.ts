@@ -8,6 +8,7 @@ export const uiTheme: UiTheme = {
     primary: 0x4e9fce,
     danger: 0xc64d4d,
     text: "#f2f5f7",
+    dangerText: "#c64d4d",
     mutedText: "#b7c2c9",
   },
   spacing: {

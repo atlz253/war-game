@@ -6,6 +6,7 @@ export interface UiTheme {
     primary: number;
     danger: number;
     text: string;
+    dangerText: string;
     mutedText: string;
   };
   spacing: {
