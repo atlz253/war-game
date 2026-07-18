@@ -13,6 +13,7 @@ import {
   calculatePresentationViewport,
   type PresentationViewport,
 } from "../config/presentation-layout";
+import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateDraggedScroll } from "../input/camera-pan";
 import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
@@ -57,7 +58,8 @@ const MAP_NAME_PREFIX = "New Map";
 const MAP_ID_SEPARATOR = "-";
 const MAP_NAME_SEPARATOR = " ";
 const INITIAL_MAP_NUMBER = 1;
-const CAMERA_SCROLL_SPEED = 900;
+const CAMERA_SCROLL_SPEED = 2400;
+const CAMERA_DECELERATION = 8;
 const MILLISECONDS_PER_SECOND = 1000;
 const BUTTON_ROW = {
   widthDecrease: 0,
@@ -114,6 +116,7 @@ export class MapEditorScene extends Phaser.Scene {
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private presentationViewport!: PresentationViewport;
   private mapZoom = INITIAL_MAP_ZOOM;
+  private cameraVelocity = { x: 0, y: 0 };
   private tool: EditorTool = { kind: "unit", side: "blue", unitType: "infantry" };
   private statusText!: Phaser.GameObjects.Text;
   private mapInfoText!: Phaser.GameObjects.Text;
@@ -141,14 +144,12 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
-    if (this.renameDialog) return;
-    const distance = (CAMERA_SCROLL_SPEED * delta) / MILLISECONDS_PER_SECOND;
-    const camera = this.cameras.main;
+    if (this.renameDialog) {
+      this.stopCameraMotion();
+      return;
+    }
 
-    if (this.cursors?.left.isDown || this.wasdKeys?.left.isDown) camera.scrollX -= distance;
-    if (this.cursors?.right.isDown || this.wasdKeys?.right.isDown) camera.scrollX += distance;
-    if (this.cursors?.up.isDown || this.wasdKeys?.up.isDown) camera.scrollY -= distance;
-    if (this.cursors?.down.isDown || this.wasdKeys?.down.isDown) camera.scrollY += distance;
+    this.updateKeyboardCamera(delta);
   }
 
   private loadMap(mapId: string | undefined): MapDefinition {
@@ -187,6 +188,7 @@ export class MapEditorScene extends Phaser.Scene {
       .setViewport(worldViewport.x, worldViewport.y, worldViewport.width, worldViewport.height)
       .setBounds(0, 0, boardWidth, boardHeight)
       .setZoom(this.mapZoom * scale);
+    this.stopCameraMotion();
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
     this.hudContainer.setPosition(x, y).setScale(scale);
   }
@@ -322,6 +324,7 @@ export class MapEditorScene extends Phaser.Scene {
       zoom: this.cameras.main.zoom,
     });
     this.cameras.main.setScroll(scroll.x, scroll.y);
+    this.stopCameraMotion();
   }
 
   private isMapPointer(pointer: Phaser.Input.Pointer): boolean {
@@ -347,6 +350,40 @@ export class MapEditorScene extends Phaser.Scene {
     });
     this.mapZoom = nextMapZoom;
     camera.setZoom(nextZoom).setScroll(scroll.x, scroll.y);
+    this.stopCameraMotion();
+  }
+
+  private updateKeyboardCamera(delta: number): void {
+    const camera = this.cameras.main;
+    const velocity = calculateInertialCameraVelocity({
+      velocityX: this.cameraVelocity.x,
+      velocityY: this.cameraVelocity.y,
+      ...this.getKeyboardCameraDirection(),
+      deltaMs: delta,
+      speed: CAMERA_SCROLL_SPEED,
+      deceleration: CAMERA_DECELERATION,
+    });
+
+    this.cameraVelocity = velocity;
+    camera.setScroll(
+      camera.scrollX + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
+      camera.scrollY + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
+    );
+  }
+
+  private getKeyboardCameraDirection(): { horizontal: number; vertical: number } {
+    return {
+      horizontal:
+        Number(Boolean(this.cursors?.right.isDown || this.wasdKeys?.right.isDown)) -
+        Number(Boolean(this.cursors?.left.isDown || this.wasdKeys?.left.isDown)),
+      vertical:
+        Number(Boolean(this.cursors?.down.isDown || this.wasdKeys?.down.isDown)) -
+        Number(Boolean(this.cursors?.up.isDown || this.wasdKeys?.up.isDown)),
+    };
+  }
+
+  private stopCameraMotion(): void {
+    this.cameraVelocity = { x: 0, y: 0 };
   }
 
   private applyTool(position: Position): void {

@@ -16,6 +16,7 @@ import {
   calculatePresentationViewport,
   type PresentationViewport,
 } from "../config/presentation-layout";
+import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
@@ -68,7 +69,8 @@ const CAPTURE_BUTTON_X = HUD_X + HUD_WIDTH / 2;
 const CAPTURE_BUTTON_Y = SELECTED_PANEL_Y + CAPTURE_BUTTON_OFFSET_Y;
 const EVENT_LOG_ENTRIES = 10;
 const AI_ACTION_DELAY = 500;
-const CAMERA_SCROLL_SPEED = 900;
+const CAMERA_SCROLL_SPEED = 2400;
+const CAMERA_DECELERATION = 8;
 const MILLISECONDS_PER_SECOND = 1000;
 const NO_UNIT_COUNT = 0;
 const DIAGNOSTIC_TILE_COLOR_A = 0x31513a;
@@ -113,6 +115,7 @@ export class BattleScene extends Phaser.Scene {
   private mapDefinition: MapDefinition | null = null;
   private matchConfiguration = createDefaultMatchConfiguration();
   private mapZoom = INITIAL_MAP_ZOOM;
+  private cameraVelocity = { x: 0, y: 0 };
   private selectedUnitId: string | null = null;
   private inputLocked = false;
   private selectedUnitText!: Phaser.GameObjects.Text;
@@ -162,24 +165,11 @@ export class BattleScene extends Phaser.Scene {
     this.movementHighlightLayer = null;
     this.selectedUnitId = null;
     this.inputLocked = false;
+    this.cameraVelocity = { x: 0, y: 0 };
   }
 
   public update(_time: number, delta: number): void {
-    const camera = this.cameras.main;
-    const distance = (CAMERA_SCROLL_SPEED * delta) / MILLISECONDS_PER_SECOND;
-
-    if (this.cursors?.left.isDown || this.wasdKeys?.left.isDown) {
-      camera.scrollX -= distance;
-    }
-    if (this.cursors?.right.isDown || this.wasdKeys?.right.isDown) {
-      camera.scrollX += distance;
-    }
-    if (this.cursors?.up.isDown || this.wasdKeys?.up.isDown) {
-      camera.scrollY -= distance;
-    }
-    if (this.cursors?.down.isDown || this.wasdKeys?.down.isDown) {
-      camera.scrollY += distance;
-    }
+    this.updateKeyboardCamera(delta);
   }
 
   private configureCameras(): void {
@@ -217,6 +207,7 @@ export class BattleScene extends Phaser.Scene {
     const { x, y, width, height, scale } = this.presentationViewport;
 
     this.cameras.main.setViewport(x, y, width, height).setZoom(this.mapZoom * scale);
+    this.stopCameraMotion();
   }
 
   private configureUiCameraViewport(): void {
@@ -417,7 +408,41 @@ export class BattleScene extends Phaser.Scene {
     });
     this.mapZoom = nextMapZoom;
     camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
+    this.stopCameraMotion();
     this.updateUnitHealthLabelScales(nextMapZoom);
+  }
+
+  private updateKeyboardCamera(delta: number): void {
+    const camera = this.cameras.main;
+    const velocity = calculateInertialCameraVelocity({
+      velocityX: this.cameraVelocity.x,
+      velocityY: this.cameraVelocity.y,
+      ...this.getKeyboardCameraDirection(),
+      deltaMs: delta,
+      speed: CAMERA_SCROLL_SPEED,
+      deceleration: CAMERA_DECELERATION,
+    });
+
+    this.cameraVelocity = velocity;
+    camera.setScroll(
+      camera.scrollX + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
+      camera.scrollY + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
+    );
+  }
+
+  private getKeyboardCameraDirection(): { horizontal: number; vertical: number } {
+    return {
+      horizontal:
+        Number(Boolean(this.cursors?.right.isDown || this.wasdKeys?.right.isDown)) -
+        Number(Boolean(this.cursors?.left.isDown || this.wasdKeys?.left.isDown)),
+      vertical:
+        Number(Boolean(this.cursors?.down.isDown || this.wasdKeys?.down.isDown)) -
+        Number(Boolean(this.cursors?.up.isDown || this.wasdKeys?.up.isDown)),
+    };
+  }
+
+  private stopCameraMotion(): void {
+    this.cameraVelocity = { x: 0, y: 0 };
   }
 
   private handleHudClick(pointer: Phaser.Input.Pointer): boolean {
