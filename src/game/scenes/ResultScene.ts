@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 
+import type { MapDefinition } from "../../core/maps/map-definition";
 import type { SideId } from "../../core/model/game-state";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
@@ -16,6 +17,7 @@ interface ResultSceneData {
   readonly winner: SideId;
   readonly turn: number;
   readonly matchConfiguration?: MatchConfiguration;
+  readonly mapDefinition?: MapDefinition;
 }
 
 const CENTER_X = 1920;
@@ -68,7 +70,11 @@ export class ResultScene extends Phaser.Scene {
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
       label: "PLAY AGAIN",
-      onClick: () => this.scene.start(BATTLE_SCENE_KEY, { matchConfiguration }),
+      onClick: () =>
+        this.scene.start(BATTLE_SCENE_KEY, {
+          matchConfiguration,
+          mapDefinition: data.mapDefinition,
+        }),
     });
     const menuButton = new Button(this, {
       x: MENU_BUTTON_X,

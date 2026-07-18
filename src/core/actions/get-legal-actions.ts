@@ -32,8 +32,19 @@ function addUnitActions(state: GameState, unit: UnitState, actions: GameAction[]
 }
 
 function addLegalMoveActions(state: GameState, unit: UnitState, actions: GameAction[]): void {
-  for (let y = FIRST_COORDINATE; y < state.board.height; y += COORDINATE_INCREMENT) {
-    for (let x = FIRST_COORDINATE; x < state.board.width; x += COORDINATE_INCREMENT) {
+  const minimumX = Math.max(FIRST_COORDINATE, unit.position.x - unit.movementPoints);
+  const maximumX = Math.min(
+    state.board.width - COORDINATE_INCREMENT,
+    unit.position.x + unit.movementPoints,
+  );
+  const minimumY = Math.max(FIRST_COORDINATE, unit.position.y - unit.movementPoints);
+  const maximumY = Math.min(
+    state.board.height - COORDINATE_INCREMENT,
+    unit.position.y + unit.movementPoints,
+  );
+
+  for (let y = minimumY; y <= maximumY; y += COORDINATE_INCREMENT) {
+    for (let x = minimumX; x <= maximumX; x += COORDINATE_INCREMENT) {
       addIfLegal(state, { type: "move", unitId: unit.id, destination: { x, y } }, actions);
     }
   }

@@ -1,0 +1,507 @@
+import Phaser from "phaser";
+
+import {
+  createMapDefinition,
+  isMapReadyForMatch,
+  type MapDefinition,
+  resizeMapDefinition,
+} from "../../core/maps/map-definition";
+import type { Position, SideId, UnitType } from "../../core/model/game-state";
+import { assetManifest } from "../assets/asset-manifest";
+import { calculateEditorWorldViewport } from "../config/editor-presentation";
+import {
+  calculatePresentationViewport,
+  type PresentationViewport,
+} from "../config/presentation-layout";
+import { calculateDraggedScroll } from "../input/camera-pan";
+import { calculateAnchoredScroll, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
+import {
+  applyEditorTool,
+  type EditorTool,
+  isPositionInMap,
+  wouldTrimPlacements,
+} from "../maps/editor-map-operations";
+import { getBrowserMapLibrary } from "../maps/map-library";
+import {
+  createDefaultMatchConfiguration,
+  type MatchConfiguration,
+} from "../match/match-configuration";
+import { Button } from "../ui/components/Button";
+import { Panel } from "../ui/components/Panel";
+import { uiTheme } from "../ui/theme/ui-theme";
+import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY } from "./scene-keys";
+
+const TILE_SIZE = 512;
+const HALF = 2;
+const HUD_X = 56;
+const HUD_WIDTH = 864;
+const EDITOR_PANEL_RESERVED_WIDTH = HUD_X + HUD_WIDTH;
+const TOP_PANEL_Y = 56;
+const TOP_PANEL_HEIGHT = 2048;
+const EDITOR_CONTENT_OFFSET = 64;
+const CONTENT_X = HUD_X + EDITOR_CONTENT_OFFSET;
+const BUTTON_X = HUD_X + HUD_WIDTH / HALF;
+const BUTTON_WIDTH = 704;
+const BUTTON_HEIGHT = 64;
+const BUTTON_GAP = 80;
+const FIRST_BUTTON_Y = 332;
+const TOOL_TITLE_Y = 148;
+const STATUS_Y = 1940;
+const DEFAULT_WIDTH = 12;
+const DEFAULT_HEIGHT = 8;
+const MAP_ID_PREFIX = "map";
+const MAP_NAME_PREFIX = "New Map";
+const MAP_ID_SEPARATOR = "-";
+const MAP_NAME_SEPARATOR = " ";
+const INITIAL_MAP_NUMBER = 1;
+const CAMERA_SCROLL_SPEED = 900;
+const MILLISECONDS_PER_SECOND = 1000;
+const BUTTON_ROW = {
+  widthDecrease: 0,
+  widthIncrease: 1,
+  heightDecrease: 2,
+  heightIncrease: 3,
+  newMap: 4,
+  blueInfantry: 5,
+  blueTank: 6,
+  redInfantry: 7,
+  redTank: 8,
+  neutralPoint: 10,
+  bluePoint: 11,
+  redPoint: 12,
+  erase: 13,
+  save: 15,
+  saveCopy: 16,
+  testMatch: 17,
+  import: 18,
+  export: 19,
+  delete: 20,
+  back: 21,
+} as const;
+
+interface MapEditorSceneData {
+  readonly mapId?: string;
+  readonly matchConfiguration?: MatchConfiguration;
+}
+
+interface PendingResize {
+  readonly width: number;
+  readonly height: number;
+}
+
+interface CameraDrag {
+  readonly pointerX: number;
+  readonly pointerY: number;
+  readonly scrollX: number;
+  readonly scrollY: number;
+}
+
+export class MapEditorScene extends Phaser.Scene {
+  private readonly library = getBrowserMapLibrary();
+  private map!: MapDefinition;
+  private matchConfiguration = createDefaultMatchConfiguration();
+  private worldContainer!: Phaser.GameObjects.Container;
+  private hudContainer!: Phaser.GameObjects.Container;
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
+  private presentationViewport!: PresentationViewport;
+  private mapZoom = INITIAL_MAP_ZOOM;
+  private tool: EditorTool = { kind: "unit", side: "blue", unitType: "infantry" };
+  private statusText!: Phaser.GameObjects.Text;
+  private mapInfoText!: Phaser.GameObjects.Text;
+  private pendingResize: PendingResize | null = null;
+  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
+  private cameraDrag: CameraDrag | null = null;
+
+  public constructor() {
+    super("map-editor");
+  }
+
+  public create(data: MapEditorSceneData = {}): void {
+    this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
+    this.map = this.loadMap(data.mapId);
+    this.worldContainer = this.add.container();
+    this.hudContainer = this.add.container().setScrollFactor(0);
+    this.configureCameras();
+    this.createWorld();
+    this.createHud();
+    this.bindInput();
+    this.render();
+  }
+
+  public update(_time: number, delta: number): void {
+    const distance = (CAMERA_SCROLL_SPEED * delta) / MILLISECONDS_PER_SECOND;
+    const camera = this.cameras.main;
+
+    if (this.cursors?.left.isDown || this.wasdKeys?.left.isDown) camera.scrollX -= distance;
+    if (this.cursors?.right.isDown || this.wasdKeys?.right.isDown) camera.scrollX += distance;
+    if (this.cursors?.up.isDown || this.wasdKeys?.up.isDown) camera.scrollY -= distance;
+    if (this.cursors?.down.isDown || this.wasdKeys?.down.isDown) camera.scrollY += distance;
+  }
+
+  private loadMap(mapId: string | undefined): MapDefinition {
+    const storedMap = mapId ? this.library.list().find((map) => map.id === mapId) : undefined;
+    return storedMap ?? createNewMap(this.library.list().length + INITIAL_MAP_NUMBER);
+  }
+
+  private configureCameras(): void {
+    this.uiCamera = this.cameras.add();
+    this.cameras.main.ignore(this.hudContainer);
+    this.uiCamera.ignore(this.worldContainer);
+    const keyboard = this.input.keyboard;
+    this.cursors = keyboard?.createCursorKeys();
+    this.wasdKeys = keyboard?.addKeys({
+      up: Phaser.Input.Keyboard.KeyCodes.W,
+      down: Phaser.Input.Keyboard.KeyCodes.S,
+      left: Phaser.Input.Keyboard.KeyCodes.A,
+      right: Phaser.Input.Keyboard.KeyCodes.D,
+    }) as Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key> | undefined;
+    this.updatePresentationViewport();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.unbindResize, this);
+  }
+
+  private updatePresentationViewport(): void {
+    this.presentationViewport = calculatePresentationViewport(this.scale.width, this.scale.height);
+    const { x, y, scale } = this.presentationViewport;
+    const worldViewport = calculateEditorWorldViewport(
+      this.presentationViewport,
+      EDITOR_PANEL_RESERVED_WIDTH,
+    );
+    const boardWidth = this.map.width * TILE_SIZE;
+    const boardHeight = this.map.height * TILE_SIZE;
+
+    this.cameras.main
+      .setViewport(worldViewport.x, worldViewport.y, worldViewport.width, worldViewport.height)
+      .setBounds(0, 0, boardWidth, boardHeight)
+      .setZoom(this.mapZoom * scale);
+    this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
+    this.hudContainer.setPosition(x, y).setScale(scale);
+  }
+
+  private createWorld(): void {
+    const grass = this.add.tileSprite(
+      (this.map.width * TILE_SIZE) / HALF,
+      (this.map.height * TILE_SIZE) / HALF,
+      this.map.width * TILE_SIZE,
+      this.map.height * TILE_SIZE,
+      assetManifest.terrain.plain.textureKey,
+    );
+    this.worldContainer.add(grass);
+  }
+
+  private createHud(): void {
+    const panel = new Panel(this, {
+      x: HUD_X,
+      y: TOP_PANEL_Y,
+      width: HUD_WIDTH,
+      height: TOP_PANEL_HEIGHT,
+      title: "MAP EDITOR",
+    });
+    this.mapInfoText = this.addText(CONTENT_X, TOOL_TITLE_Y, "");
+    this.statusText = this.addText(CONTENT_X, STATUS_Y, "");
+    const buttons = [
+      this.createButton("WIDTH -", BUTTON_ROW.widthDecrease, () =>
+        this.requestResize(this.map.width - 1, this.map.height),
+      ),
+      this.createButton("WIDTH +", BUTTON_ROW.widthIncrease, () =>
+        this.requestResize(this.map.width + 1, this.map.height),
+      ),
+      this.createButton("HEIGHT -", BUTTON_ROW.heightDecrease, () =>
+        this.requestResize(this.map.width, this.map.height - 1),
+      ),
+      this.createButton("HEIGHT +", BUTTON_ROW.heightIncrease, () =>
+        this.requestResize(this.map.width, this.map.height + 1),
+      ),
+      this.createButton("NEW MAP", BUTTON_ROW.newMap, () => this.createNewMap()),
+      this.createButton("BLUE INFANTRY", BUTTON_ROW.blueInfantry, () =>
+        this.selectUnitTool("blue", "infantry"),
+      ),
+      this.createButton("BLUE TANK", BUTTON_ROW.blueTank, () =>
+        this.selectUnitTool("blue", "tank"),
+      ),
+      this.createButton("RED INFANTRY", BUTTON_ROW.redInfantry, () =>
+        this.selectUnitTool("red", "infantry"),
+      ),
+      this.createButton("RED TANK", BUTTON_ROW.redTank, () => this.selectUnitTool("red", "tank")),
+      this.createButton("POINT: NEUTRAL", BUTTON_ROW.neutralPoint, () =>
+        this.selectControlPointTool(null),
+      ),
+      this.createButton("POINT: BLUE", BUTTON_ROW.bluePoint, () =>
+        this.selectControlPointTool("blue"),
+      ),
+      this.createButton("POINT: RED", BUTTON_ROW.redPoint, () =>
+        this.selectControlPointTool("red"),
+      ),
+      this.createButton("ERASE CELL", BUTTON_ROW.erase, () => this.setTool({ kind: "erase" })),
+      this.createButton("SAVE", BUTTON_ROW.save, () => this.save()),
+      this.createButton("SAVE AS COPY", BUTTON_ROW.saveCopy, () => this.saveCopy()),
+      this.createButton("TEST MATCH", BUTTON_ROW.testMatch, () => this.startTestMatch()),
+      this.createButton("IMPORT", BUTTON_ROW.import, () => void this.importMap()),
+      this.createButton("EXPORT", BUTTON_ROW.export, () => this.exportMap()),
+      this.createButton("DELETE MAP", BUTTON_ROW.delete, () => this.deleteMap()),
+      this.createButton("BACK TO MENU", BUTTON_ROW.back, () =>
+        this.scene.start(MAIN_MENU_SCENE_KEY),
+      ),
+    ];
+
+    this.hudContainer.add([
+      panel.container,
+      this.mapInfoText,
+      this.statusText,
+      ...buttons.map((button) => button.container),
+    ]);
+  }
+
+  private createButton(label: string, row: number, onClick: () => void): Button {
+    return new Button(this, {
+      x: BUTTON_X,
+      y: FIRST_BUTTON_Y + row * BUTTON_GAP,
+      width: BUTTON_WIDTH,
+      height: BUTTON_HEIGHT,
+      label,
+      onClick,
+    });
+  }
+
+  private bindInput(): void {
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+      if (pointer.middleButtonDown() && this.isMapPointer(pointer)) {
+        this.startCameraDrag(pointer);
+        return;
+      }
+      if (!this.isMapPointer(pointer)) return;
+      const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const position = { x: Math.floor(world.x / TILE_SIZE), y: Math.floor(world.y / TILE_SIZE) };
+      if (isPositionInMap(position, this.map)) this.applyTool(position);
+    });
+    this.input.on(
+      Phaser.Input.Events.POINTER_WHEEL,
+      (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) =>
+        this.zoom(pointer, y),
+    );
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+      this.updateCameraDrag(pointer);
+    });
+    this.input.on(Phaser.Input.Events.POINTER_UP, () => {
+      this.cameraDrag = null;
+    });
+  }
+
+  private startCameraDrag(pointer: Phaser.Input.Pointer): void {
+    const camera = this.cameras.main;
+    this.cameraDrag = {
+      pointerX: pointer.x,
+      pointerY: pointer.y,
+      scrollX: camera.scrollX,
+      scrollY: camera.scrollY,
+    };
+  }
+
+  private updateCameraDrag(pointer: Phaser.Input.Pointer): void {
+    if (!this.cameraDrag || !pointer.middleButtonDown()) return;
+    const scroll = calculateDraggedScroll({
+      scrollX: this.cameraDrag.scrollX,
+      scrollY: this.cameraDrag.scrollY,
+      deltaX: pointer.x - this.cameraDrag.pointerX,
+      deltaY: pointer.y - this.cameraDrag.pointerY,
+      zoom: this.cameras.main.zoom,
+    });
+    this.cameras.main.setScroll(scroll.x, scroll.y);
+  }
+
+  private isMapPointer(pointer: Phaser.Input.Pointer): boolean {
+    const logical = this.toLogicalPointer(pointer);
+    return logical !== null && logical.x >= EDITOR_PANEL_RESERVED_WIDTH;
+  }
+
+  private zoom(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
+    if (!this.isMapPointer(pointer)) return;
+    const nextMapZoom = calculateNextZoom(this.mapZoom, wheelDeltaY);
+    if (nextMapZoom === this.mapZoom) return;
+    const camera = this.cameras.main;
+    const nextZoom = nextMapZoom * this.presentationViewport.scale;
+    const scroll = calculateAnchoredScroll({
+      scrollX: camera.scrollX,
+      scrollY: camera.scrollY,
+      pointerX: pointer.x - this.presentationViewport.x,
+      pointerY: pointer.y - this.presentationViewport.y,
+      previousZoom: camera.zoom,
+      nextZoom,
+    });
+    this.mapZoom = nextMapZoom;
+    camera.setZoom(nextZoom).setScroll(scroll.x, scroll.y);
+  }
+
+  private applyTool(position: Position): void {
+    this.map = applyEditorTool(this.map, this.tool, position);
+    this.render();
+  }
+
+  private selectUnitTool(side: SideId, unitType: UnitType): void {
+    this.setTool({ kind: "unit", side, unitType });
+  }
+  private selectControlPointTool(owner: SideId | null): void {
+    this.setTool({ kind: "control-point", owner });
+  }
+  private setTool(tool: EditorTool): void {
+    this.tool = tool;
+    this.render();
+  }
+
+  private requestResize(width: number, height: number): void {
+    if (width < 1 || height < 1) {
+      this.statusText.setText("Map dimensions must stay positive.");
+      return;
+    }
+    if (!wouldTrimPlacements(this.map, width, height)) {
+      this.commitResize(width, height);
+      return;
+    }
+    this.pendingResize = { width, height };
+    this.statusText.setText(
+      "Resize removes out-of-bounds placements. Click SAVE to confirm resize.",
+    );
+  }
+
+  private commitResize(width: number, height: number): void {
+    this.map = resizeMapDefinition(this.map, width, height);
+    this.pendingResize = null;
+    this.worldContainer.destroy(true);
+    this.worldContainer = this.add.container();
+    this.uiCamera.ignore(this.worldContainer);
+    this.createWorld();
+    this.updatePresentationViewport();
+    this.render();
+  }
+
+  private save(): void {
+    if (this.pendingResize) {
+      this.commitResize(this.pendingResize.width, this.pendingResize.height);
+    }
+    this.library.save(this.map);
+    this.statusText.setText("Map saved locally.");
+  }
+
+  private saveCopy(): void {
+    this.library.save(this.map);
+    this.map = this.library.copy(this.map.id);
+    this.render();
+  }
+
+  private createNewMap(): void {
+    this.map = createNewMap(this.nextMapNumber());
+    this.pendingResize = null;
+    this.updatePresentationViewport();
+    this.render();
+  }
+  private startTestMatch(): void {
+    if (!isMapReadyForMatch(this.map)) {
+      this.statusText.setText("Add at least one Blue and Red unit to test this map.");
+      return;
+    }
+    this.scene.start(BATTLE_SCENE_KEY, {
+      mapDefinition: this.map,
+      matchConfiguration: this.matchConfiguration,
+    });
+  }
+  private async importMap(): Promise<void> {
+    const serialized = await chooseMapFile();
+    if (!serialized) return;
+    try {
+      this.map = this.library.import(serialized);
+      this.updatePresentationViewport();
+      this.statusText.setText("Map imported.");
+      this.render();
+    } catch {
+      this.statusText.setText("Import failed: invalid map file.");
+    }
+  }
+  private exportMap(): void {
+    downloadMapFile(this.map.name, JSON.stringify(this.map, null, 2));
+    this.statusText.setText("Map export started.");
+  }
+  private deleteMap(): void {
+    this.library.delete(this.map.id);
+    this.scene.start(MAIN_MENU_SCENE_KEY);
+  }
+
+  private render(): void {
+    this.worldContainer.removeAll(true);
+    this.createWorld();
+    for (const point of this.map.controlPoints)
+      this.worldContainer.add(
+        this.add.image(
+          tileCenter(point.position.x),
+          tileCenter(point.position.y),
+          controlPointTextureKey(point.owner),
+        ),
+      );
+    for (const unit of this.map.units)
+      this.worldContainer.add(
+        this.add.image(
+          tileCenter(unit.position.x),
+          tileCenter(unit.position.y),
+          assetManifest.units[`${unit.side}-${unit.type}`].textureKey,
+        ),
+      );
+    this.mapInfoText.setText(
+      `${this.map.name}\n${this.map.width} × ${this.map.height}\nTool: ${toolLabel(this.tool)}`,
+    );
+    if (!this.pendingResize)
+      this.statusText.setText(
+        isMapReadyForMatch(this.map) ? "Ready for test match." : "Draft: place Blue and Red units.",
+      );
+  }
+
+  private toLogicalPointer(pointer: Phaser.Input.Pointer): Position | null {
+    const { x, y, width, height, scale } = this.presentationViewport;
+    const localX = pointer.x - x;
+    const localY = pointer.y - y;
+    return localX < 0 || localX >= width || localY < 0 || localY >= height
+      ? null
+      : { x: Math.floor(localX / scale), y: Math.floor(localY / scale) };
+  }
+  private addText(x: number, y: number, text: string): Phaser.GameObjects.Text {
+    return this.add.text(x, y, text, {
+      color: uiTheme.colors.text,
+      fontFamily: uiTheme.font.family,
+      fontSize: `${uiTheme.font.smallSize}px`,
+    });
+  }
+  private unbindResize(): void {
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
+  }
+
+  private nextMapNumber(): number {
+    const mapIds = new Set(this.library.list().map((map) => map.id));
+    let number = INITIAL_MAP_NUMBER;
+
+    while (mapIds.has(`${MAP_ID_PREFIX}${MAP_ID_SEPARATOR}${number}`)) {
+      number += INITIAL_MAP_NUMBER;
+    }
+
+    return number;
+  }
+}
+
+function createNewMap(number: number): MapDefinition {
+  return createMapDefinition(
+    `${MAP_ID_PREFIX}${MAP_ID_SEPARATOR}${number}`,
+    `${MAP_NAME_PREFIX}${MAP_NAME_SEPARATOR}${number}`,
+    DEFAULT_WIDTH,
+    DEFAULT_HEIGHT,
+  );
+}
+function tileCenter(coordinate: number): number {
+  return coordinate * TILE_SIZE + TILE_SIZE / HALF;
+}
+function controlPointTextureKey(owner: SideId | null): string {
+  return assetManifest.terrain[`control-point-${owner ?? "neutral"}`].textureKey;
+}
+function toolLabel(tool: EditorTool): string {
+  if (tool.kind === "erase") return "ERASE";
+  if (tool.kind === "unit") return `${tool.side.toUpperCase()} ${tool.unitType.toUpperCase()}`;
+  return `POINT ${tool.owner?.toUpperCase() ?? "NEUTRAL"}`;
+}

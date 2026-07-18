@@ -1,7 +1,9 @@
 import Phaser from "phaser";
 
+import type { MapDefinition } from "../../core/maps/map-definition";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import { getBrowserMapLibrary } from "../maps/map-library";
 import {
   createDefaultMatchConfiguration,
   getParticipantLabel,
@@ -9,12 +11,12 @@ import {
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
-import { BATTLE_SCENE_KEY } from "./scene-keys";
+import { BATTLE_SCENE_KEY, MAP_EDITOR_SCENE_KEY } from "./scene-keys";
 
 const MENU_CENTER_X = 1920;
 const MENU_PANEL_CENTER_Y = 1080;
 const MENU_PANEL_WIDTH = 2400;
-const MENU_PANEL_HEIGHT = 1440;
+const MENU_PANEL_HEIGHT = 1900;
 const MENU_PANEL_BORDER_WIDTH = 8;
 const MENU_TITLE_Y = 560;
 const SIDE_LABEL_X = 1280;
@@ -23,7 +25,13 @@ const RED_SIDE_Y = 1120;
 const ROLE_BUTTON_X = 2580;
 const ROLE_BUTTON_WIDTH = 920;
 const ROLE_BUTTON_HEIGHT = 128;
-const MENU_START_BUTTON_Y = 1420;
+const MAP_LABEL_Y = 1320;
+const MAP_PREVIOUS_X = 1440;
+const MAP_NEXT_X = 2400;
+const MAP_BUTTON_WIDTH = 224;
+const MAP_BUTTON_HEIGHT = 112;
+const EDITOR_BUTTON_Y = 1580;
+const MENU_START_BUTTON_Y = 1800;
 const MENU_START_BUTTON_WIDTH = 1120;
 const MENU_START_BUTTON_HEIGHT = 176;
 const CENTER_ORIGIN = 0.5;
@@ -33,94 +41,164 @@ export class MainMenuScene extends Phaser.Scene {
   private safeAreaBackground!: Phaser.GameObjects.Rectangle;
   private presentationContainer!: Phaser.GameObjects.Container;
   private matchConfiguration = createDefaultMatchConfiguration();
+  private readonly mapLibrary = getBrowserMapLibrary();
+  private selectedMapId: string | null = null;
   private blueRoleButton!: Button;
   private redRoleButton!: Button;
+  private selectedMapText!: Phaser.GameObjects.Text;
 
   public constructor() {
     super("main-menu");
   }
 
   public create(): void {
-    const { colors, font, spacing } = uiTheme;
-    const centerX = MENU_CENTER_X;
     this.matchConfiguration = createDefaultMatchConfiguration();
+    const children = [
+      ...this.createStaticElements(),
+      ...this.createRoleControls(),
+      ...this.createMapControls(),
+      ...this.createLaunchControls(),
+    ];
+
+    this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
+    this.safeAreaBackground = this.add
+      .rectangle(0, 0, 0, 0, uiTheme.colors.background)
+      .setOrigin(0);
+    this.presentationContainer = this.add.container(0, 0, children);
+    this.refreshSelectedMapText();
+    this.updatePresentationViewport();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.unbindPresentationResize, this);
+  }
+
+  private createStaticElements(): Phaser.GameObjects.GameObject[] {
     const panel = this.add
-      .rectangle(centerX, MENU_PANEL_CENTER_Y, MENU_PANEL_WIDTH, MENU_PANEL_HEIGHT, colors.panel)
-      .setStrokeStyle(MENU_PANEL_BORDER_WIDTH, colors.panelBorder);
+      .rectangle(
+        MENU_CENTER_X,
+        MENU_PANEL_CENTER_Y,
+        MENU_PANEL_WIDTH,
+        MENU_PANEL_HEIGHT,
+        uiTheme.colors.panel,
+      )
+      .setStrokeStyle(MENU_PANEL_BORDER_WIDTH, uiTheme.colors.panelBorder);
     const title = this.add
-      .text(centerX, MENU_TITLE_Y, "AI WAR GAME", {
-        color: colors.text,
-        fontFamily: font.family,
-        fontSize: `${font.titleSize}px`,
+      .text(MENU_CENTER_X, MENU_TITLE_Y, "AI WAR GAME", {
+        color: uiTheme.colors.text,
+        fontFamily: uiTheme.font.family,
+        fontSize: `${uiTheme.font.titleSize}px`,
       })
       .setOrigin(CENTER_ORIGIN);
-    const blueSideLabel = this.add
-      .text(SIDE_LABEL_X, BLUE_SIDE_Y, "BLUE COMMANDER", {
-        color: colors.text,
-        fontFamily: font.family,
-        fontSize: `${font.normalSize}px`,
+
+    return [
+      panel,
+      title,
+      this.createSideLabel("BLUE COMMANDER", BLUE_SIDE_Y),
+      this.createSideLabel("RED COMMANDER", RED_SIDE_Y),
+    ];
+  }
+
+  private createRoleControls(): Phaser.GameObjects.GameObject[] {
+    this.blueRoleButton = this.createRoleButton(BLUE_SIDE_Y, "blue");
+    this.redRoleButton = this.createRoleButton(RED_SIDE_Y, "red");
+    return [this.blueRoleButton.container, this.redRoleButton.container];
+  }
+
+  private createMapControls(): Phaser.GameObjects.GameObject[] {
+    this.selectedMapText = this.add
+      .text(MENU_CENTER_X, MAP_LABEL_Y, "", {
+        color: uiTheme.colors.text,
+        fontFamily: uiTheme.font.family,
+        fontSize: `${uiTheme.font.normalSize}px`,
       })
-      .setOrigin(0, CENTER_ORIGIN);
-    const redSideLabel = this.add
-      .text(SIDE_LABEL_X, RED_SIDE_Y, "RED COMMANDER", {
-        color: colors.text,
-        fontFamily: font.family,
-        fontSize: `${font.normalSize}px`,
-      })
-      .setOrigin(0, CENTER_ORIGIN);
-    this.blueRoleButton = new Button(this, {
-      x: ROLE_BUTTON_X,
-      y: BLUE_SIDE_Y,
-      width: ROLE_BUTTON_WIDTH,
+      .setOrigin(CENTER_ORIGIN);
+    const previousMapButton = this.createMapButton(MAP_PREVIOUS_X, "< MAP", -1);
+    const nextMapButton = this.createMapButton(MAP_NEXT_X, "MAP >", 1);
+    const editorButton = new Button(this, {
+      x: MENU_CENTER_X,
+      y: EDITOR_BUTTON_Y,
+      width: MENU_START_BUTTON_WIDTH,
       height: ROLE_BUTTON_HEIGHT,
-      label: getParticipantLabel(this.matchConfiguration.blue),
-      onClick: () => this.toggleRole("blue"),
+      label: "MAP EDITOR",
+      onClick: () => this.openMapEditor(),
     });
-    this.redRoleButton = new Button(this, {
-      x: ROLE_BUTTON_X,
-      y: RED_SIDE_Y,
-      width: ROLE_BUTTON_WIDTH,
-      height: ROLE_BUTTON_HEIGHT,
-      label: getParticipantLabel(this.matchConfiguration.red),
-      onClick: () => this.toggleRole("red"),
-    });
+
+    return [
+      this.selectedMapText,
+      previousMapButton.container,
+      nextMapButton.container,
+      editorButton.container,
+    ];
+  }
+
+  private createLaunchControls(): Phaser.GameObjects.GameObject[] {
     const startButton = new Button(this, {
-      x: centerX,
+      x: MENU_CENTER_X,
       y: MENU_START_BUTTON_Y,
       width: MENU_START_BUTTON_WIDTH,
       height: MENU_START_BUTTON_HEIGHT,
       label: "START MATCH",
-      onClick: () =>
-        this.scene.start(BATTLE_SCENE_KEY, { matchConfiguration: this.matchConfiguration }),
+      onClick: () => this.startMatch(),
     });
     const instructions = this.add
       .text(
-        centerX,
-        MENU_START_BUTTON_Y + MENU_START_BUTTON_HEIGHT + spacing.sm,
-        "Choose a commander for each army, then start the match.",
+        MENU_CENTER_X,
+        MENU_START_BUTTON_Y + MENU_START_BUTTON_HEIGHT + uiTheme.spacing.sm,
+        "Choose commanders and a map, then start the match.",
         {
-          color: colors.mutedText,
-          fontFamily: font.family,
-          fontSize: `${font.smallSize}px`,
+          color: uiTheme.colors.mutedText,
+          fontFamily: uiTheme.font.family,
+          fontSize: `${uiTheme.font.smallSize}px`,
         },
       )
       .setOrigin(CENTER_ORIGIN, TOP_ORIGIN);
 
-    this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
-    this.safeAreaBackground = this.add.rectangle(0, 0, 0, 0, colors.background).setOrigin(0);
-    this.presentationContainer = this.add.container(0, 0, [
-      panel,
-      title,
-      blueSideLabel,
-      redSideLabel,
-      this.blueRoleButton.container,
-      this.redRoleButton.container,
-      startButton.container,
-      instructions,
-    ]);
-    this.updatePresentationViewport();
-    this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.unbindPresentationResize, this);
+    return [startButton.container, instructions];
+  }
+
+  private createSideLabel(label: string, y: number): Phaser.GameObjects.Text {
+    return this.add
+      .text(SIDE_LABEL_X, y, label, {
+        color: uiTheme.colors.text,
+        fontFamily: uiTheme.font.family,
+        fontSize: `${uiTheme.font.normalSize}px`,
+      })
+      .setOrigin(0, CENTER_ORIGIN);
+  }
+
+  private createRoleButton(y: number, side: "blue" | "red"): Button {
+    return new Button(this, {
+      x: ROLE_BUTTON_X,
+      y,
+      width: ROLE_BUTTON_WIDTH,
+      height: ROLE_BUTTON_HEIGHT,
+      label: getParticipantLabel(this.matchConfiguration[side]),
+      onClick: () => this.toggleRole(side),
+    });
+  }
+
+  private createMapButton(x: number, label: string, direction: number): Button {
+    return new Button(this, {
+      x,
+      y: MAP_LABEL_Y,
+      width: MAP_BUTTON_WIDTH,
+      height: MAP_BUTTON_HEIGHT,
+      label,
+      onClick: () => this.changeSelectedMap(direction),
+    });
+  }
+
+  private openMapEditor(): void {
+    this.scene.start(MAP_EDITOR_SCENE_KEY, {
+      mapId: this.selectedMapId ?? undefined,
+      matchConfiguration: this.matchConfiguration,
+    });
+  }
+
+  private startMatch(): void {
+    this.scene.start(BATTLE_SCENE_KEY, {
+      matchConfiguration: this.matchConfiguration,
+      mapDefinition: this.getSelectedCustomMap() ?? undefined,
+    });
   }
 
   private updatePresentationViewport(): void {
@@ -141,6 +219,27 @@ export class MainMenuScene extends Phaser.Scene {
     this.matchConfiguration = toggleParticipant(this.matchConfiguration, side);
     this.blueRoleButton.setLabel(getParticipantLabel(this.matchConfiguration.blue));
     this.redRoleButton.setLabel(getParticipantLabel(this.matchConfiguration.red));
+  }
+
+  private changeSelectedMap(direction: number): void {
+    const maps = this.mapLibrary.list();
+    const selectedIndex = this.selectedMapId
+      ? maps.findIndex((map) => map.id === this.selectedMapId) + 1
+      : 0;
+    const nextIndex = (selectedIndex + direction + maps.length + 1) % (maps.length + 1);
+    this.selectedMapId = nextIndex === 0 ? null : (maps[nextIndex - 1]?.id ?? null);
+    this.refreshSelectedMapText();
+  }
+
+  private getSelectedCustomMap(): MapDefinition | undefined {
+    return this.selectedMapId
+      ? this.mapLibrary.list().find((map) => map.id === this.selectedMapId)
+      : undefined;
+  }
+
+  private refreshSelectedMapText(): void {
+    const map = this.getSelectedCustomMap();
+    this.selectedMapText.setText(map ? `MAP: ${map.name}` : "MAP: Skirmish 12×8");
   }
 
   private unbindPresentationResize(): void {

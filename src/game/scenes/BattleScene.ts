@@ -1,14 +1,11 @@
 import Phaser from "phaser";
 
 import type { GameAction } from "../../core/actions/game-actions";
+import { createGameStateFromMap, type MapDefinition } from "../../core/maps/map-definition";
 import type { GameEvent } from "../../core/model/game-events";
 import type { GameState, Position, SideId, UnitState } from "../../core/model/game-state";
 import { applyAction } from "../../core/rules/apply-action";
-import {
-  BOARD_HEIGHT,
-  BOARD_WIDTH,
-  createSkirmishGameState,
-} from "../../core/scenarios/skirmish-12x8";
+import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
 import { assetManifest } from "../assets/asset-manifest";
 import {
   calculateUnitHealthLabelScale,
@@ -104,6 +101,7 @@ interface UnitHealthView {
 
 export interface BattleSceneData {
   readonly matchConfiguration?: MatchConfiguration;
+  readonly mapDefinition?: MapDefinition;
 }
 
 export class BattleScene extends Phaser.Scene {
@@ -112,6 +110,7 @@ export class BattleScene extends Phaser.Scene {
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private presentationViewport!: PresentationViewport;
   private gameState!: GameState;
+  private mapDefinition: MapDefinition | null = null;
   private matchConfiguration = createDefaultMatchConfiguration();
   private mapZoom = INITIAL_MAP_ZOOM;
   private selectedUnitId: string | null = null;
@@ -138,7 +137,10 @@ export class BattleScene extends Phaser.Scene {
 
   public create(data: BattleSceneData = {}): void {
     this.resetRenderingState();
-    this.gameState = createSkirmishGameState();
+    this.mapDefinition = data.mapDefinition ?? null;
+    this.gameState = this.mapDefinition
+      ? createGameStateFromMap(this.mapDefinition)
+      : createSkirmishGameState();
     this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     this.mapZoom = INITIAL_MAP_ZOOM;
     this.worldContainer = this.add.container();
@@ -181,8 +183,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private configureCameras(): void {
-    const boardWidth = BOARD_WIDTH * TILE_SIZE;
-    const boardHeight = BOARD_HEIGHT * TILE_SIZE;
+    const boardWidth = this.gameState.board.width * TILE_SIZE;
+    const boardHeight = this.gameState.board.height * TILE_SIZE;
     const worldCamera = this.cameras.main;
     this.uiCamera = this.cameras.add();
 
@@ -238,8 +240,8 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    for (let y = 0; y < BOARD_HEIGHT; y += 1) {
-      for (let x = 0; x < BOARD_WIDTH; x += 1) {
+    for (let y = 0; y < this.gameState.board.height; y += 1) {
+      for (let x = 0; x < this.gameState.board.width; x += 1) {
         this.addDiagnosticTile(x, y);
       }
     }
@@ -265,13 +267,16 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createAssetWorld(): void {
-    for (let y = 0; y < BOARD_HEIGHT; y += 1) {
-      for (let x = 0; x < BOARD_WIDTH; x += 1) {
-        const point = this.toScreenPosition({ x, y });
-        const tile = this.add.image(point.x, point.y, assetManifest.terrain.plain.textureKey);
-        this.worldContainer.add(tile);
-      }
-    }
+    const boardWidth = this.gameState.board.width * TILE_SIZE;
+    const boardHeight = this.gameState.board.height * TILE_SIZE;
+    const tile = this.add.tileSprite(
+      BOARD_ORIGIN_X + boardWidth / DOUBLE_SIZE_MULTIPLIER,
+      BOARD_ORIGIN_Y + boardHeight / DOUBLE_SIZE_MULTIPLIER,
+      boardWidth,
+      boardHeight,
+      assetManifest.terrain.plain.textureKey,
+    );
+    this.worldContainer.add(tile);
 
     this.createMovementHighlightLayer();
     this.updateControlPointViews(this.gameState);
@@ -585,6 +590,7 @@ export class BattleScene extends Phaser.Scene {
       winner: this.gameState.winner,
       turn: this.gameState.turn,
       matchConfiguration: this.matchConfiguration,
+      mapDefinition: this.mapDefinition ?? undefined,
     });
 
     return true;
@@ -810,7 +816,9 @@ export class BattleScene extends Phaser.Scene {
     const x = Math.floor((point.x - BOARD_ORIGIN_X) / TILE_SIZE);
     const y = Math.floor((point.y - BOARD_ORIGIN_Y) / TILE_SIZE);
 
-    return x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT ? { x, y } : null;
+    return x >= 0 && x < this.gameState.board.width && y >= 0 && y < this.gameState.board.height
+      ? { x, y }
+      : null;
   }
 
   private toLogicalPointer(pointer: Phaser.Input.Pointer): Position | null {

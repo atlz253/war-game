@@ -12,6 +12,7 @@
 - Phaser is responsible for rendering, input, scenes, cameras, Canvas UI, effects, audio, and animation only.
 - Do not add React, Vue, Svelte, DOM overlays, DOM controls, CSS layout for game UI, or a global UI-state library.
 - The HTML shell contains only `<div id="game"></div>`.
+- Map import and export may create a temporary native browser file picker or download link only after a Canvas-button click. These elements must be removed immediately and must never become visible game UI.
 - Keep UI theme values centralized. Use integer coordinates, `pixelArt`, `roundPixels`, and nearest-neighbour scaling.
 - HUD objects use `setScrollFactor(0)` and must consume pointer input so a HUD click cannot also select a board cell.
 

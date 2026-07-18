@@ -78,6 +78,12 @@ interface SelectedUnitViewModel {
 
 `renderGameState(previousState, nextState)` incrementally reconciles unit views by ID, terrain/control-point views, HUD data, event log entries, and legal-action indicators. It must not recreate the entire scene after each action.
 
+## User map library
+
+`MapDefinition` is a serializable core value object. It contains only board dimensions, unit placements, and control-point placements; `createGameStateFromMap` deterministically creates runtime unit identifiers and stats. Browser-local persistence, the Canvas editor, and file import/export live under `src/game/maps` and must not be imported by `core` or `ai`.
+
+Map files use a versioned JSON schema. A map can be saved as a draft, but a match may begin only when both sides have at least one unit. The only DOM exception is a short-lived native file picker/download link initiated by a Canvas button for JSON import/export; it is not part of the game interface.
+
 ## Canvas UI contracts
 
 `Button` supports normal, hover, pressed, and disabled states; pointer handling; label changes; and destruction. `Panel` supports background, border, title, padding, children, resize, visibility, and destruction. `ProgressBar` represents bounded numeric progress. `ScrollableList` is a bounded event log showing the last 6–10 events in v1; full scrolling is out of scope.
