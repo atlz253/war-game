@@ -1,10 +1,10 @@
 import Phaser from "phaser";
 
+import { HeuristicAgent } from "../../ai/agents/HeuristicAgent";
 import type { GameAction } from "../../core/actions/game-actions";
-import { getDefenceBonus } from "../../core/combat/calculate-damage";
 import { createGameStateFromMap, type MapDefinition } from "../../core/maps/map-definition";
 import type { GameEvent } from "../../core/model/game-events";
-import type { GameState, Position, SideId, UnitState } from "../../core/model/game-state";
+import type { GameState, Position, UnitState } from "../../core/model/game-state";
 import { applyAction } from "../../core/rules/apply-action";
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
 import { assetManifest } from "../assets/asset-manifest";
@@ -26,6 +26,8 @@ import {
 } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
+import { getBrowserLmStudioSettings } from "../lm-studio/lm-studio-settings";
+import { decideAiAction } from "../match/choose-ai-action";
 import {
   createAgentForParticipant,
   createDefaultMatchConfiguration,
@@ -37,6 +39,15 @@ import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
 import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
+import {
+  findUnitAt,
+  formatEvent,
+  formatSelectedUnit,
+  getControlPointTextureKey,
+  getTerrainTextureKey,
+  getUnitTextureKey,
+  isInsideRectangle,
+} from "./battle-view-helpers";
 import { RESULT_SCENE_KEY } from "./scene-keys";
 
 const TILE_SIZE = 512;
@@ -126,12 +137,14 @@ export class BattleScene extends Phaser.Scene {
   private gameState!: GameState;
   private mapDefinition: MapDefinition | null = null;
   private matchConfiguration = createDefaultMatchConfiguration();
+  private readonly lmStudioSettings = getBrowserLmStudioSettings();
   private mapZoom = INITIAL_MAP_ZOOM;
   private targetMapZoom = INITIAL_MAP_ZOOM;
   private zoomAnchor: ZoomAnchor | null = null;
   private cameraVelocity = { x: 0, y: 0 };
   private selectedUnitId: string | null = null;
   private inputLocked = false;
+  private aiTurnActions: GameAction[] = [];
   private selectedUnitText!: Phaser.GameObjects.Text;
   private activeTurnText!: Phaser.GameObjects.Text;
   private healthBar!: ProgressBar;
@@ -180,6 +193,7 @@ export class BattleScene extends Phaser.Scene {
     this.movementHighlightLayer = null;
     this.selectedUnitId = null;
     this.inputLocked = false;
+    this.aiTurnActions = [];
     this.cameraVelocity = { x: 0, y: 0 };
     this.zoomAnchor = null;
   }
@@ -592,6 +606,7 @@ export class BattleScene extends Phaser.Scene {
 
     const previousState = this.gameState;
     this.gameState = result.state;
+    this.recordTurnAction(action);
     this.clearSelectionAfterTurnEnd(action);
     this.addEventMessages(result.events);
     this.renderGameState(previousState, this.gameState);
@@ -601,32 +616,34 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private runAiAction(): void {
-    this.time.delayedCall(AI_ACTION_DELAY, () => {
-      const agent = createAgentForParticipant(this.matchConfiguration[this.gameState.activeSide]);
+    this.time.delayedCall(AI_ACTION_DELAY, () => void this.executeAiAction());
+  }
 
-      if (!agent) {
-        throw new Error("A human participant cannot issue an automatic action.");
-      }
+  private async executeAiAction(): Promise<void> {
+    const participant = this.matchConfiguration[this.gameState.activeSide];
+    const fallbackAgent = new HeuristicAgent();
+    const agent = createAgentForParticipant(participant, this.lmStudioSettings.load());
+    const context = { actionsThisTurn: this.aiTurnActions };
+    const decision = agent
+      ? await decideAiAction(this.gameState, context, agent, fallbackAgent)
+      : { action: await fallbackAgent.chooseAction(this.gameState, context), usedFallback: true };
+    const result = applyAction(this.gameState, decision.action);
 
-      const action = agent.chooseAction(this.gameState);
-      const result = applyAction(this.gameState, action);
+    if (!result.accepted) {
+      throw new Error("AI returned an invalid action.");
+    }
 
-      if (!result.accepted) {
-        throw new Error(`${agent.id} returned an invalid action.`);
-      }
+    const previousState = this.gameState;
+    this.gameState = result.state;
+    this.recordTurnAction(decision.action);
+    this.clearSelectionAfterTurnEnd(decision.action);
+    if (decision.usedFallback && participant === "lm-studio-ai") {
+      this.eventLog.push("LM Studio unavailable — Heuristic AI order used.");
+    }
+    this.addEventMessages(result.events);
+    this.renderGameState(previousState, this.gameState);
 
-      const previousState = this.gameState;
-      this.gameState = result.state;
-      this.clearSelectionAfterTurnEnd(action);
-      this.addEventMessages(result.events);
-      this.renderGameState(previousState, this.gameState);
-
-      if (this.checkForResult()) {
-        return;
-      }
-
-      this.startAiTurnIfNeeded();
-    });
+    if (!this.checkForResult()) this.startAiTurnIfNeeded();
   }
 
   private startAiTurnIfNeeded(): void {
@@ -636,7 +653,12 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.inputLocked = true;
+    this.renderGameState(this.gameState, this.gameState);
     this.runAiAction();
+  }
+
+  private recordTurnAction(action: GameAction): void {
+    this.aiTurnActions = action.type === "end-turn" ? [] : [...this.aiTurnActions, action];
   }
 
   private clearSelectionAfterTurnEnd(action: GameAction): void {
@@ -849,7 +871,7 @@ export class BattleScene extends Phaser.Scene {
   private updateHud(state: GameState): void {
     const selectedUnit = this.selectedUnitId ? state.units[this.selectedUnitId] : undefined;
     this.activeTurnText.setText(
-      `Turn ${state.turn} — ${state.activeSide.toUpperCase()}${this.isActiveSideHuman() ? "" : " AI thinking"}`,
+      `Turn ${state.turn} — ${state.activeSide.toUpperCase()}${this.getAiThinkingSuffix()}`,
     );
     this.selectedUnitText.setText(
       formatSelectedUnit(state, selectedUnit, state.activeSide, this.isActiveSideHuman()),
@@ -869,6 +891,13 @@ export class BattleScene extends Phaser.Scene {
     this.captureButton.setEnabled(
       getCapturableControlPointId(state, this.selectedUnitId, this.inputLocked) !== null,
     );
+  }
+
+  private getAiThinkingSuffix(): string {
+    if (this.isActiveSideHuman() || !this.inputLocked) return "";
+    return this.matchConfiguration[this.gameState.activeSide] === "lm-studio-ai"
+      ? " — LM STUDIO THINKING..."
+      : " — AI THINKING";
   }
 
   private addEventMessages(events: readonly GameEvent[]): void {
@@ -912,83 +941,4 @@ export class BattleScene extends Phaser.Scene {
       fontSize: `${uiTheme.font.normalSize}px`,
     });
   }
-}
-
-function findUnitAt(state: GameState, position: Position): UnitState | undefined {
-  return Object.values(state.units).find((unit) => positionsEqual(unit.position, position));
-}
-
-function positionsEqual(first: Position, second: Position): boolean {
-  return first.x === second.x && first.y === second.y;
-}
-
-function formatSelectedUnit(
-  state: GameState,
-  unit: UnitState | undefined,
-  activeSide: SideId,
-  activeSideIsHuman: boolean,
-): string {
-  if (!unit) {
-    return activeSideIsHuman
-      ? `Select a ${activeSide.toUpperCase()} unit.`
-      : `${activeSide.toUpperCase()} AI is taking its turn.`;
-  }
-
-  const defenceBonus = getDefenceBonus(state, unit.position);
-  const defenceText = defenceBonus > 0 ? `  Defence -${defenceBonus}` : "";
-
-  return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nRange ${unit.attackRange}  Action ${unit.hasTakenMainAction ? "used" : "ready"}${defenceText}`;
-}
-
-function formatEvent(event: GameEvent): string {
-  switch (event.type) {
-    case "unit-moved":
-      return `${event.unitId} moved.`;
-    case "unit-attacked":
-      return `${event.attackerUnitId} attacked ${event.targetUnitId}.`;
-    case "unit-damaged":
-      return `${event.unitId} took ${event.damage} damage.`;
-    case "unit-destroyed":
-      return `${event.unitId} was destroyed.`;
-    case "control-point-captured":
-      return `${event.owner} captured ${event.controlPointId}.`;
-    case "unit-waited":
-      return `${event.unitId} waited.`;
-    case "turn-ended":
-      return `Turn ${event.turn}: ${event.activeSide}.`;
-    case "victory-achieved":
-      return `${event.winner.toUpperCase()} wins.`;
-  }
-}
-
-function isInsideRectangle(
-  pointer: Position,
-  centerX: number,
-  centerY: number,
-  width: number,
-  height: number,
-): boolean {
-  const halfWidth = width / 2;
-  const halfHeight = height / 2;
-
-  return (
-    pointer.x >= centerX - halfWidth &&
-    pointer.x <= centerX + halfWidth &&
-    pointer.y >= centerY - halfHeight &&
-    pointer.y <= centerY + halfHeight
-  );
-}
-
-function getUnitTextureKey(unit: UnitState): string {
-  return assetManifest.units[`${unit.side}-${unit.type}`]?.textureKey ?? "";
-}
-
-function getControlPointTextureKey(owner: "blue" | "red" | null): string {
-  const controlPointKey = `control-point-${owner ?? "neutral"}`;
-
-  return assetManifest.terrain[controlPointKey]?.textureKey ?? "";
-}
-
-function getTerrainTextureKey(terrainType: "mountain"): string {
-  return assetManifest.terrain[terrainType]?.textureKey ?? "";
 }

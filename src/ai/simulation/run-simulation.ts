@@ -1,3 +1,4 @@
+import type { GameAction } from "../../core/actions/game-actions";
 import type { GameState, SideId } from "../../core/model/game-state";
 import type { ReplayRecord } from "../../core/replay/replay-actions";
 import { applyAction } from "../../core/rules/apply-action";
@@ -19,14 +20,15 @@ export interface SimulationResult {
 const FIRST_ACTION_COUNT = 0;
 const ACTION_INCREMENT = 1;
 
-export function runSimulation(options: SimulationOptions): SimulationResult {
+export async function runSimulation(options: SimulationOptions): Promise<SimulationResult> {
   let state = options.createInitialState();
-  const actions = [];
+  const actions: GameAction[] = [];
+  let actionsThisTurn: GameAction[] = [];
   let actionCount = FIRST_ACTION_COUNT;
 
   while (!state.winner && actionCount < options.maxActions) {
     const agent = options.agents[state.activeSide];
-    const action = agent.chooseAction(state);
+    const action = await agent.chooseAction(state, { actionsThisTurn });
     const result = applyAction(state, action);
 
     if (!result.accepted) {
@@ -34,6 +36,7 @@ export function runSimulation(options: SimulationOptions): SimulationResult {
     }
 
     actions.push(action);
+    actionsThisTurn = action.type === "end-turn" ? [] : [...actionsThisTurn, action];
     state = result.state;
     actionCount += ACTION_INCREMENT;
   }

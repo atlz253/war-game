@@ -1,7 +1,7 @@
 import type { GameAction } from "../../core/actions/game-actions";
 import { getLegalActions } from "../../core/actions/get-legal-actions";
 import type { GameState } from "../../core/model/game-state";
-import type { Agent } from "./Agent";
+import type { Agent, AgentContext } from "./Agent";
 
 const RANDOM_AGENT_ID = "random";
 const INITIAL_NON_ZERO_SEED = 1;
@@ -17,7 +17,7 @@ export class RandomAgent implements Agent {
     this.randomState = seed || INITIAL_NON_ZERO_SEED;
   }
 
-  public chooseAction(state: GameState): GameAction {
+  public async chooseAction(state: GameState, _context: AgentContext): Promise<GameAction> {
     const actions = getLegalActions(state);
     const actionIndex = this.nextInteger(actions.length);
     const action = actions[actionIndex];

@@ -16,8 +16,8 @@ const RED_WAIT_ACTION = { type: "wait" as const, unitId: RED_INFANTRY_ID };
 const RECORDED_ACTIONS = [BLUE_WAIT_ACTION, END_TURN_ACTION, RED_WAIT_ACTION, END_TURN_ACTION];
 
 describe("runSimulation", () => {
-  it("plays a deterministic complete match through the public action API", () => {
-    const result = runSimulation({
+  it("plays a deterministic complete match through the public action API", async () => {
+    const result = await runSimulation({
       seed: SIMULATION_SEED,
       maxActions: MAX_ACTIONS,
       createInitialState: createSkirmishGameState,
@@ -29,8 +29,8 @@ describe("runSimulation", () => {
     expect(result.replay.actions).not.toHaveLength(0);
   });
 
-  it("replays an agent-generated record to the exact final state", () => {
-    const result = runSimulation({
+  it("replays an agent-generated record to the exact final state", async () => {
+    const result = await runSimulation({
       seed: SIMULATION_SEED,
       maxActions: MAX_ACTIONS,
       createInitialState: createSkirmishGameState,

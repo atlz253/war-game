@@ -22,13 +22,19 @@ describe("getLegalActions", () => {
 });
 
 describe("RandomAgent", () => {
-  it("returns the same legal action sequence for the same seed", () => {
+  it("returns the same legal action sequence for the same seed", async () => {
     const firstAgent = new RandomAgent(RANDOM_SEED);
     const secondAgent = new RandomAgent(RANDOM_SEED);
     const state = createSkirmishGameState();
 
-    const firstActions = [firstAgent.chooseAction(state), firstAgent.chooseAction(state)];
-    const secondActions = [secondAgent.chooseAction(state), secondAgent.chooseAction(state)];
+    const firstActions = [
+      await firstAgent.chooseAction(state, { actionsThisTurn: [] }),
+      await firstAgent.chooseAction(state, { actionsThisTurn: [] }),
+    ];
+    const secondActions = [
+      await secondAgent.chooseAction(state, { actionsThisTurn: [] }),
+      await secondAgent.chooseAction(state, { actionsThisTurn: [] }),
+    ];
 
     expect(firstActions).toEqual(secondActions);
     expect(firstActions.every((action) => validateAction(state, action).isValid)).toBe(true);
@@ -36,7 +42,7 @@ describe("RandomAgent", () => {
 });
 
 describe("HeuristicAgent", () => {
-  it("prioritizes a legal adjacent attack", () => {
+  it("prioritizes a legal adjacent attack", async () => {
     const state = createSkirmishGameState();
     const combatState = {
       ...state,
@@ -50,7 +56,7 @@ describe("HeuristicAgent", () => {
     };
     const agent = new HeuristicAgent();
 
-    expect(agent.chooseAction(combatState)).toEqual({
+    await expect(agent.chooseAction(combatState, { actionsThisTurn: [] })).resolves.toEqual({
       type: "attack",
       unitId: BLUE_INFANTRY_ID,
       targetUnitId: RED_INFANTRY_ID,

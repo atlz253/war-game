@@ -7,6 +7,7 @@
 - Keep match state in `GameState`; keep selection, hover, animation, and input-lock state inside Phaser scenes or controllers.
 - Preserve replayability: seeded simulations with the same scenario and action sequence must produce the same result.
 - Keep terrain as validated, sparse scenario/map data. Terrain-dependent movement and damage must remain in `core`; Canvas scenes only render the resulting terrain and view data.
+- LM Studio is an optional remote-decision adapter under `src/ai`. It may be asynchronous, but must receive only snapshots and legal actions, return an offered `GameAction`, and fall back visibly to the deterministic Heuristic agent on request, parsing, or validation failure. Replays must store accepted actions rather than call the model again.
 
 ## Canvas-only presentation
 
@@ -14,6 +15,7 @@
 - Do not add React, Vue, Svelte, DOM overlays, DOM controls, CSS layout for game UI, or a global UI-state library.
 - The HTML shell contains only `<div id="game"></div>`.
 - Map import and export may create a temporary native browser file picker or download link only after a Canvas-button click. These elements must be removed immediately and must never become visible game UI.
+- LM Studio configuration and all settings controls are Phaser Canvas scenes. Persist only the local endpoint and model ID in browser storage; never add a DOM settings form or a cloud-provider credential flow.
 - Keep UI theme values centralized. Use integer coordinates, `pixelArt`, `roundPixels`, and nearest-neighbour scaling.
 - HUD objects use `setScrollFactor(0)` and must consume pointer input so a HUD click cannot also select a board cell.
 

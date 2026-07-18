@@ -1,7 +1,7 @@
 import type { GameAction, MoveAction } from "../../core/actions/game-actions";
 import { chebyshevDistance, getLegalActions } from "../../core/actions/get-legal-actions";
 import type { GameState, UnitState } from "../../core/model/game-state";
-import type { Agent } from "./Agent";
+import type { Agent, AgentContext } from "./Agent";
 
 const HEURISTIC_AGENT_ID = "heuristic";
 const NO_DISTANCE = 0;
@@ -9,7 +9,7 @@ const NO_DISTANCE = 0;
 export class HeuristicAgent implements Agent {
   public readonly id = HEURISTIC_AGENT_ID;
 
-  public chooseAction(state: GameState): GameAction {
+  public async chooseAction(state: GameState, _context: AgentContext): Promise<GameAction> {
     const actions = getLegalActions(state);
 
     return (

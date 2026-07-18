@@ -3,6 +3,10 @@ import Phaser from "phaser";
 import type { MapDefinition } from "../../core/maps/map-definition";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import {
+  getBrowserLmStudioSettings,
+  isLmStudioSettingsReady,
+} from "../lm-studio/lm-studio-settings";
 import { getBrowserMapLibrary } from "../maps/map-library";
 import {
   createDefaultMatchConfiguration,
@@ -11,7 +15,7 @@ import {
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
-import { BATTLE_SCENE_KEY, MAP_EDITOR_SCENE_KEY } from "./scene-keys";
+import { BATTLE_SCENE_KEY, LM_STUDIO_SETTINGS_SCENE_KEY, MAP_EDITOR_SCENE_KEY } from "./scene-keys";
 
 const MENU_CENTER_X = 1920;
 const MENU_PANEL_CENTER_Y = 1080;
@@ -30,30 +34,40 @@ const MAP_PREVIOUS_X = 1440;
 const MAP_NEXT_X = 2400;
 const MAP_BUTTON_WIDTH = 224;
 const MAP_BUTTON_HEIGHT = 112;
-const EDITOR_BUTTON_Y = 1580;
-const MENU_START_BUTTON_Y = 1800;
+const LM_STUDIO_SETTINGS_X = MENU_CENTER_X;
+const LM_STUDIO_SETTINGS_Y = 1480;
+const LM_STUDIO_SETTINGS_WIDTH = 1120;
+const EDITOR_BUTTON_Y = 1640;
+const MENU_START_BUTTON_Y = 1820;
 const MENU_START_BUTTON_WIDTH = 1120;
 const MENU_START_BUTTON_HEIGHT = 176;
-const MENU_INSTRUCTIONS_Y = 1940;
+const MENU_INSTRUCTIONS_Y = 1960;
 const CENTER_ORIGIN = 0.5;
 const TOP_ORIGIN = 0;
+
+export interface MainMenuSceneData {
+  readonly matchConfiguration?: ReturnType<typeof createDefaultMatchConfiguration>;
+}
 
 export class MainMenuScene extends Phaser.Scene {
   private safeAreaBackground!: Phaser.GameObjects.Rectangle;
   private presentationContainer!: Phaser.GameObjects.Container;
   private matchConfiguration = createDefaultMatchConfiguration();
   private readonly mapLibrary = getBrowserMapLibrary();
+  private readonly lmStudioSettings = getBrowserLmStudioSettings();
   private selectedMapId: string | null = null;
   private blueRoleButton!: Button;
   private redRoleButton!: Button;
   private selectedMapText!: Phaser.GameObjects.Text;
+  private startButton!: Button;
+  private instructionsText!: Phaser.GameObjects.Text;
 
   public constructor() {
     super("main-menu");
   }
 
-  public create(): void {
-    this.matchConfiguration = createDefaultMatchConfiguration();
+  public create(data: MainMenuSceneData = {}): void {
+    this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     const children = [
       ...this.createStaticElements(),
       ...this.createRoleControls(),
@@ -67,6 +81,7 @@ export class MainMenuScene extends Phaser.Scene {
       .setOrigin(0);
     this.presentationContainer = this.add.container(0, 0, children);
     this.refreshSelectedMapText();
+    this.refreshLaunchAvailability();
     this.updatePresentationViewport();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.unbindPresentationResize, this);
@@ -122,17 +137,26 @@ export class MainMenuScene extends Phaser.Scene {
       label: "MAP EDITOR",
       onClick: () => this.openMapEditor(),
     });
+    const lmStudioSettingsButton = new Button(this, {
+      x: LM_STUDIO_SETTINGS_X,
+      y: LM_STUDIO_SETTINGS_Y,
+      width: LM_STUDIO_SETTINGS_WIDTH,
+      height: MAP_BUTTON_HEIGHT,
+      label: "LM STUDIO SETTINGS",
+      onClick: () => this.openLmStudioSettings(),
+    });
 
     return [
       this.selectedMapText,
       previousMapButton.container,
       nextMapButton.container,
       editorButton.container,
+      lmStudioSettingsButton.container,
     ];
   }
 
   private createLaunchControls(): Phaser.GameObjects.GameObject[] {
-    const startButton = new Button(this, {
+    this.startButton = new Button(this, {
       x: MENU_CENTER_X,
       y: MENU_START_BUTTON_Y,
       width: MENU_START_BUTTON_WIDTH,
@@ -140,7 +164,7 @@ export class MainMenuScene extends Phaser.Scene {
       label: "START MATCH",
       onClick: () => this.startMatch(),
     });
-    const instructions = this.add
+    this.instructionsText = this.add
       .text(
         MENU_CENTER_X,
         MENU_INSTRUCTIONS_Y,
@@ -153,7 +177,7 @@ export class MainMenuScene extends Phaser.Scene {
       )
       .setOrigin(CENTER_ORIGIN, TOP_ORIGIN);
 
-    return [startButton.container, instructions];
+    return [this.startButton.container, this.instructionsText];
   }
 
   private createSideLabel(label: string, y: number): Phaser.GameObjects.Text {
@@ -195,7 +219,15 @@ export class MainMenuScene extends Phaser.Scene {
     });
   }
 
+  private openLmStudioSettings(): void {
+    this.scene.start(LM_STUDIO_SETTINGS_SCENE_KEY, { matchConfiguration: this.matchConfiguration });
+  }
+
   private startMatch(): void {
+    if (this.isLmStudioConfigurationMissing()) {
+      this.refreshLaunchAvailability();
+      return;
+    }
     this.scene.start(BATTLE_SCENE_KEY, {
       matchConfiguration: this.matchConfiguration,
       mapDefinition: this.getSelectedCustomMap() ?? undefined,
@@ -220,6 +252,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.matchConfiguration = toggleParticipant(this.matchConfiguration, side);
     this.blueRoleButton.setLabel(getParticipantLabel(this.matchConfiguration.blue));
     this.redRoleButton.setLabel(getParticipantLabel(this.matchConfiguration.red));
+    this.refreshLaunchAvailability();
   }
 
   private changeSelectedMap(direction: number): void {
@@ -241,6 +274,24 @@ export class MainMenuScene extends Phaser.Scene {
   private refreshSelectedMapText(): void {
     const map = this.getSelectedCustomMap();
     this.selectedMapText.setText(map ? `MAP: ${map.name}` : "MAP: Skirmish 12×8");
+  }
+
+  private refreshLaunchAvailability(): void {
+    const isReady = !this.isLmStudioConfigurationMissing();
+    this.startButton.setEnabled(isReady);
+    this.instructionsText.setText(
+      isReady
+        ? "Choose commanders and a map, then start the match."
+        : "Open LM Studio Settings and select a model before starting.",
+    );
+  }
+
+  private isLmStudioConfigurationMissing(): boolean {
+    const usesLmStudio =
+      this.matchConfiguration.blue === "lm-studio-ai" ||
+      this.matchConfiguration.red === "lm-studio-ai";
+
+    return usesLmStudio && !isLmStudioSettingsReady(this.lmStudioSettings.load());
   }
 
   private unbindPresentationResize(): void {

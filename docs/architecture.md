@@ -48,11 +48,22 @@ Agents receive a state snapshot and return an action candidate:
 ```ts
 interface Agent {
   readonly id: string;
-  chooseAction(state: GameState): GameAction;
+  chooseAction(state: GameState, context: AgentContext): Promise<GameAction>;
+}
+
+interface AgentContext {
+  actionsThisTurn: readonly GameAction[];
 }
 ```
 
 Randomness is injected through a seeded source stored in scenario or simulation configuration. A replay records scenario identity, seed, and accepted actions; replaying them must reproduce the final state.
+
+`LmStudioAgent` remains under `src/ai` and depends only on core state/actions plus an injected HTTP
+client. It sends a current state snapshot, legal action IDs, and current-turn history to LM Studio's
+OpenAI-compatible API. Its response is mapped only to the offered action set, then still validated by
+the shared action path. Network, JSON, timeout, and legality failures use `HeuristicAgent` for that
+single decision. Remote inference is not deterministic; deterministic replays record its accepted
+actions and do not issue HTTP requests.
 
 Display models cross into Phaser as plain data only:
 

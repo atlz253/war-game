@@ -6,7 +6,7 @@ const SIMULATION_SEED = 2026;
 const MAX_ACTIONS = 400;
 const EXIT_FAILURE = 1;
 
-const result = runSimulation({
+const result = await runSimulation({
   seed: SIMULATION_SEED,
   maxActions: MAX_ACTIONS,
   createInitialState: createSkirmishGameState,

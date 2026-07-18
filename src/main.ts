@@ -3,6 +3,7 @@ import Phaser from "phaser";
 import { createGameConfig } from "./game/config/game-config";
 import { BattleScene } from "./game/scenes/BattleScene";
 import { BootScene } from "./game/scenes/BootScene";
+import { LmStudioSettingsScene } from "./game/scenes/LmStudioSettingsScene";
 import { MainMenuScene } from "./game/scenes/MainMenuScene";
 import { MapEditorScene } from "./game/scenes/MapEditorScene";
 import { ResultScene } from "./game/scenes/ResultScene";
@@ -21,7 +22,14 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.RESIZE,
   },
-  scene: [BootScene, MainMenuScene, MapEditorScene, BattleScene, ResultScene],
+  scene: [
+    BootScene,
+    MainMenuScene,
+    MapEditorScene,
+    LmStudioSettingsScene,
+    BattleScene,
+    ResultScene,
+  ],
 };
 
 const game = new Phaser.Game(gameConfig);
