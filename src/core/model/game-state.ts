@@ -2,6 +2,8 @@ export type SideId = "blue" | "red";
 
 export type UnitType = "infantry" | "tank";
 
+export type TerrainType = "mountain";
+
 export interface Position {
   readonly x: number;
   readonly y: number;
@@ -11,6 +13,12 @@ export interface BoardState {
   readonly width: number;
   readonly height: number;
   readonly blockedCells: readonly Position[];
+  readonly terrain: readonly TerrainPlacement[];
+}
+
+export interface TerrainPlacement {
+  readonly type: TerrainType;
+  readonly position: Position;
 }
 
 export interface UnitState {

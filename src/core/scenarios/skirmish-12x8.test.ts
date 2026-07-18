@@ -15,13 +15,22 @@ const BLUE_TANK_MOVEMENT = 5;
 const CONTROL_POINT_COUNT = 2;
 const BLUE_UNIT_COUNT = 4;
 const RED_UNIT_COUNT = 4;
+const STARTING_MOUNTAINS = [
+  { type: "mountain", position: { x: 4, y: 2 } },
+  { type: "mountain", position: { x: 7, y: 5 } },
+];
 
 describe("createSkirmishGameState", () => {
   it("creates the documented deterministic v1 setup", () => {
     const state = createSkirmishGameState();
 
     expect(state.scenarioId).toBe(SKIRMISH_SCENARIO_ID);
-    expect(state.board).toEqual({ width: BOARD_WIDTH, height: BOARD_HEIGHT, blockedCells: [] });
+    expect(state.board).toEqual({
+      width: BOARD_WIDTH,
+      height: BOARD_HEIGHT,
+      blockedCells: [],
+      terrain: STARTING_MOUNTAINS,
+    });
     expect(state.turn).toBe(INITIAL_TURN);
     expect(state.activeSide).toBe("blue");
     expect(state.winner).toBeNull();

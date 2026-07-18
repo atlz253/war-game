@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 
 import type { GameAction } from "../../core/actions/game-actions";
+import { getDefenceBonus } from "../../core/combat/calculate-damage";
 import { createGameStateFromMap, type MapDefinition } from "../../core/maps/map-definition";
 import type { GameEvent } from "../../core/model/game-events";
 import type { GameState, Position, SideId, UnitState } from "../../core/model/game-state";
@@ -284,6 +285,16 @@ export class BattleScene extends Phaser.Scene {
       assetManifest.terrain.plain.textureKey,
     );
     this.worldContainer.add(tile);
+
+    for (const terrain of this.gameState.board.terrain) {
+      this.worldContainer.add(
+        this.add.image(
+          this.toScreenPosition(terrain.position).x,
+          this.toScreenPosition(terrain.position).y,
+          getTerrainTextureKey(terrain.type),
+        ),
+      );
+    }
 
     this.createMovementHighlightLayer();
     this.updateControlPointViews(this.gameState);
@@ -841,7 +852,7 @@ export class BattleScene extends Phaser.Scene {
       `Turn ${state.turn} — ${state.activeSide.toUpperCase()}${this.isActiveSideHuman() ? "" : " AI thinking"}`,
     );
     this.selectedUnitText.setText(
-      formatSelectedUnit(selectedUnit, state.activeSide, this.isActiveSideHuman()),
+      formatSelectedUnit(state, selectedUnit, state.activeSide, this.isActiveSideHuman()),
     );
 
     if (selectedUnit) {
@@ -912,6 +923,7 @@ function positionsEqual(first: Position, second: Position): boolean {
 }
 
 function formatSelectedUnit(
+  state: GameState,
   unit: UnitState | undefined,
   activeSide: SideId,
   activeSideIsHuman: boolean,
@@ -922,7 +934,10 @@ function formatSelectedUnit(
       : `${activeSide.toUpperCase()} AI is taking its turn.`;
   }
 
-  return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nRange ${unit.attackRange}  Action ${unit.hasTakenMainAction ? "used" : "ready"}`;
+  const defenceBonus = getDefenceBonus(state, unit.position);
+  const defenceText = defenceBonus > 0 ? `  Defence -${defenceBonus}` : "";
+
+  return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nRange ${unit.attackRange}  Action ${unit.hasTakenMainAction ? "used" : "ready"}${defenceText}`;
 }
 
 function formatEvent(event: GameEvent): string {
@@ -972,4 +987,8 @@ function getControlPointTextureKey(owner: "blue" | "red" | null): string {
   const controlPointKey = `control-point-${owner ?? "neutral"}`;
 
   return assetManifest.terrain[controlPointKey]?.textureKey ?? "";
+}
+
+function getTerrainTextureKey(terrainType: "mountain"): string {
+  return assetManifest.terrain[terrainType]?.textureKey ?? "";
 }

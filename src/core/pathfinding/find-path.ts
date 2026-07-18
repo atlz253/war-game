@@ -34,6 +34,11 @@ export function findPath(
 
   const queue: PathNode[] = [{ position: start, path: [] }];
   const visited = new Set([positionKey(start)]);
+  const movingUnit = units[movingUnitId];
+
+  if (!movingUnit) {
+    return null;
+  }
 
   while (queue.length > NO_OFFSET) {
     const current = queue.shift();
@@ -42,15 +47,7 @@ export function findPath(
       return null;
     }
 
-    const result = visitNeighbours(
-      board,
-      units,
-      movingUnitId,
-      destination,
-      current,
-      visited,
-      queue,
-    );
+    const result = visitNeighbours(board, units, movingUnit, destination, current, visited, queue);
 
     if (result) {
       return result;
@@ -63,7 +60,7 @@ export function findPath(
 function visitNeighbours(
   board: BoardState,
   units: Readonly<Record<string, UnitState>>,
-  movingUnitId: string,
+  movingUnit: UnitState,
   destination: Position,
   current: PathNode,
   visited: Set<string>,
@@ -73,7 +70,7 @@ function visitNeighbours(
     const next = { x: current.position.x + offset.x, y: current.position.y + offset.y };
 
     if (
-      !canEnterCell(board, units, movingUnitId, current.position, next) ||
+      !canEnterCell(board, units, movingUnit, current.position, next) ||
       visited.has(positionKey(next))
     ) {
       continue;
@@ -95,21 +92,21 @@ function visitNeighbours(
 function canEnterCell(
   board: BoardState,
   units: Readonly<Record<string, UnitState>>,
-  movingUnitId: string,
+  movingUnit: UnitState,
   from: Position,
   to: Position,
 ): boolean {
   return (
     isInBounds(board, to) &&
-    !isOccupiedOrBlocked(board, units, movingUnitId, to) &&
-    !cutsCorner(board, units, movingUnitId, from, to)
+    !isOccupiedOrBlocked(board, units, movingUnit, to) &&
+    !cutsCorner(board, units, movingUnit, from, to)
   );
 }
 
 function cutsCorner(
   board: BoardState,
   units: Readonly<Record<string, UnitState>>,
-  movingUnitId: string,
+  movingUnit: UnitState,
   from: Position,
   to: Position,
 ): boolean {
@@ -123,8 +120,8 @@ function cutsCorner(
   const vertical = { x: from.x, y: to.y };
 
   return (
-    isOccupiedOrBlocked(board, units, movingUnitId, horizontal) &&
-    isOccupiedOrBlocked(board, units, movingUnitId, vertical)
+    isOccupiedOrBlocked(board, units, movingUnit, horizontal) &&
+    isOccupiedOrBlocked(board, units, movingUnit, vertical)
   );
 }
 
@@ -140,13 +137,23 @@ function isInBounds(board: BoardState, position: Position): boolean {
 function isOccupiedOrBlocked(
   board: BoardState,
   units: Readonly<Record<string, UnitState>>,
-  movingUnitId: string,
+  movingUnit: UnitState,
   position: Position,
 ): boolean {
   return (
     board.blockedCells.some((cell) => positionsEqual(cell, position)) ||
+    isMountainImpassableFor(movingUnit, board, position) ||
     Object.values(units).some(
-      (unit) => unit.id !== movingUnitId && positionsEqual(unit.position, position),
+      (unit) => unit.id !== movingUnit.id && positionsEqual(unit.position, position),
+    )
+  );
+}
+
+function isMountainImpassableFor(unit: UnitState, board: BoardState, position: Position): boolean {
+  return (
+    unit.type !== "infantry" &&
+    board.terrain.some(
+      (terrain) => terrain.type === "mountain" && positionsEqual(terrain.position, position),
     )
   );
 }

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { createMapDefinition } from "../../core/maps/map-definition";
-import { applyEditorTool, wouldTrimPlacements } from "./editor-map-operations";
+import {
+  applyEditorTool,
+  getEditorToolRejection,
+  wouldTrimPlacements,
+} from "./editor-map-operations";
 
 const WIDTH = 4;
 const HEIGHT = 3;
@@ -35,6 +39,29 @@ describe("editor map operations", () => {
       ...map,
       units: [],
       controlPoints: [],
+      terrain: [],
     });
+  });
+
+  it("places mountains for infantry but rejects mountain and control point conflicts", () => {
+    const position = { x: 1, y: 1 };
+    const infantryMap = {
+      ...createMapDefinition("map", "Map", WIDTH, HEIGHT),
+      units: [{ side: "blue" as const, type: "infantry" as const, position }],
+    };
+    const mountainTool = { kind: "terrain" as const, terrainType: "mountain" as const };
+    const mountainMap = applyEditorTool(infantryMap, mountainTool, position);
+
+    expect(mountainMap.terrain).toEqual([{ type: "mountain", position }]);
+    expect(
+      getEditorToolRejection(mountainMap, { kind: "control-point", owner: null }, position),
+    ).toBe("control-point-on-mountain");
+    expect(
+      getEditorToolRejection(
+        { ...mountainMap, units: [{ side: "red" as const, type: "tank" as const, position }] },
+        mountainTool,
+        position,
+      ),
+    ).toBe("mountain-on-tank");
   });
 });

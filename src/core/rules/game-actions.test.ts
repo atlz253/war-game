@@ -22,6 +22,9 @@ const OUT_OF_BOUNDS_DESTINATION = { x: 12, y: 1 };
 const OCCUPIED_DESTINATION = { x: 1, y: 3 };
 const INSUFFICIENT_MOVEMENT_DESTINATION = { x: 6, y: 1 };
 const DISTANT_TARGET_POSITION = { x: 4, y: 1 };
+const MOUNTAIN_POSITION = { x: 2, y: 1 };
+const DAMAGE_WITH_ONE_DEFENCE_BONUS = 2;
+const MINIMUM_DAMAGE = 1;
 
 const moveAction: GameAction = {
   type: "move",
@@ -71,7 +74,9 @@ describe("movement rules", () => {
       reason: "destination-unreachable",
     });
   });
+});
 
+describe("movement validation", () => {
   it("rejects occupied, out-of-bounds, and over-budget destinations", () => {
     const state = createSkirmishGameState();
     const occupiedAction: GameAction = {
@@ -115,6 +120,63 @@ describe("movement rules", () => {
       isValid: false,
       reason: "unit-not-active-side",
     });
+  });
+});
+
+describe("terrain movement", () => {
+  it("allows infantry but not tanks to enter mountains", () => {
+    const state = createSkirmishGameState();
+    const mountainState = {
+      ...state,
+      board: {
+        ...state.board,
+        terrain: [{ type: "mountain" as const, position: MOUNTAIN_POSITION }],
+      },
+      units: {
+        [BLUE_INFANTRY_ID]: state.units[BLUE_INFANTRY_ID],
+        [BLUE_TANK_ID]: { ...state.units[BLUE_TANK_ID], position: { x: 1, y: 2 } },
+      },
+    };
+
+    expect(
+      validateAction(mountainState, {
+        type: "move",
+        unitId: BLUE_INFANTRY_ID,
+        destination: MOUNTAIN_POSITION,
+      }),
+    ).toEqual({ isValid: true });
+    expect(
+      validateAction(mountainState, {
+        type: "move",
+        unitId: BLUE_TANK_ID,
+        destination: MOUNTAIN_POSITION,
+      }),
+    ).toEqual({ isValid: false, reason: "destination-unreachable" });
+  });
+
+  it("treats mountains as impassable diagonal corners for tanks", () => {
+    const state = createSkirmishGameState();
+    const mountainState = {
+      ...state,
+      board: {
+        ...state.board,
+        width: 3,
+        height: 3,
+        blockedCells: [{ x: 1, y: 2 }],
+        terrain: [{ type: "mountain" as const, position: MOUNTAIN_POSITION }],
+      },
+      units: {
+        [BLUE_TANK_ID]: { ...state.units[BLUE_TANK_ID], position: { x: 1, y: 1 } },
+      },
+    };
+
+    expect(
+      validateAction(mountainState, {
+        type: "move",
+        unitId: BLUE_TANK_ID,
+        destination: { x: 2, y: 2 },
+      }),
+    ).toEqual({ isValid: false, reason: "destination-unreachable" });
   });
 });
 
@@ -206,7 +268,72 @@ describe("main action rules", () => {
       reason: "destination-out-of-range",
     });
   });
+});
 
+describe("combined defensive terrain", () => {
+  it("reduces damage for targets on mountains and control points", () => {
+    const state = createSkirmishGameState();
+    const defendedState = {
+      ...state,
+      board: {
+        ...state.board,
+        terrain: [{ type: "mountain" as const, position: MOUNTAIN_POSITION }],
+      },
+      units: {
+        [BLUE_INFANTRY_ID]: state.units[BLUE_INFANTRY_ID],
+        [RED_INFANTRY_ID]: { ...state.units[RED_INFANTRY_ID], position: MOUNTAIN_POSITION },
+      },
+      controlPoints: {
+        [CONTROL_POINT_ID]: {
+          ...state.controlPoints[CONTROL_POINT_ID],
+          position: MOUNTAIN_POSITION,
+        },
+      },
+    };
+    const result = applyAction(defendedState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
+      UNIT_DESTRUCTION_DAMAGE - MINIMUM_DAMAGE,
+    );
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ type: "unit-damaged", damage: MINIMUM_DAMAGE }),
+    );
+  });
+});
+
+describe("control point defence", () => {
+  it("applies a single defence bonus without reducing damage below one", () => {
+    const state = createSkirmishGameState();
+    const defendedState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: state.units[BLUE_INFANTRY_ID],
+        [RED_INFANTRY_ID]: { ...state.units[RED_INFANTRY_ID], position: MOUNTAIN_POSITION },
+      },
+      controlPoints: {
+        [CONTROL_POINT_ID]: {
+          ...state.controlPoints[CONTROL_POINT_ID],
+          position: MOUNTAIN_POSITION,
+        },
+      },
+    };
+    const result = applyAction(defendedState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
+      UNIT_DESTRUCTION_DAMAGE - DAMAGE_WITH_ONE_DEFENCE_BONUS,
+    );
+  });
+});
+
+describe("main action rules", () => {
   it("captures a neutral point and consumes the unit main action", () => {
     const state = createSkirmishGameState();
     const capturingState = {

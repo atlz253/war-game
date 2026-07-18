@@ -80,9 +80,9 @@ interface SelectedUnitViewModel {
 
 ## User map library
 
-`MapDefinition` is a serializable core value object. It contains only board dimensions, unit placements, and control-point placements; `createGameStateFromMap` deterministically creates runtime unit identifiers and stats. Browser-local persistence, the Canvas editor, and file import/export live under `src/game/maps` and must not be imported by `core` or `ai`.
+`MapDefinition` is a serializable core value object. It contains board dimensions, sparse terrain placements, unit placements, and control-point placements; grass is implicit. `createGameStateFromMap` deterministically creates runtime unit identifiers, stats, and terrain-aware board state. Browser-local persistence, the Canvas editor, and file import/export live under `src/game/maps` and must not be imported by `core` or `ai`.
 
-Map files use a versioned JSON schema. A map can be saved as a draft, but a match may begin only when both sides have at least one unit. The only DOM exception is a short-lived native file picker/download link initiated by a Canvas button for JSON import/export; it is not part of the game interface.
+Map files use a versioned JSON schema. Schema-v1 maps are migrated deterministically to schema v2 with an empty terrain list. A map can be saved as a draft, but a match may begin only when both sides have at least one unit. The only DOM exception is a short-lived native file picker/download link initiated by a Canvas button for JSON import/export; it is not part of the game interface.
 
 ## Canvas UI contracts
 

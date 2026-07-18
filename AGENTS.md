@@ -6,6 +6,7 @@
 - Route every human and AI order through the same public `GameAction` API, `validateAction`, and `applyAction` path. Agents must not mutate `GameState` directly.
 - Keep match state in `GameState`; keep selection, hover, animation, and input-lock state inside Phaser scenes or controllers.
 - Preserve replayability: seeded simulations with the same scenario and action sequence must produce the same result.
+- Keep terrain as validated, sparse scenario/map data. Terrain-dependent movement and damage must remain in `core`; Canvas scenes only render the resulting terrain and view data.
 
 ## Canvas-only presentation
 

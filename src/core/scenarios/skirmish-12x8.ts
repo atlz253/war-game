@@ -34,11 +34,21 @@ const RED_INFANTRY_THREE_POSITION: Position = { x: 10, y: 5 };
 const RED_TANK_POSITION: Position = { x: 9, y: 6 };
 const CONTROL_POINT_ONE_POSITION: Position = { x: 5, y: 3 };
 const CONTROL_POINT_TWO_POSITION: Position = { x: 6, y: 4 };
+const MOUNTAIN_ONE_POSITION: Position = { x: 4, y: 2 };
+const MOUNTAIN_TWO_POSITION: Position = { x: 7, y: 5 };
 
 export function createSkirmishGameState(): GameState {
   return {
     scenarioId: SKIRMISH_SCENARIO_ID,
-    board: { width: BOARD_WIDTH, height: BOARD_HEIGHT, blockedCells: [] },
+    board: {
+      width: BOARD_WIDTH,
+      height: BOARD_HEIGHT,
+      blockedCells: [],
+      terrain: [
+        { type: "mountain", position: MOUNTAIN_ONE_POSITION },
+        { type: "mountain", position: MOUNTAIN_TWO_POSITION },
+      ],
+    },
     turn: INITIAL_TURN,
     activeSide: BLUE_SIDE,
     units: {

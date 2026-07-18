@@ -1,4 +1,5 @@
 import type { GameAction } from "../actions/game-actions";
+import { calculateDamage } from "../combat/calculate-damage";
 import type { GameEvent } from "../model/game-events";
 import type { GameState, SideId, UnitState } from "../model/game-state";
 import { findPath } from "../pathfinding/find-path";
@@ -57,13 +58,14 @@ function applyAttack(state: GameState, unitId: string, targetUnitId: string): Ap
   const attacker = requireUnit(state, unitId);
   const target = requireUnit(state, targetUnitId);
   const committedAttacker = { ...attacker, hasTakenMainAction: true };
-  const remainingHealth = target.health - attacker.baseDamage;
+  const damage = calculateDamage(state, target, attacker.baseDamage);
+  const remainingHealth = target.health - damage;
   const events: GameEvent[] = [
     { type: "unit-attacked", attackerUnitId: unitId, targetUnitId },
     {
       type: "unit-damaged",
       unitId: targetUnitId,
-      damage: attacker.baseDamage,
+      damage,
       remainingHealth: Math.max(remainingHealth, NO_MOVEMENT_COST),
     },
   ];

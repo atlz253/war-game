@@ -19,7 +19,13 @@ Sides alternate turns. During its turn, a side may issue legal orders to its uni
 
 A unit may spend movement points to move through legal cells, then take one main action: attack, capture, or wait. A unit that has taken its main action cannot move or take another main action until its side's next turn. Movement uses all eight neighbouring cells; every step costs one movement point. A diagonal step cannot pass between two occupied or impassable orthogonal cells. Attack range uses adjacent cells in all eight directions. Movement, range, occupancy, ownership, and action availability are validated by `validateAction`.
 
-Terrain and control-point modifiers must be expressed as scenario data when introduced. The initial balance does not hardwire terrain combat or movement effects.
+## Terrain and defence
+
+Grass is the implicit base terrain. Mountains are sparse map placements: infantry may enter and move through them at the normal movement cost, while tanks cannot enter or path through them. For a tank, a mountain is also impassable when applying the diagonal corner rule.
+
+The built-in `skirmish-12x8` map contains two central mountains at `(4,2)` and `(7,5)`.
+
+Every mountain reduces damage received by the occupying unit by 1. Every control point reduces damage received by the occupying unit by 1, independent of point ownership. These bonuses use the shared deterministic combat calculation and cannot reduce an attack below 1 damage. Mountains and control points cannot occupy the same cell in a valid map.
 
 ## Events and visibility
 

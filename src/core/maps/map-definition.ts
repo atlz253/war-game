@@ -3,11 +3,14 @@ import type {
   GameState,
   Position,
   SideId,
+  TerrainPlacement,
+  TerrainType,
   UnitState,
   UnitType,
 } from "../model/game-state";
 
-export const MAP_SCHEMA_VERSION = 1;
+export const MAP_SCHEMA_VERSION = 2;
+const LEGACY_MAP_SCHEMA_VERSION = 1;
 
 export interface MapUnitPlacement {
   readonly side: SideId;
@@ -20,6 +23,8 @@ export interface MapControlPointPlacement {
   readonly position: Position;
 }
 
+export interface MapTerrainPlacement extends TerrainPlacement {}
+
 export interface MapDefinition {
   readonly schemaVersion: number;
   readonly id: string;
@@ -28,6 +33,7 @@ export interface MapDefinition {
   readonly height: number;
   readonly units: readonly MapUnitPlacement[];
   readonly controlPoints: readonly MapControlPointPlacement[];
+  readonly terrain: readonly MapTerrainPlacement[];
 }
 
 export type MapValidationError =
@@ -36,8 +42,13 @@ export type MapValidationError =
   | "invalid-board-size"
   | "unit-out-of-bounds"
   | "control-point-out-of-bounds"
+  | "terrain-out-of-bounds"
   | "duplicate-unit-position"
-  | "duplicate-control-point-position";
+  | "duplicate-control-point-position"
+  | "duplicate-terrain-position"
+  | "invalid-terrain-type"
+  | "mountain-control-point-conflict"
+  | "tank-on-mountain";
 
 export interface MapValidationResult {
   readonly isValid: boolean;
@@ -72,6 +83,7 @@ export function createMapDefinition(
     height,
     units: [],
     controlPoints: [],
+    terrain: [],
   };
 }
 
@@ -103,7 +115,7 @@ export function createGameStateFromMap(map: MapDefinition): GameState {
 
   return {
     scenarioId: map.id,
-    board: { width: map.width, height: map.height, blockedCells: [] },
+    board: { width: map.width, height: map.height, blockedCells: [], terrain: map.terrain },
     turn: INITIAL_TURN,
     activeSide: BLUE_SIDE,
     units: createUnits(map.units),
@@ -125,6 +137,7 @@ export function resizeMapDefinition(
     controlPoints: map.controlPoints.filter((point) =>
       isPositionInBounds(point.position, width, height),
     ),
+    terrain: map.terrain.filter((terrain) => isPositionInBounds(terrain.position, width, height)),
   };
 }
 
@@ -135,17 +148,19 @@ export function serializeMapDefinition(map: MapDefinition): string {
 export function deserializeMapDefinition(serializedMap: string): MapDefinition {
   const parsed: unknown = JSON.parse(serializedMap);
 
-  if (!isMapDefinition(parsed)) {
+  const migratedMap = migrateMapDefinition(parsed);
+
+  if (!isMapDefinition(migratedMap)) {
     throw new Error("The imported file is not a supported AI War Game map.");
   }
 
-  const validation = validateMapDefinition(parsed);
+  const validation = validateMapDefinition(migratedMap);
 
   if (!validation.isValid) {
     throw new Error(`The imported map is invalid: ${validation.errors.join(", ")}.`);
   }
 
-  return parsed;
+  return migratedMap;
 }
 
 function addMapMetadataErrors(map: MapDefinition, errors: MapValidationError[]): void {
@@ -161,8 +176,30 @@ function addMapMetadataErrors(map: MapDefinition, errors: MapValidationError[]):
 }
 
 function addPlacementErrors(map: MapDefinition, errors: MapValidationError[]): void {
+  addTerrainPlacementErrors(map, errors);
   addUnitPlacementErrors(map, errors);
   addControlPointPlacementErrors(map, errors);
+  addTerrainConflictErrors(map, errors);
+}
+
+function addTerrainPlacementErrors(map: MapDefinition, errors: MapValidationError[]): void {
+  const occupied = new Set<string>();
+
+  for (const terrain of map.terrain) {
+    if (!isTerrainType(terrain.type)) {
+      errors.push("invalid-terrain-type");
+      continue;
+    }
+    if (!isPositionInBounds(terrain.position, map.width, map.height)) {
+      errors.push("terrain-out-of-bounds");
+      continue;
+    }
+    if (occupied.has(positionKey(terrain.position))) {
+      errors.push("duplicate-terrain-position");
+      continue;
+    }
+    occupied.add(positionKey(terrain.position));
+  }
 }
 
 function addUnitPlacementErrors(map: MapDefinition, errors: MapValidationError[]): void {
@@ -194,6 +231,26 @@ function addControlPointPlacementErrors(map: MapDefinition, errors: MapValidatio
       continue;
     }
     occupied.add(positionKey(controlPoint.position));
+  }
+}
+
+function addTerrainConflictErrors(map: MapDefinition, errors: MapValidationError[]): void {
+  const mountainPositions = new Set(
+    map.terrain
+      .filter((terrain) => terrain.type === "mountain")
+      .map((terrain) => positionKey(terrain.position)),
+  );
+
+  for (const controlPoint of map.controlPoints) {
+    if (mountainPositions.has(positionKey(controlPoint.position))) {
+      errors.push("mountain-control-point-conflict");
+    }
+  }
+
+  for (const unit of map.units) {
+    if (unit.type === "tank" && mountainPositions.has(positionKey(unit.position))) {
+      errors.push("tank-on-mountain");
+    }
   }
 }
 
@@ -272,6 +329,18 @@ function positionKey(position: Position): string {
   return `${position.x}:${position.y}`;
 }
 
+function migrateMapDefinition(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const map = value as Partial<MapDefinition>;
+
+  return map.schemaVersion === LEGACY_MAP_SCHEMA_VERSION
+    ? { ...map, schemaVersion: MAP_SCHEMA_VERSION, terrain: [] }
+    : value;
+}
+
 function isMapDefinition(value: unknown): value is MapDefinition {
   if (!value || typeof value !== "object") {
     return false;
@@ -285,6 +354,11 @@ function isMapDefinition(value: unknown): value is MapDefinition {
     typeof map.width === "number" &&
     typeof map.height === "number" &&
     Array.isArray(map.units) &&
-    Array.isArray(map.controlPoints)
+    Array.isArray(map.controlPoints) &&
+    Array.isArray(map.terrain)
   );
+}
+
+function isTerrainType(value: string): value is TerrainType {
+  return value === "mountain";
 }

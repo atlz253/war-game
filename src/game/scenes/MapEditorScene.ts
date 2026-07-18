@@ -25,6 +25,7 @@ import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
 import {
   applyEditorTool,
   type EditorTool,
+  getEditorToolRejection,
   isPositionInMap,
   wouldTrimPlacements,
 } from "../maps/editor-map-operations";
@@ -77,6 +78,7 @@ const BUTTON_ROW = {
   blueTank: 6,
   redInfantry: 7,
   redTank: 8,
+  mountain: 9,
   neutralPoint: 10,
   bluePoint: 11,
   redPoint: 12,
@@ -255,6 +257,9 @@ export class MapEditorScene extends Phaser.Scene {
         this.selectUnitTool("red", "infantry"),
       ),
       this.createButton("RED TANK", BUTTON_ROW.redTank, () => this.selectUnitTool("red", "tank")),
+      this.createButton("MOUNTAIN", BUTTON_ROW.mountain, () =>
+        this.setTool({ kind: "terrain", terrainType: "mountain" }),
+      ),
       this.createButton("POINT: NEUTRAL", BUTTON_ROW.neutralPoint, () =>
         this.selectControlPointTool(null),
       ),
@@ -421,6 +426,13 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   private applyTool(position: Position): void {
+    const rejection = getEditorToolRejection(this.map, this.tool, position);
+
+    if (rejection) {
+      this.statusText.setText(editorToolRejectionMessage(rejection));
+      return;
+    }
+
     this.map = applyEditorTool(this.map, this.tool, position);
     this.render();
   }
@@ -589,6 +601,14 @@ export class MapEditorScene extends Phaser.Scene {
   private render(): void {
     this.worldContainer.removeAll(true);
     this.createWorld();
+    for (const terrain of this.map.terrain)
+      this.worldContainer.add(
+        this.add.image(
+          tileCenter(terrain.position.x),
+          tileCenter(terrain.position.y),
+          terrainTextureKey(terrain.type),
+        ),
+      );
     for (const point of this.map.controlPoints)
       this.worldContainer.add(
         this.add.image(
@@ -660,8 +680,26 @@ function tileCenter(coordinate: number): number {
 function controlPointTextureKey(owner: SideId | null): string {
   return assetManifest.terrain[`control-point-${owner ?? "neutral"}`].textureKey;
 }
+function terrainTextureKey(terrainType: "mountain"): string {
+  return assetManifest.terrain[terrainType].textureKey;
+}
 function toolLabel(tool: EditorTool): string {
   if (tool.kind === "erase") return "ERASE";
   if (tool.kind === "unit") return `${tool.side.toUpperCase()} ${tool.unitType.toUpperCase()}`;
+  if (tool.kind === "terrain") return tool.terrainType.toUpperCase();
   return `POINT ${tool.owner?.toUpperCase() ?? "NEUTRAL"}`;
+}
+function editorToolRejectionMessage(rejection: ReturnType<typeof getEditorToolRejection>): string {
+  switch (rejection) {
+    case "mountain-on-control-point":
+      return "Remove the control point before placing a mountain.";
+    case "mountain-on-tank":
+      return "Tanks cannot occupy mountain cells.";
+    case "control-point-on-mountain":
+      return "Control points cannot be placed on mountains.";
+    case "tank-on-mountain":
+      return "Tanks cannot be placed on mountains.";
+    case null:
+      return "";
+  }
 }
