@@ -9,6 +9,8 @@
 - Keep terrain as validated, sparse scenario/map data. Terrain-dependent movement and damage must remain in `core`; Canvas scenes only render the resulting terrain and view data.
 - LM Studio is an optional remote-decision adapter under `src/ai`. It may be asynchronous, but must receive only snapshots and legal actions, return an offered `GameAction`, and fall back visibly to the deterministic Heuristic agent on request, parsing, or validation failure. Replays must store accepted actions rather than call the model again.
 - Completed matches are stored as versioned local replay records containing an initial map snapshot, participant snapshot, accepted actions, and result metadata. Build replay frames by applying actions through core rules; the replay viewer must never invoke AI or network inference.
+- Keep headless batch simulations in `src/ai/simulation`. They may use core map factories and agents but never Phaser, browser storage, or `src/game`. Record accepted actions for training/replay and preserve deterministic seed derivation for local agents.
+- CLI configuration precedence is `arguments > .env.local > .env > code defaults`. Keep safe shared defaults in tracked `.env`; ignore `.env.local` and never commit credentials or machine-specific configuration.
 
 ## Canvas-only presentation
 

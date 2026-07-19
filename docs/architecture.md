@@ -102,6 +102,21 @@ interface SelectedUnitViewModel {
 
 Map files use a versioned JSON schema. Schema-v1 maps are migrated deterministically to schema v2 with an empty terrain list. A map can be saved as a draft, but a match may begin only when both sides have at least one unit. The only DOM exception is a short-lived native file picker/download link initiated by a Canvas button for JSON import/export; it is not part of the game interface.
 
+## Headless simulation
+
+`src/ai/simulation` runs sequential graphics-free batches. It accepts only core `GameState` factories,
+AI agents, maps, and seeds; it must not import Phaser or `src/game`. Each match is constructed from
+either the built-in skirmish factory or a validated `MapDefinition` loaded by the CLI. Random agents
+receive a reproducible derived seed (`baseSeed + matchIndex`); Heuristic agents are deterministic.
+
+LM Studio may be used in a batch, but remote decisions are non-deterministic. The shared AI decision
+helper validates each offered action and falls back to `HeuristicAgent` on request, parsing, timeout,
+or legality failure. JSONL records store accepted actions and metadata, so replaying them never invokes
+LM Studio. A match that reaches the configured action limit is recorded as incomplete.
+
+CLI settings resolve in this order: explicit arguments, `.env.local`, tracked `.env`, then code
+defaults. `.env.local` is local-only and ignored by Git; `.env` must contain only safe defaults.
+
 ## Canvas UI contracts
 
 `Button` supports normal, hover, pressed, and disabled states; pointer handling; label changes; and destruction. `Panel` supports background, border, title, padding, children, resize, visibility, and destruction. `ProgressBar` represents bounded numeric progress. `ScrollableList` is a bounded event log showing the last 6–10 events in v1; full scrolling is out of scope.

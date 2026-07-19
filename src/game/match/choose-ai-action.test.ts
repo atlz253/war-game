@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { Agent } from "../../ai/agents/Agent";
+import { decideAiAction } from "../../ai/agents/decide-ai-action";
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
-import { decideAiAction } from "./choose-ai-action";
 
 const END_TURN = { type: "end-turn" as const };
 

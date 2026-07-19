@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { replayActions } from "../../core/replay/replay-actions";
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
+import type { Agent } from "../agents/Agent";
 import { HeuristicAgent } from "../agents/HeuristicAgent";
 import { runSimulation } from "./run-simulation";
 
@@ -14,6 +15,7 @@ const BLUE_WAIT_ACTION = { type: "wait" as const, unitId: BLUE_INFANTRY_ID };
 const END_TURN_ACTION = { type: "end-turn" as const };
 const RED_WAIT_ACTION = { type: "wait" as const, unitId: RED_INFANTRY_ID };
 const RECORDED_ACTIONS = [BLUE_WAIT_ACTION, END_TURN_ACTION, RED_WAIT_ACTION, END_TURN_ACTION];
+const ONE_ACTION = 1;
 
 describe("runSimulation", () => {
   it("plays a deterministic complete match through the public action API", async () => {
@@ -41,6 +43,20 @@ describe("runSimulation", () => {
       result.finalState,
     );
   });
+
+  it("counts a validated Heuristic fallback after an agent failure", async () => {
+    const failingAgent = createFailingAgent();
+    const result = await runSimulation({
+      seed: SIMULATION_SEED,
+      maxActions: ONE_ACTION,
+      createInitialState: createSkirmishGameState,
+      agents: { blue: failingAgent, red: new HeuristicAgent() },
+      fallbackAgents: { blue: new HeuristicAgent(), red: new HeuristicAgent() },
+    });
+
+    expect(result.fallbackCount).toBe(ONE_ACTION);
+    expect(result.replay.actions).toHaveLength(ONE_ACTION);
+  });
 });
 
 describe("replayActions", () => {
@@ -52,3 +68,10 @@ describe("replayActions", () => {
     expect(replayedState.units[BLUE_INFANTRY_ID]?.hasTakenMainAction).toBe(false);
   });
 });
+
+function createFailingAgent(): Agent {
+  return {
+    id: "failing",
+    chooseAction: async () => Promise.reject(new Error("offline")),
+  };
+}

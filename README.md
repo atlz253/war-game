@@ -20,7 +20,34 @@ npm run simulate
 npm run build
 ```
 
-`npm run simulate` runs a deterministic graphics-free match between two Heuristic agents and prints its outcome as JSON.
+## Headless simulations
+
+`npm run simulate` runs graphics-free matches for AI evaluation, statistics, and training data. It
+does not load Phaser, browser storage, or Canvas assets.
+
+```sh
+npm run simulate -- --map skirmish --blue heuristic --red random --matches 100 --seed 42
+npm run simulate -- --map ./maps/example.ai-war-map.json --blue heuristic --red heuristic --records ./results/matches.jsonl
+```
+
+Use `random`, `heuristic`, or `lm-studio` independently for `--blue` and `--red`. A batch executes
+sequentially; match `i` receives `seed + i`. Stdout contains a JSON summary. `--records` is optional
+and writes one JSONL match record per line, including accepted actions for replay or training.
+Matches reaching `--max-actions` without a winner are counted as `incomplete` and do not stop a batch.
+
+`--map skirmish` selects the built-in map. Any other `--map` value must be a versioned map JSON
+exported from the editor and contain at least one unit for each side.
+
+For LM Studio, use `--lm-url`, `--blue-model`, `--red-model`, and optionally `--lm-timeout disabled`
+or a positive millisecond value. LM Studio errors, timeouts, malformed responses, and invalid orders
+fall back to Heuristic AI for that order; the summary records the fallback count.
+
+### Environment policy
+
+The committed [.env](.env) contains safe defaults. Create a personal `.env.local` to override them;
+it is ignored by Git. CLI arguments take precedence over `.env.local`, which takes precedence over
+`.env`, which takes precedence over built-in constants. Do not put credentials or machine-specific
+configuration in `.env`.
 
 ## Replays
 

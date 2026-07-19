@@ -1,28 +1,133 @@
-import { HeuristicAgent } from "../src/ai/agents/HeuristicAgent";
-import { runSimulation } from "../src/ai/simulation/run-simulation";
-import { createSkirmishGameState } from "../src/core/scenarios/skirmish-12x8";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import {
+  runBatchSimulation,
+  type SimulationMap,
+  type SimulationParticipant,
+} from "../src/ai/simulation/batch-simulation";
+import {
+  createHeadlessSimulationConfiguration,
+  type EnvironmentValues,
+  mergeEnvironment,
+} from "../src/ai/simulation/headless-configuration";
+import {
+  createGameStateFromMap,
+  deserializeMapDefinition,
+  isMapReadyForMatch,
+} from "../src/core/maps/map-definition";
+import { createSkirmishGameState, SKIRMISH_SCENARIO_ID } from "../src/core/scenarios/skirmish-12x8";
 
-const SIMULATION_SEED = 2026;
-const MAX_ACTIONS = 400;
-const EXIT_FAILURE = 1;
+const BUILT_IN_MAP_SELECTION = "skirmish";
+const BUILT_IN_MAP_NAME = "Skirmish 12×8";
+const ENV_DEFAULTS_FILE = ".env";
+const ENV_LOCAL_FILE = ".env.local";
+const UTF8_ENCODING = "utf8";
+const NEW_LINE = "\n";
+const ENV_ASSIGNMENT = "=";
+const COMMENT_PREFIX = "#";
 
-const result = await runSimulation({
-  seed: SIMULATION_SEED,
-  maxActions: MAX_ACTIONS,
-  createInitialState: createSkirmishGameState,
-  agents: { blue: new HeuristicAgent(), red: new HeuristicAgent() },
+const environment = mergeEnvironment(
+  readEnvironmentFile(ENV_DEFAULTS_FILE),
+  readEnvironmentFile(ENV_LOCAL_FILE),
+  process.env,
+);
+const configuration = createHeadlessSimulationConfiguration(
+  process.argv.slice(2),
+  environment,
+  BUILT_IN_MAP_SELECTION,
+);
+const map = loadSimulationMap(configuration.map);
+const result = await runBatchSimulation({
+  map,
+  blue: createParticipant(
+    configuration.blue,
+    configuration.lmStudio.baseUrl,
+    configuration.lmStudio.blueModelId,
+    configuration.lmStudio.timeoutMs,
+  ),
+  red: createParticipant(
+    configuration.red,
+    configuration.lmStudio.baseUrl,
+    configuration.lmStudio.redModelId,
+    configuration.lmStudio.timeoutMs,
+  ),
+  seed: configuration.seed,
+  matches: configuration.matches,
+  maxActions: configuration.maxActions,
 });
 
-console.log(
-  JSON.stringify({
-    seed: result.replay.seed,
-    winner: result.finalState.winner,
-    turn: result.finalState.turn,
-    actionCount: result.replay.actions.length,
-    completed: result.completed,
-  }),
-);
+if (configuration.recordsPath) {
+  writeRecords(configuration.recordsPath, result.records);
+}
 
-if (!result.completed) {
-  process.exitCode = EXIT_FAILURE;
+console.log(JSON.stringify(result.summary));
+
+function loadSimulationMap(selection: string): SimulationMap {
+  if (selection === BUILT_IN_MAP_SELECTION) {
+    return {
+      id: SKIRMISH_SCENARIO_ID,
+      name: BUILT_IN_MAP_NAME,
+      createInitialState: createSkirmishGameState,
+    };
+  }
+
+  const mapPath = resolve(selection);
+  const map = deserializeMapDefinition(readFileSync(mapPath, UTF8_ENCODING));
+
+  if (!isMapReadyForMatch(map)) {
+    throw new Error("The selected map must contain at least one unit for each side.");
+  }
+
+  return { id: map.id, name: map.name, createInitialState: () => createGameStateFromMap(map) };
+}
+
+function createParticipant(
+  kind: SimulationParticipant["kind"],
+  baseUrl: string,
+  modelId: string,
+  timeoutMs: number | null,
+): SimulationParticipant {
+  return kind === "lm-studio" ? { kind, connection: { baseUrl, modelId, timeoutMs } } : { kind };
+}
+
+function readEnvironmentFile(filePath: string): EnvironmentValues {
+  if (!existsSync(filePath)) return {};
+
+  return parseEnvironment(readFileSync(filePath, UTF8_ENCODING));
+}
+
+function parseEnvironment(content: string): EnvironmentValues {
+  return Object.fromEntries(
+    content
+      .split(NEW_LINE)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith(COMMENT_PREFIX))
+      .flatMap(parseEnvironmentLine),
+  );
+}
+
+function parseEnvironmentLine(line: string): readonly [string, string][] {
+  const separatorIndex = line.indexOf(ENV_ASSIGNMENT);
+  if (separatorIndex < 0) return [];
+
+  const key = line.slice(0, separatorIndex).trim();
+  const value = line.slice(separatorIndex + ENV_ASSIGNMENT.length).trim();
+  return key.length > 0 ? [[key, value]] : [];
+}
+
+function writeRecords(
+  recordsPath: string,
+  records: Awaited<ReturnType<typeof runBatchSimulation>>["records"],
+): void {
+  const resolvedPath = resolve(recordsPath);
+  mkdirSync(dirname(resolvedPath), { recursive: true });
+  const content = records.map(serializeRecord).join(NEW_LINE) + NEW_LINE;
+  writeFileSync(resolvedPath, content, UTF8_ENCODING);
+}
+
+function serializeRecord(
+  record: Awaited<ReturnType<typeof runBatchSimulation>>["records"][number],
+): string {
+  const { finalState: _finalState, ...serializableRecord } = record;
+  return JSON.stringify(serializableRecord);
 }
