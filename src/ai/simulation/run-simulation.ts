@@ -1,7 +1,9 @@
 import type { GameAction } from "../../core/actions/game-actions";
-import type { GameState, SideId } from "../../core/model/game-state";
+import type { GameEvent } from "../../core/model/game-events";
+import type { GameState, SideId, TeamScores } from "../../core/model/game-state";
 import type { ReplayRecord } from "../../core/replay/replay-actions";
 import { applyAction } from "../../core/rules/apply-action";
+import { calculateScoreDelta } from "../../core/scoring/team-scores";
 import type { Agent } from "../agents/Agent";
 import { decideAiAction } from "../agents/decide-ai-action";
 
@@ -18,6 +20,13 @@ export interface SimulationResult {
   readonly replay: ReplayRecord;
   readonly completed: boolean;
   readonly fallbackCount: number;
+  readonly actionRewards: readonly SimulationActionReward[];
+}
+
+export interface SimulationActionReward {
+  readonly action: GameAction;
+  readonly events: readonly GameEvent[];
+  readonly scoreDelta: TeamScores;
 }
 
 const FIRST_ACTION_COUNT = 0;
@@ -27,6 +36,7 @@ const FIRST_FALLBACK_COUNT = 0;
 export async function runSimulation(options: SimulationOptions): Promise<SimulationResult> {
   let state = options.createInitialState();
   const actions: GameAction[] = [];
+  const actionRewards: SimulationActionReward[] = [];
   let actionsThisTurn: GameAction[] = [];
   let actionCount = FIRST_ACTION_COUNT;
   let fallbackCount = FIRST_FALLBACK_COUNT;
@@ -45,6 +55,11 @@ export async function runSimulation(options: SimulationOptions): Promise<Simulat
     }
 
     actions.push(action);
+    actionRewards.push({
+      action,
+      events: result.events,
+      scoreDelta: calculateScoreDelta(state.scores, result.state.scores),
+    });
     fallbackCount += Number(decision.usedFallback);
     actionsThisTurn = action.type === "end-turn" ? [] : [...actionsThisTurn, action];
     state = result.state;
@@ -56,5 +71,6 @@ export async function runSimulation(options: SimulationOptions): Promise<Simulat
     replay: { scenarioId: state.scenarioId, seed: options.seed, actions },
     completed: state.winner !== null,
     fallbackCount,
+    actionRewards,
   };
 }

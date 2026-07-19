@@ -1,5 +1,10 @@
 export type SideId = "blue" | "red";
 
+export interface TeamScores {
+  readonly blue: number;
+  readonly red: number;
+}
+
 export type UnitType = "infantry" | "tank";
 
 export type TerrainType = "mountain";
@@ -48,5 +53,6 @@ export interface GameState {
   readonly activeSide: SideId;
   readonly units: Readonly<Record<string, UnitState>>;
   readonly controlPoints: Readonly<Record<string, ControlPointState>>;
+  readonly scores: TeamScores;
   readonly winner: SideId | null;
 }

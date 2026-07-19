@@ -32,7 +32,8 @@ npm run simulate -- --map ./maps/example.ai-war-map.json --blue heuristic --red 
 
 Use `random`, `heuristic`, or `lm-studio` independently for `--blue` and `--red`. A batch executes
 sequentially; match `i` receives `seed + i`. Stdout contains a JSON summary. `--records` is optional
-and writes one JSONL match record per line, including accepted actions for replay or training.
+and writes one JSONL match record per line. Each record includes accepted actions, their ordered domain
+events, per-action Blue/Red score deltas, and final team scores for replay or training.
 Matches reaching `--max-actions` without a winner are counted as `incomplete` and do not stop a batch.
 
 `--map skirmish` selects the built-in map. Any other `--map` value must be a versioned map JSON
@@ -86,6 +87,7 @@ src/ai    -> agents, evaluation, simulations
 ```
 
 `core` and `ai` never import Phaser or files from `game`. Human and AI actions use the same validated public action interface.
+Teams earn points deterministically: actual HP removed by attacks and 5 points for each successful control-point capture.
 
 ## Documentation
 

@@ -3,6 +3,7 @@ import { calculateDamage } from "../combat/calculate-damage";
 import type { GameEvent } from "../model/game-events";
 import type { GameState, SideId, UnitState } from "../model/game-state";
 import { findPath } from "../pathfinding/find-path";
+import { addTeamScore, CAPTURE_SCORE, calculateAttackScore } from "../scoring/team-scores";
 import { validateAction } from "./validate-action";
 
 export interface ApplyActionResult {
@@ -59,6 +60,7 @@ function applyAttack(state: GameState, unitId: string, targetUnitId: string): Ap
   const target = requireUnit(state, targetUnitId);
   const committedAttacker = { ...attacker, hasTakenMainAction: true };
   const damage = calculateDamage(state, target, attacker.baseDamage);
+  const score = calculateAttackScore(target.health, damage);
   const remainingHealth = target.health - damage;
   const events: GameEvent[] = [
     { type: "unit-attacked", attackerUnitId: unitId, targetUnitId },
@@ -68,8 +70,9 @@ function applyAttack(state: GameState, unitId: string, targetUnitId: string): Ap
       damage,
       remainingHealth: Math.max(remainingHealth, NO_MOVEMENT_COST),
     },
+    { type: "team-scored", side: attacker.side, points: score, reason: "attack" },
   ];
-  const attackedState = withUnit(state, committedAttacker);
+  const attackedState = withScore(withUnit(state, committedAttacker), attacker.side, score);
 
   if (remainingHealth > NO_MOVEMENT_COST) {
     return {
@@ -100,11 +103,15 @@ function applyCapture(state: GameState, unitId: string, controlPointId: string):
       [controlPointId]: { ...controlPoint, owner: unit.side },
     },
   };
+  const scoredState = withScore(nextState, unit.side, CAPTURE_SCORE);
 
   return {
     accepted: true,
-    state: nextState,
-    events: [{ type: "control-point-captured", controlPointId, owner: unit.side }],
+    state: scoredState,
+    events: [
+      { type: "control-point-captured", controlPointId, owner: unit.side },
+      { type: "team-scored", side: unit.side, points: CAPTURE_SCORE, reason: "capture" },
+    ],
   };
 }
 
@@ -152,6 +159,10 @@ function withoutUnit(state: GameState, unitId: string): GameState {
   delete units[unitId];
 
   return { ...state, units };
+}
+
+function withScore(state: GameState, side: SideId, points: number): GameState {
+  return { ...state, scores: addTeamScore(state.scores, side, points) };
 }
 
 function refreshSideUnits(

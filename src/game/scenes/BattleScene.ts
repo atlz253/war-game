@@ -60,6 +60,9 @@ const LOG_PANEL_HEIGHT = 1204;
 const PANEL_CONTENT_X = HUD_X + uiTheme.spacing.md;
 const TOP_TEXT_OFFSET = 128;
 const TOP_TEXT_Y = TOP_PANEL_Y + TOP_TEXT_OFFSET;
+const SCORE_TEXT_OFFSET_X = 384;
+const SCORE_TEXT_X = HUD_X + SCORE_TEXT_OFFSET_X;
+const SCORE_TEXT_Y = TOP_PANEL_Y + uiTheme.spacing.sm;
 const SELECTED_TEXT_OFFSET = 128;
 const SELECTED_TEXT_Y = SELECTED_PANEL_Y + SELECTED_TEXT_OFFSET;
 const SELECTED_HEALTH_BAR_OFFSET = 264;
@@ -127,6 +130,7 @@ export class BattleScene extends Phaser.Scene {
   private replayActions: GameAction[] = [];
   private selectedUnitText!: Phaser.GameObjects.Text;
   private activeTurnText!: Phaser.GameObjects.Text;
+  private scoreText!: Phaser.GameObjects.Text;
   private healthBar!: ProgressBar;
   private eventLog!: ScrollableList;
   private waitButton!: Button;
@@ -321,6 +325,7 @@ export class BattleScene extends Phaser.Scene {
       title: "EVENT LOG",
     });
     this.activeTurnText = this.addText(PANEL_CONTENT_X, TOP_TEXT_Y, "");
+    this.scoreText = this.addScoreText(SCORE_TEXT_X, SCORE_TEXT_Y, "");
     this.selectedUnitText = this.addText(PANEL_CONTENT_X, SELECTED_TEXT_Y, "Select a Blue unit.");
     this.healthBar = new ProgressBar(this, {
       x: PANEL_CONTENT_X,
@@ -364,6 +369,7 @@ export class BattleScene extends Phaser.Scene {
       selectedPanel.container,
       logPanel.container,
       this.activeTurnText,
+      this.scoreText,
       this.selectedUnitText,
       this.healthBar.container,
       this.eventLog.container,
@@ -769,6 +775,7 @@ export class BattleScene extends Phaser.Scene {
     this.activeTurnText.setText(
       `Turn ${state.turn} — ${state.activeSide.toUpperCase()}${this.getAiThinkingSuffix()}`,
     );
+    this.scoreText.setText(`B ${state.scores.blue}  R ${state.scores.red}`);
     this.selectedUnitText.setText(
       formatSelectedUnit(state, selectedUnit, state.activeSide, this.isActiveSideHuman()),
     );
@@ -835,6 +842,14 @@ export class BattleScene extends Phaser.Scene {
       color: uiTheme.colors.text,
       fontFamily: uiTheme.font.family,
       fontSize: `${uiTheme.font.normalSize}px`,
+    });
+  }
+
+  private addScoreText(x: number, y: number, text: string): Phaser.GameObjects.Text {
+    return this.add.text(x, y, text, {
+      color: uiTheme.colors.mutedText,
+      fontFamily: uiTheme.font.family,
+      fontSize: `${uiTheme.font.smallSize}px`,
     });
   }
 }

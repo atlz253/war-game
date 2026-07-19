@@ -8,6 +8,7 @@ import type {
   UnitState,
   UnitType,
 } from "../model/game-state";
+import { createInitialTeamScores } from "../scoring/team-scores";
 
 export const MAP_SCHEMA_VERSION = 2;
 const LEGACY_MAP_SCHEMA_VERSION = 1;
@@ -120,6 +121,7 @@ export function createGameStateFromMap(map: MapDefinition): GameState {
     activeSide: BLUE_SIDE,
     units: createUnits(map.units),
     controlPoints: createControlPoints(map.controlPoints),
+    scores: createInitialTeamScores(),
     winner: null,
   };
 }

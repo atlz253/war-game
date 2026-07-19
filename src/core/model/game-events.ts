@@ -1,3 +1,4 @@
+import type { ScoreReason } from "../scoring/team-scores";
 import type { Position, SideId } from "./game-state";
 
 export interface UnitMovedEvent {
@@ -32,6 +33,13 @@ export interface ControlPointCapturedEvent {
   readonly owner: SideId;
 }
 
+export interface TeamScoredEvent {
+  readonly type: "team-scored";
+  readonly side: SideId;
+  readonly points: number;
+  readonly reason: ScoreReason;
+}
+
 export interface UnitWaitedEvent {
   readonly type: "unit-waited";
   readonly unitId: string;
@@ -54,6 +62,7 @@ export type GameEvent =
   | UnitDamagedEvent
   | UnitDestroyedEvent
   | ControlPointCapturedEvent
+  | TeamScoredEvent
   | UnitWaitedEvent
   | TurnEndedEvent
   | VictoryAchievedEvent;

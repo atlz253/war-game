@@ -6,6 +6,7 @@
 - Route every human and AI order through the same public `GameAction` API, `validateAction`, and `applyAction` path. Agents must not mutate `GameState` directly.
 - Keep match state in `GameState`; keep selection, hover, animation, and input-lock state inside Phaser scenes or controllers.
 - Preserve replayability: seeded simulations with the same scenario and action sequence must produce the same result.
+- Keep team scoring in deterministic core state. Attacks award only HP actually removed and successful captures award the configured capture score; record action-level score deltas in headless data rather than recalculating rewards in AI or Phaser.
 - Keep terrain as validated, sparse scenario/map data. Terrain-dependent movement and damage must remain in `core`; Canvas scenes only render the resulting terrain and view data.
 - LM Studio is an optional remote-decision adapter under `src/ai`. It may be asynchronous, but must receive only snapshots and legal actions, return an offered `GameAction`, and fall back visibly to the deterministic Heuristic agent on request, parsing, or validation failure. Replays must store accepted actions rather than call the model again.
 - Completed matches are stored as versioned local replay records containing an initial map snapshot, participant snapshot, accepted actions, and result metadata. Build replay frames by applying actions through core rules; the replay viewer must never invoke AI or network inference.

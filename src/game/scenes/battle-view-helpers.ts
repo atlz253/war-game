@@ -39,6 +39,8 @@ export function formatEvent(event: GameEvent): string {
       return `${event.unitId} was destroyed.`;
     case "control-point-captured":
       return `${event.owner} captured ${event.controlPointId}.`;
+    case "team-scored":
+      return `${event.side.toUpperCase()} +${event.points} score (${event.reason}).`;
     case "unit-waited":
       return `${event.unitId} waited.`;
     case "turn-ended":

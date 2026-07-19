@@ -1,12 +1,12 @@
 import type { GameAction } from "../../core/actions/game-actions";
-import type { GameState, SideId } from "../../core/model/game-state";
+import type { GameState, SideId, TeamScores } from "../../core/model/game-state";
 import type { Agent } from "../agents/Agent";
 import { HeuristicAgent } from "../agents/HeuristicAgent";
 import { LmStudioAgent } from "../agents/LmStudioAgent";
 import { RandomAgent } from "../agents/RandomAgent";
 import type { LmStudioConnection } from "../lm-studio/lm-studio-client";
 import type { SimulationParticipantKind } from "./headless-configuration";
-import { runSimulation } from "./run-simulation";
+import { runSimulation, type SimulationActionReward } from "./run-simulation";
 
 export interface SimulationMap {
   readonly id: string;
@@ -40,6 +40,8 @@ export interface MatchSimulationRecord {
   readonly actionCount: number;
   readonly fallbackCount: number;
   readonly actions: readonly GameAction[];
+  readonly actionRewards: readonly SimulationActionReward[];
+  readonly scores: TeamScores;
   readonly finalState: GameState;
 }
 
@@ -58,6 +60,10 @@ export interface BatchSimulationSummary {
   readonly averageTurns: number;
   readonly averageActions: number;
   readonly fallbackCount: number;
+  readonly totalBlueScore: number;
+  readonly totalRedScore: number;
+  readonly averageBlueScore: number;
+  readonly averageRedScore: number;
   readonly baseSeed: number;
   readonly finalSeed: number;
 }
@@ -108,6 +114,8 @@ async function runMatch(
     actionCount: result.replay.actions.length,
     fallbackCount: result.fallbackCount,
     actions: result.replay.actions,
+    actionRewards: result.actionRewards,
+    scores: result.finalState.scores,
     finalState: result.finalState,
   };
 }
@@ -142,6 +150,8 @@ function createSummary(
   const totalTurns = records.reduce((total, record) => total + record.turn, ZERO_COUNT);
   const totalActions = records.reduce((total, record) => total + record.actionCount, ZERO_COUNT);
   const fallbackCount = records.reduce((total, record) => total + record.fallbackCount, ZERO_COUNT);
+  const totalBlueScore = records.reduce((total, record) => total + record.scores.blue, ZERO_COUNT);
+  const totalRedScore = records.reduce((total, record) => total + record.scores.red, ZERO_COUNT);
 
   return {
     mapId: options.map.id,
@@ -158,6 +168,10 @@ function createSummary(
     averageTurns: calculateAverage(totalTurns, options.matches),
     averageActions: calculateAverage(totalActions, options.matches),
     fallbackCount,
+    totalBlueScore,
+    totalRedScore,
+    averageBlueScore: calculateAverage(totalBlueScore, options.matches),
+    averageRedScore: calculateAverage(totalRedScore, options.matches),
     baseSeed: options.seed,
     finalSeed: options.seed + options.matches - SEED_INCREMENT,
   };

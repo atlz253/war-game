@@ -6,6 +6,7 @@ import type {
   UnitState,
   UnitType,
 } from "../model/game-state";
+import { createInitialTeamScores } from "../scoring/team-scores";
 
 export const SKIRMISH_SCENARIO_ID = "skirmish-12x8";
 export const BOARD_WIDTH = 12;
@@ -95,6 +96,7 @@ export function createSkirmishGameState(): GameState {
       "control-point-1": createControlPoint("control-point-1", CONTROL_POINT_ONE_POSITION),
       "control-point-2": createControlPoint("control-point-2", CONTROL_POINT_TWO_POSITION),
     },
+    scores: createInitialTeamScores(),
     winner: null,
   };
 }

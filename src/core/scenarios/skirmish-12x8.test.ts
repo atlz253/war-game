@@ -15,6 +15,7 @@ const BLUE_TANK_MOVEMENT = 5;
 const CONTROL_POINT_COUNT = 2;
 const BLUE_UNIT_COUNT = 4;
 const RED_UNIT_COUNT = 4;
+const INITIAL_SCORES = { blue: 0, red: 0 };
 const STARTING_MOUNTAINS = [
   { type: "mountain", position: { x: 4, y: 2 } },
   { type: "mountain", position: { x: 7, y: 5 } },
@@ -34,6 +35,7 @@ describe("createSkirmishGameState", () => {
     expect(state.turn).toBe(INITIAL_TURN);
     expect(state.activeSide).toBe("blue");
     expect(state.winner).toBeNull();
+    expect(state.scores).toEqual(INITIAL_SCORES);
     expect(state.units["blue-infantry-1"]?.position).toEqual({ x: 1, y: 1 });
     expect(state.units["red-infantry-1"]?.position).toEqual({ x: 10, y: 1 });
     expect(state.units["blue-infantry-1"]?.health).toBe(BLUE_INFANTRY_HEALTH);

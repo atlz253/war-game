@@ -26,6 +26,7 @@ interface GameState {
   activeSide: SideId;
   units: Record<string, UnitState>;
   controlPoints: Record<string, ControlPointState>;
+  scores: { blue: number; red: number };
   winner: SideId | null;
 }
 
@@ -42,6 +43,8 @@ interface ApplyActionResult {
 ```
 
 `ValidationResult` is a discriminated valid/invalid result with a stable reason code. `applyAction` returns a new state and ordered domain events for accepted actions; rejected actions return the exact input state with no events. It must not depend on time, random global state, or Phaser objects.
+
+Team scores are deterministic core state. An attack awards the attacking side the HP actually removed after defence modifiers; a successful capture awards 5 points. `team-scored` follows the corresponding combat or capture event. The HUD only renders these values; it never calculates or mutates them.
 
 Agents receive a state snapshot and return an action candidate:
 
@@ -112,7 +115,9 @@ receive a reproducible derived seed (`baseSeed + matchIndex`); Heuristic agents 
 LM Studio may be used in a batch, but remote decisions are non-deterministic. The shared AI decision
 helper validates each offered action and falls back to `HeuristicAgent` on request, parsing, timeout,
 or legality failure. JSONL records store accepted actions and metadata, so replaying them never invokes
-LM Studio. A match that reaches the configured action limit is recorded as incomplete.
+LM Studio. Each record also stores final team scores and an action-level reward trail containing the
+action, domain events, and Blue/Red score delta. A match that reaches the configured action limit is
+recorded as incomplete.
 
 CLI settings resolve in this order: explicit arguments, `.env.local`, tracked `.env`, then code
 defaults. `.env.local` is local-only and ignored by Git; `.env` must contain only safe defaults.

@@ -25,6 +25,9 @@ const DISTANT_TARGET_POSITION = { x: 4, y: 1 };
 const MOUNTAIN_POSITION = { x: 2, y: 1 };
 const DAMAGE_WITH_ONE_DEFENCE_BONUS = 2;
 const MINIMUM_DAMAGE = 1;
+const CAPTURE_SCORE = 5;
+const OVERKILL_TARGET_HEALTH = 2;
+const INITIAL_SCORES = { blue: 0, red: 0 };
 
 const moveAction: GameAction = {
   type: "move",
@@ -44,6 +47,7 @@ describe("movement rules", () => {
     expect(result.events).toEqual([
       expect.objectContaining({ type: "unit-moved", unitId: BLUE_INFANTRY_ID }),
     ]);
+    expect(result.state.scores).toEqual(INITIAL_SCORES);
   });
 
   it("rejects a diagonal route that cuts between two occupied orthogonal cells", () => {
@@ -231,9 +235,11 @@ describe("main action rules", () => {
     expect(result.events.map((event) => event.type)).toEqual([
       "unit-attacked",
       "unit-damaged",
+      "team-scored",
       "unit-destroyed",
       "victory-achieved",
     ]);
+    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: 0 });
   });
 
   it("rejects friendly and out-of-range attacks", () => {
@@ -302,6 +308,7 @@ describe("combined defensive terrain", () => {
     expect(result.events).toContainEqual(
       expect.objectContaining({ type: "unit-damaged", damage: MINIMUM_DAMAGE }),
     );
+    expect(result.state.scores).toEqual({ blue: MINIMUM_DAMAGE, red: 0 });
   });
 });
 
@@ -357,6 +364,37 @@ describe("main action rules", () => {
     expect(result.accepted).toBe(true);
     expect(result.state.controlPoints[CONTROL_POINT_ID]?.owner).toBe("blue");
     expect(result.state.units[BLUE_INFANTRY_ID]?.hasTakenMainAction).toBe(true);
+    expect(result.state.scores).toEqual({ blue: CAPTURE_SCORE, red: 0 });
+    expect(result.events.map((event) => event.type)).toEqual([
+      "control-point-captured",
+      "team-scored",
+    ]);
+  });
+
+  it("awards only health actually removed when an attack overkills its target", () => {
+    const state = createSkirmishGameState();
+    const duelState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: state.units[BLUE_INFANTRY_ID],
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: { x: 2, y: 1 },
+          health: OVERKILL_TARGET_HEALTH,
+        },
+      },
+    };
+
+    const result = applyAction(duelState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.scores).toEqual({ blue: OVERKILL_TARGET_HEALTH, red: 0 });
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ type: "team-scored", points: OVERKILL_TARGET_HEALTH }),
+    );
   });
 
   it("rejects invalid actions without changing the input state or emitting events", () => {
@@ -371,6 +409,7 @@ describe("main action rules", () => {
 
     expect(result).toEqual({ accepted: false, state, events: [] });
     expect(state.units[BLUE_INFANTRY_ID]?.hasTakenMainAction).toBe(false);
+    expect(state.scores).toEqual({ blue: 0, red: 0 });
   });
 });
 
@@ -412,6 +451,15 @@ describe("turn and immutability rules", () => {
       isValid: false,
       reason: "unit-main-action-already-taken",
     });
+  });
+
+  it("does not award points for waiting or ending a turn", () => {
+    const state = createSkirmishGameState();
+    const waitingResult = applyAction(state, { type: "wait", unitId: BLUE_INFANTRY_ID });
+    const endingResult = applyAction(waitingResult.state, { type: "end-turn" });
+
+    expect(waitingResult.state.scores).toEqual(INITIAL_SCORES);
+    expect(endingResult.state.scores).toEqual(INITIAL_SCORES);
   });
 
   it("does not mutate the prior state when applying combat damage", () => {

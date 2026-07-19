@@ -36,6 +36,8 @@ describe("runBatchSimulation", () => {
     expect(first.records).toHaveLength(MATCH_COUNT);
     expect(first.records.map((record) => record.seed)).toEqual([BASE_SEED, BASE_SEED + 1]);
     expect(first.summary.completed + first.summary.incomplete).toBe(MATCH_COUNT);
+    expect(first.summary.totalBlueScore).toBeGreaterThanOrEqual(0);
+    expect(first.summary.totalRedScore).toBeGreaterThanOrEqual(0);
   });
 
   it("stores accepted actions that replay to the recorded final match state", async () => {
@@ -55,6 +57,9 @@ describe("runBatchSimulation", () => {
 
     expect(record).toBeDefined();
     expect(replayActions(createSkirmishGameState, record.actions)).toEqual(record.finalState);
+    expect(record.scores).toEqual(record.finalState.scores);
+    expect(record.actionRewards).toHaveLength(record.actions.length);
+    expect(record.actionRewards.every((reward) => reward.action !== undefined)).toBe(true);
   });
 
   it("initializes a selected custom map without Phaser or browser storage", async () => {
