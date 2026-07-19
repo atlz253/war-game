@@ -11,13 +11,14 @@ import {
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { uiTheme } from "../ui/theme/ui-theme";
-import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY } from "./scene-keys";
+import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY, REPLAY_SCENE_KEY } from "./scene-keys";
 
 interface ResultSceneData {
   readonly winner: SideId;
   readonly turn: number;
   readonly matchConfiguration?: MatchConfiguration;
   readonly mapDefinition?: MapDefinition;
+  readonly replayId?: string;
 }
 
 const CENTER_X = 1920;
@@ -27,9 +28,10 @@ const PANEL_HEIGHT = 1040;
 const TITLE_Y = 740;
 const STATS_Y = 1000;
 const BUTTON_Y = 1320;
-const REPLAY_BUTTON_X = 1520;
-const MENU_BUTTON_X = 2320;
-const BUTTON_WIDTH = 640;
+const REPLAY_BUTTON_X = 1200;
+const WATCH_BUTTON_X = 1920;
+const MENU_BUTTON_X = 2640;
+const BUTTON_WIDTH = 560;
 const BUTTON_HEIGHT = 160;
 const CENTER_ORIGIN = 0.5;
 const HALF_DIMENSION = 2;
@@ -84,6 +86,15 @@ export class ResultScene extends Phaser.Scene {
       label: "MENU",
       onClick: () => this.scene.start(MAIN_MENU_SCENE_KEY),
     });
+    const watchButton = new Button(this, {
+      x: WATCH_BUTTON_X,
+      y: BUTTON_Y,
+      width: BUTTON_WIDTH,
+      height: BUTTON_HEIGHT,
+      label: "WATCH REPLAY",
+      enabled: Boolean(data.replayId),
+      onClick: () => this.scene.start(REPLAY_SCENE_KEY, { replayId: data.replayId }),
+    });
 
     this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
     this.safeAreaBackground = this.add
@@ -94,6 +105,7 @@ export class ResultScene extends Phaser.Scene {
       title,
       stats,
       replayButton.container,
+      watchButton.container,
       menuButton.container,
     ]);
     this.updatePresentationViewport();

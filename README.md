@@ -22,6 +22,10 @@ npm run build
 
 `npm run simulate` runs a deterministic graphics-free match between two Heuristic agents and prints its outcome as JSON.
 
+## Replays
+
+Every completed match is saved locally as a deterministic replay. Open `REPLAYS` from the main Canvas menu to watch, export, import, or delete records. A replay stores its initial map snapshot, participant configuration, and accepted actions; playback never contacts LM Studio and regenerates domain events through the game rules.
+
 ## LM Studio opponent
 
 Start the local server in LM Studio, then run the game with `npm run dev` and open `LM STUDIO SETTINGS`

@@ -58,6 +58,8 @@ interface AgentContext {
 
 Randomness is injected through a seeded source stored in scenario or simulation configuration. A replay records scenario identity, seed, and accepted actions; replaying them must reproduce the final state.
 
+Completed Canvas matches additionally create a versioned `RecordedMatch` in the presentation layer. It snapshots `MapDefinition`, `MatchConfiguration`, result metadata, and the core replay actions. `ReplayTimeline` remains pure core logic: it reapplies every accepted action with `applyAction` to produce immutable state/event frames. The replay viewer never runs agents or calls LM Studio.
+
 `LmStudioAgent` remains under `src/ai` and depends only on core state/actions plus an injected HTTP
 client. It sends a current state snapshot, legal action IDs, and current-turn history to LM Studio's
 OpenAI-compatible API. Its response is mapped only to the offered action set, then still validated by

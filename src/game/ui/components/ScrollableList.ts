@@ -37,6 +37,12 @@ export class ScrollableList {
     this.text.setText(this.entries.map((item) => `• ${item}`));
   }
 
+  public setEntries(entries: readonly string[]): void {
+    this.entries.length = 0;
+    this.entries.push(...entries.slice(-this.maxEntries));
+    this.text.setText(this.entries.map((item) => `• ${item}`));
+  }
+
   public destroy(): void {
     this.container.destroy(true);
   }

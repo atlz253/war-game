@@ -2,17 +2,13 @@ import Phaser from "phaser";
 
 import { HeuristicAgent } from "../../ai/agents/HeuristicAgent";
 import type { GameAction } from "../../core/actions/game-actions";
+import { createMapDefinitionFromState } from "../../core/maps/create-map-definition-from-state";
 import { createGameStateFromMap, type MapDefinition } from "../../core/maps/map-definition";
 import type { GameEvent } from "../../core/model/game-events";
-import type { GameState, Position, UnitState } from "../../core/model/game-state";
+import type { GameState, Position } from "../../core/model/game-state";
 import { applyAction } from "../../core/rules/apply-action";
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
-import { assetManifest } from "../assets/asset-manifest";
-import {
-  calculateUnitHealthLabelScale,
-  calculateUnitHealthLabelY,
-  formatUnitHealthLabel,
-} from "../board/unit-health-label";
+import { BattleMapRenderer } from "../board/BattleMapRenderer";
 import {
   calculatePresentationViewport,
   type PresentationViewport,
@@ -33,6 +29,8 @@ import {
   isHumanTurn,
   type MatchConfiguration,
 } from "../match/match-configuration";
+import { createRecordedMatch } from "../replays/recorded-match";
+import { getBrowserReplayLibrary } from "../replays/replay-library";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
@@ -42,9 +40,6 @@ import {
   findUnitAt,
   formatEvent,
   formatSelectedUnit,
-  getControlPointTextureKey,
-  getTerrainTextureKey,
-  getUnitTextureKey,
   isInsideRectangle,
 } from "./battle-view-helpers";
 import { RESULT_SCENE_KEY } from "./scene-keys";
@@ -101,22 +96,7 @@ const MOVEMENT_HIGHLIGHT_COLOR = 0x3dd6b1;
 const MOVEMENT_HIGHLIGHT_FILL_ALPHA = 0.28;
 const MOVEMENT_HIGHLIGHT_BORDER_ALPHA = 0.85;
 const MOVEMENT_HIGHLIGHT_BORDER_WIDTH = 8;
-const UNIT_HEALTH_LABEL_GAP = 24;
-const UNIT_HEALTH_LABEL_PADDING_X = 16;
-const UNIT_HEALTH_LABEL_PADDING_Y = 8;
-const UNIT_HEALTH_LABEL_BACKGROUND_COLOR = 0x101820;
-const UNIT_HEALTH_LABEL_BACKGROUND_ALPHA = 0.85;
-const UNIT_HEALTH_LABEL_BORDER_COLOR = 0xeaf4ff;
-const UNIT_HEALTH_LABEL_BORDER_WIDTH = 4;
-const CENTER_ORIGIN = 0.5;
-const DOUBLE_SIZE_MULTIPLIER = 2;
 const DIAGNOSTIC_MODE = import.meta.env.DEV;
-
-interface UnitHealthView {
-  readonly container: Phaser.GameObjects.Container;
-  readonly background: Phaser.GameObjects.Rectangle;
-  readonly text: Phaser.GameObjects.Text;
-}
 
 interface ZoomAnchor {
   readonly pointerX: number;
@@ -135,6 +115,7 @@ export class BattleScene extends Phaser.Scene {
   private presentationViewport!: PresentationViewport;
   private gameState!: GameState;
   private mapDefinition: MapDefinition | null = null;
+  private replayMapDefinition!: MapDefinition;
   private matchConfiguration = createDefaultMatchConfiguration();
   private mapZoom = INITIAL_MAP_ZOOM;
   private targetMapZoom = INITIAL_MAP_ZOOM;
@@ -143,6 +124,7 @@ export class BattleScene extends Phaser.Scene {
   private selectedUnitId: string | null = null;
   private inputLocked = false;
   private aiTurnActions: GameAction[] = [];
+  private replayActions: GameAction[] = [];
   private selectedUnitText!: Phaser.GameObjects.Text;
   private activeTurnText!: Phaser.GameObjects.Text;
   private healthBar!: ProgressBar;
@@ -153,9 +135,7 @@ export class BattleScene extends Phaser.Scene {
   private selectionView: Phaser.GameObjects.Rectangle | null = null;
   private diagnosticUnitLayer: Phaser.GameObjects.Graphics | null = null;
   private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
-  private readonly unitViews = new Map<string, Phaser.GameObjects.Image>();
-  private readonly unitHealthViews = new Map<string, UnitHealthView>();
-  private readonly controlPointViews = new Map<string, Phaser.GameObjects.Image>();
+  private mapRenderer!: BattleMapRenderer;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
 
@@ -169,6 +149,8 @@ export class BattleScene extends Phaser.Scene {
     this.gameState = this.mapDefinition
       ? createGameStateFromMap(this.mapDefinition)
       : createSkirmishGameState();
+    this.replayMapDefinition =
+      this.mapDefinition ?? createMapDefinitionFromState(this.gameState, "Skirmish 12×8");
     this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     this.mapZoom = INITIAL_MAP_ZOOM;
     this.targetMapZoom = INITIAL_MAP_ZOOM;
@@ -183,15 +165,14 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private resetRenderingState(): void {
-    this.unitViews.clear();
-    this.unitHealthViews.clear();
-    this.controlPointViews.clear();
+    this.mapRenderer?.reset();
     this.selectionView = null;
     this.diagnosticUnitLayer = null;
     this.movementHighlightLayer = null;
     this.selectedUnitId = null;
     this.inputLocked = false;
     this.aiTurnActions = [];
+    this.replayActions = [];
     this.cameraVelocity = { x: 0, y: 0 };
     this.zoomAnchor = null;
   }
@@ -251,7 +232,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createWorld(): void {
-    if (this.hasLoadedAssets()) {
+    this.mapRenderer = new BattleMapRenderer(this, this.worldContainer, {
+      boardOriginX: BOARD_ORIGIN_X,
+      boardOriginY: BOARD_ORIGIN_Y,
+      tileSize: TILE_SIZE,
+      initialZoom: this.mapZoom,
+    });
+    if (this.mapRenderer.hasLoadedAssets()) {
       this.createAssetWorld();
       return;
     }
@@ -287,29 +274,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createAssetWorld(): void {
-    const boardWidth = this.gameState.board.width * TILE_SIZE;
-    const boardHeight = this.gameState.board.height * TILE_SIZE;
-    const tile = this.add.tileSprite(
-      BOARD_ORIGIN_X + boardWidth / DOUBLE_SIZE_MULTIPLIER,
-      BOARD_ORIGIN_Y + boardHeight / DOUBLE_SIZE_MULTIPLIER,
-      boardWidth,
-      boardHeight,
-      assetManifest.terrain.plain.textureKey,
-    );
-    this.worldContainer.add(tile);
-
-    for (const terrain of this.gameState.board.terrain) {
-      this.worldContainer.add(
-        this.add.image(
-          this.toScreenPosition(terrain.position).x,
-          this.toScreenPosition(terrain.position).y,
-          getTerrainTextureKey(terrain.type),
-        ),
-      );
-    }
-
+    this.mapRenderer.createTerrain(this.gameState);
     this.createMovementHighlightLayer();
-    this.updateControlPointViews(this.gameState);
+    this.mapRenderer.renderState(this.gameState);
   }
 
   private createMovementHighlightLayer(): void {
@@ -467,7 +434,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.mapZoom = nextMapZoom;
     camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
-    this.updateUnitHealthLabelScales(nextMapZoom);
+    this.mapRenderer.updateHealthLabelScales(nextMapZoom);
     if (this.mapZoom === this.targetMapZoom) this.zoomAnchor = null;
   }
 
@@ -605,6 +572,7 @@ export class BattleScene extends Phaser.Scene {
     const previousState = this.gameState;
     this.gameState = result.state;
     this.recordTurnAction(action);
+    this.recordReplayAction(action);
     this.clearSelectionAfterTurnEnd(action);
     this.addEventMessages(result.events);
     this.renderGameState(previousState, this.gameState);
@@ -637,6 +605,7 @@ export class BattleScene extends Phaser.Scene {
     const previousState = this.gameState;
     this.gameState = result.state;
     this.recordTurnAction(decision.action);
+    this.recordReplayAction(decision.action);
     this.clearSelectionAfterTurnEnd(decision.action);
     if (decision.usedFallback && participant === "lm-studio-ai") {
       this.eventLog.push(
@@ -664,6 +633,10 @@ export class BattleScene extends Phaser.Scene {
     this.aiTurnActions = action.type === "end-turn" ? [] : [...this.aiTurnActions, action];
   }
 
+  private recordReplayAction(action: GameAction): void {
+    this.replayActions = [...this.replayActions, action];
+  }
+
   private clearSelectionAfterTurnEnd(action: GameAction): void {
     if (action.type === "end-turn") {
       this.selectedUnitId = null;
@@ -683,11 +656,22 @@ export class BattleScene extends Phaser.Scene {
       return false;
     }
 
+    const replay = createRecordedMatch({
+      id: `replay-${Date.now()}`,
+      name: `${this.gameState.winner.toUpperCase()} victory — ${this.replayMapDefinition.name}`,
+      savedAt: new Date().toISOString(),
+      mapDefinition: this.replayMapDefinition,
+      matchConfiguration: this.matchConfiguration,
+      actions: this.replayActions,
+    });
+    getBrowserReplayLibrary().save(replay);
+
     this.scene.start(RESULT_SCENE_KEY, {
       winner: this.gameState.winner,
       turn: this.gameState.turn,
       matchConfiguration: this.matchConfiguration,
       mapDefinition: this.mapDefinition ?? undefined,
+      replayId: replay.id,
     });
 
     return true;
@@ -730,9 +714,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateUnitViews(_previousState: GameState | null, nextState: GameState): void {
-    if (this.hasLoadedAssets()) {
-      this.updateAssetUnitViews(nextState);
-      this.updateControlPointViews(nextState);
+    if (this.mapRenderer.hasLoadedAssets()) {
+      this.mapRenderer.renderState(nextState);
       this.updateSelectionView(nextState);
       return;
     }
@@ -743,96 +726,6 @@ export class BattleScene extends Phaser.Scene {
 
     this.drawDiagnosticUnitMarkers(nextState);
     this.updateSelectionView(nextState);
-  }
-
-  private updateAssetUnitViews(state: GameState): void {
-    const remainingUnitIds = new Set(Object.keys(state.units));
-
-    for (const [unitId, view] of this.unitViews) {
-      if (!remainingUnitIds.has(unitId)) {
-        view.destroy();
-        this.unitHealthViews.get(unitId)?.container.destroy();
-        this.unitViews.delete(unitId);
-        this.unitHealthViews.delete(unitId);
-      }
-    }
-
-    for (const unit of Object.values(state.units)) {
-      const point = this.toScreenPosition(unit.position);
-      const existingView = this.unitViews.get(unit.id);
-
-      if (existingView) {
-        existingView.setPosition(point.x, point.y);
-        this.upsertUnitHealthView(unit, point);
-        continue;
-      }
-
-      const view = this.add.image(point.x, point.y, getUnitTextureKey(unit));
-      this.worldContainer.add(view);
-      this.unitViews.set(unit.id, view);
-      this.upsertUnitHealthView(unit, point);
-    }
-  }
-
-  private upsertUnitHealthView(unit: UnitState, point: Position): void {
-    const label = formatUnitHealthLabel(unit.health);
-    const labelY = calculateUnitHealthLabelY(point.y, TILE_SIZE, UNIT_HEALTH_LABEL_GAP);
-    const existingView = this.unitHealthViews.get(unit.id);
-
-    if (existingView) {
-      existingView.container.setPosition(point.x, labelY);
-      existingView.text.setText(label);
-      this.layoutUnitHealthView(existingView);
-      return;
-    }
-
-    const text = this.addText(0, 0, label).setOrigin(CENTER_ORIGIN);
-    const background = this.add
-      .rectangle(0, 0, 0, 0, UNIT_HEALTH_LABEL_BACKGROUND_COLOR, UNIT_HEALTH_LABEL_BACKGROUND_ALPHA)
-      .setStrokeStyle(UNIT_HEALTH_LABEL_BORDER_WIDTH, UNIT_HEALTH_LABEL_BORDER_COLOR);
-    const container = this.add.container(point.x, labelY, [background, text]);
-    const healthView = { container, background, text };
-
-    container.setScale(calculateUnitHealthLabelScale(this.mapZoom));
-    this.layoutUnitHealthView(healthView);
-    this.worldContainer.add(container);
-    this.unitHealthViews.set(unit.id, healthView);
-  }
-
-  private updateUnitHealthLabelScales(cameraZoom: number): void {
-    const labelScale = calculateUnitHealthLabelScale(cameraZoom);
-
-    for (const healthView of this.unitHealthViews.values()) {
-      healthView.container.setScale(labelScale);
-    }
-  }
-
-  private layoutUnitHealthView(healthView: UnitHealthView): void {
-    healthView.background.setSize(
-      healthView.text.width + UNIT_HEALTH_LABEL_PADDING_X * DOUBLE_SIZE_MULTIPLIER,
-      healthView.text.height + UNIT_HEALTH_LABEL_PADDING_Y * DOUBLE_SIZE_MULTIPLIER,
-    );
-  }
-
-  private updateControlPointViews(state: GameState): void {
-    for (const controlPoint of Object.values(state.controlPoints)) {
-      const point = this.toScreenPosition(controlPoint.position);
-      const textureKey = getControlPointTextureKey(controlPoint.owner);
-      const existingView = this.controlPointViews.get(controlPoint.id);
-
-      if (existingView) {
-        existingView.setTexture(textureKey).setPosition(point.x, point.y);
-        continue;
-      }
-
-      const view = this.add.image(point.x, point.y, textureKey);
-      this.worldContainer.add(view);
-      this.controlPointViews.set(controlPoint.id, view);
-    }
-  }
-
-  private hasLoadedAssets(): boolean {
-    return this.textures.exists(assetManifest.terrain.plain.textureKey);
   }
 
   private drawDiagnosticUnitMarkers(state: GameState): void {

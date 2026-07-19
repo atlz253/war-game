@@ -8,13 +8,14 @@
 - Preserve replayability: seeded simulations with the same scenario and action sequence must produce the same result.
 - Keep terrain as validated, sparse scenario/map data. Terrain-dependent movement and damage must remain in `core`; Canvas scenes only render the resulting terrain and view data.
 - LM Studio is an optional remote-decision adapter under `src/ai`. It may be asynchronous, but must receive only snapshots and legal actions, return an offered `GameAction`, and fall back visibly to the deterministic Heuristic agent on request, parsing, or validation failure. Replays must store accepted actions rather than call the model again.
+- Completed matches are stored as versioned local replay records containing an initial map snapshot, participant snapshot, accepted actions, and result metadata. Build replay frames by applying actions through core rules; the replay viewer must never invoke AI or network inference.
 
 ## Canvas-only presentation
 
 - Phaser is responsible for rendering, input, scenes, cameras, Canvas UI, effects, audio, and animation only.
 - Do not add React, Vue, Svelte, DOM overlays, DOM controls, CSS layout for game UI, or a global UI-state library.
 - The HTML shell contains only `<div id="game"></div>`.
-- Map import and export may create a temporary native browser file picker or download link only after a Canvas-button click. These elements must be removed immediately and must never become visible game UI.
+- Map and replay import/export may create a temporary native browser file picker or download link only after a Canvas-button click. These elements must be removed immediately and must never become visible game UI.
 - LM Studio configuration and all settings controls are Phaser Canvas scenes. Persist one local endpoint, an optional validated request timeout, and independent Blue/Red model IDs in browser storage; snapshot them into a match before play. Never add a DOM settings form or a cloud-provider credential flow.
 - Keep UI theme values centralized. Use integer coordinates, `pixelArt`, `roundPixels`, and nearest-neighbour scaling.
 - HUD objects use `setScrollFactor(0)` and must consume pointer input so a HUD click cannot also select a board cell.

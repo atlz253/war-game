@@ -13,7 +13,12 @@ import {
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
-import { BATTLE_SCENE_KEY, LM_STUDIO_SETTINGS_SCENE_KEY, MAP_EDITOR_SCENE_KEY } from "./scene-keys";
+import {
+  BATTLE_SCENE_KEY,
+  LM_STUDIO_SETTINGS_SCENE_KEY,
+  MAP_EDITOR_SCENE_KEY,
+  REPLAY_LIBRARY_SCENE_KEY,
+} from "./scene-keys";
 
 const MENU_CENTER_X = 1920;
 const MENU_PANEL_CENTER_Y = 1080;
@@ -37,6 +42,9 @@ const LM_STUDIO_SETTINGS_X = MENU_CENTER_X;
 const LM_STUDIO_SETTINGS_Y = 1480;
 const LM_STUDIO_SETTINGS_WIDTH = 1120;
 const EDITOR_BUTTON_Y = 1640;
+const REPLAY_LIBRARY_BUTTON_X = 2240;
+const MAP_EDITOR_BUTTON_X = 1600;
+const MENU_SECONDARY_BUTTON_WIDTH = 520;
 const MENU_START_BUTTON_Y = 1820;
 const MENU_START_BUTTON_WIDTH = 1120;
 const MENU_START_BUTTON_HEIGHT = 176;
@@ -143,12 +151,20 @@ export class MainMenuScene extends Phaser.Scene {
     const previousMapButton = this.createMapButton(MAP_PREVIOUS_X, "< MAP", -1);
     const nextMapButton = this.createMapButton(MAP_NEXT_X, "MAP >", 1);
     const editorButton = new Button(this, {
-      x: MENU_CENTER_X,
+      x: MAP_EDITOR_BUTTON_X,
       y: EDITOR_BUTTON_Y,
-      width: MENU_START_BUTTON_WIDTH,
+      width: MENU_SECONDARY_BUTTON_WIDTH,
       height: ROLE_BUTTON_HEIGHT,
       label: "MAP EDITOR",
       onClick: () => this.openMapEditor(),
+    });
+    const replayLibraryButton = new Button(this, {
+      x: REPLAY_LIBRARY_BUTTON_X,
+      y: EDITOR_BUTTON_Y,
+      width: MENU_SECONDARY_BUTTON_WIDTH,
+      height: ROLE_BUTTON_HEIGHT,
+      label: "REPLAYS",
+      onClick: () => this.scene.start(REPLAY_LIBRARY_SCENE_KEY),
     });
     const lmStudioSettingsButton = new Button(this, {
       x: LM_STUDIO_SETTINGS_X,
@@ -164,6 +180,7 @@ export class MainMenuScene extends Phaser.Scene {
       previousMapButton.container,
       nextMapButton.container,
       editorButton.container,
+      replayLibraryButton.container,
       lmStudioSettingsButton.container,
     ];
   }
