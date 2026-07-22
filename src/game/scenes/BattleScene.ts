@@ -13,6 +13,7 @@ import {
   calculatePresentationViewport,
   type PresentationViewport,
 } from "../config/presentation-layout";
+import { getAttackHighlightPositions } from "../input/attack-highlights";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import {
   calculateAnchoredScroll,
@@ -99,6 +100,8 @@ const MOVEMENT_HIGHLIGHT_COLOR = 0x3dd6b1;
 const MOVEMENT_HIGHLIGHT_FILL_ALPHA = 0.28;
 const MOVEMENT_HIGHLIGHT_BORDER_ALPHA = 0.85;
 const MOVEMENT_HIGHLIGHT_BORDER_WIDTH = 8;
+const ATTACK_HIGHLIGHT_COLOR = 0xd94b4b;
+const ATTACK_HIGHLIGHT_FILL_ALPHA = 0.32;
 const DIAGNOSTIC_MODE = import.meta.env.DEV;
 
 interface ZoomAnchor {
@@ -139,6 +142,7 @@ export class BattleScene extends Phaser.Scene {
   private selectionView: Phaser.GameObjects.Rectangle | null = null;
   private diagnosticUnitLayer: Phaser.GameObjects.Graphics | null = null;
   private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
+  private attackHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private mapRenderer!: BattleMapRenderer;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
@@ -173,6 +177,7 @@ export class BattleScene extends Phaser.Scene {
     this.selectionView = null;
     this.diagnosticUnitLayer = null;
     this.movementHighlightLayer = null;
+    this.attackHighlightLayer = null;
     this.selectedUnitId = null;
     this.inputLocked = false;
     this.aiTurnActions = [];
@@ -258,6 +263,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.createMovementHighlightLayer();
+    this.createAttackHighlightLayer();
 
     for (const controlPoint of Object.values(this.gameState.controlPoints)) {
       const point = this.toScreenPosition(controlPoint.position);
@@ -280,6 +286,7 @@ export class BattleScene extends Phaser.Scene {
   private createAssetWorld(): void {
     this.mapRenderer.createTerrain(this.gameState);
     this.createMovementHighlightLayer();
+    this.createAttackHighlightLayer();
     this.mapRenderer.renderState(this.gameState);
   }
 
@@ -287,6 +294,12 @@ export class BattleScene extends Phaser.Scene {
     this.movementHighlightLayer = this.add.graphics();
     this.worldContainer.add(this.movementHighlightLayer);
     this.uiCamera.ignore(this.movementHighlightLayer);
+  }
+
+  private createAttackHighlightLayer(): void {
+    this.attackHighlightLayer = this.add.graphics();
+    this.worldContainer.add(this.attackHighlightLayer);
+    this.uiCamera.ignore(this.attackHighlightLayer);
   }
 
   private addDiagnosticTile(x: number, y: number): void {
@@ -685,6 +698,7 @@ export class BattleScene extends Phaser.Scene {
 
   private renderGameState(previousState: GameState | null, nextState: GameState): void {
     this.updateMovementHighlights(nextState);
+    this.updateAttackHighlights(nextState);
     this.updateUnitViews(previousState, nextState);
     this.updateHud(nextState);
   }
@@ -716,6 +730,29 @@ export class BattleScene extends Phaser.Scene {
         MOVEMENT_HIGHLIGHT_BORDER_ALPHA,
       );
       this.movementHighlightLayer.strokeRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
+    }
+  }
+
+  private updateAttackHighlights(state: GameState): void {
+    if (!this.attackHighlightLayer) {
+      return;
+    }
+
+    this.attackHighlightLayer.clear();
+    this.attackHighlightLayer.fillStyle(ATTACK_HIGHLIGHT_COLOR, ATTACK_HIGHLIGHT_FILL_ALPHA);
+
+    for (const position of getAttackHighlightPositions(
+      state,
+      this.selectedUnitId,
+      this.inputLocked,
+    )) {
+      const point = this.toScreenPosition(position);
+      this.attackHighlightLayer.fillRect(
+        point.x - TILE_CENTER,
+        point.y - TILE_CENTER,
+        TILE_SIZE,
+        TILE_SIZE,
+      );
     }
   }
 
