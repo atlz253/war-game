@@ -15,11 +15,11 @@ export class BrowserReplayLibrary {
   public constructor(private readonly storage: StorageLike) {}
 
   public list(): readonly RecordedMatch[] {
-    const parsed: unknown = JSON.parse(this.storage.getItem(STORAGE_KEY) ?? EMPTY_REPLAY_LIST);
+    const parsed = parseStoredReplays(this.storage.getItem(STORAGE_KEY));
 
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.map((replay) => deserializeRecordedMatch(JSON.stringify(replay)));
+    return parsed.flatMap(deserializeStoredReplay);
   }
 
   public get(id: string): RecordedMatch | undefined {
@@ -72,6 +72,22 @@ export class BrowserReplayLibrary {
 
   private persist(replays: readonly RecordedMatch[]): void {
     this.storage.setItem(STORAGE_KEY, JSON.stringify(replays));
+  }
+}
+
+function parseStoredReplays(value: string | null): unknown {
+  try {
+    return JSON.parse(value ?? EMPTY_REPLAY_LIST);
+  } catch {
+    return [];
+  }
+}
+
+function deserializeStoredReplay(value: unknown): readonly RecordedMatch[] {
+  try {
+    return [deserializeRecordedMatch(JSON.stringify(value))];
+  } catch {
+    return [];
   }
 }
 

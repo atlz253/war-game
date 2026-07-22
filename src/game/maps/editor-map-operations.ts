@@ -10,8 +10,10 @@ export type EditorTool =
 export type EditorToolRejection =
   | "mountain-on-control-point"
   | "mountain-on-tank"
+  | "mountain-on-artillery"
   | "control-point-on-mountain"
-  | "tank-on-mountain";
+  | "tank-on-mountain"
+  | "artillery-on-mountain";
 
 export function applyEditorTool(
   map: MapDefinition,
@@ -70,19 +72,32 @@ export function getEditorToolRejection(
   const hasTank = map.units.some(
     (unit) => unit.type === "tank" && samePosition(unit.position, position),
   );
+  const hasArtillery = map.units.some(
+    (unit) => unit.type === "artillery" && samePosition(unit.position, position),
+  );
 
-  if (tool.kind === "terrain") {
-    if (hasControlPoint) return "mountain-on-control-point";
-    return hasTank ? "mountain-on-tank" : null;
-  }
+  if (tool.kind === "terrain")
+    return getMountainToolRejection(hasControlPoint, hasTank, hasArtillery);
   if (tool.kind === "control-point") {
     return hasMountain ? "control-point-on-mountain" : null;
   }
-  if (tool.kind === "unit" && tool.unitType === "tank") {
-    return hasMountain ? "tank-on-mountain" : null;
-  }
+  return getUnitToolRejection(tool, hasMountain);
+}
 
-  return null;
+function getMountainToolRejection(
+  hasControlPoint: boolean,
+  hasTank: boolean,
+  hasArtillery: boolean,
+): EditorToolRejection | null {
+  if (hasControlPoint) return "mountain-on-control-point";
+  if (hasTank) return "mountain-on-tank";
+  return hasArtillery ? "mountain-on-artillery" : null;
+}
+
+function getUnitToolRejection(tool: EditorTool, hasMountain: boolean): EditorToolRejection | null {
+  if (!hasMountain || tool.kind !== "unit") return null;
+  if (tool.unitType === "tank") return "tank-on-mountain";
+  return tool.unitType === "artillery" ? "artillery-on-mountain" : null;
 }
 
 export function wouldTrimPlacements(map: MapDefinition, width: number, height: number): boolean {

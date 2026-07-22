@@ -1,12 +1,14 @@
 import type { GameAction } from "../actions/game-actions";
 import type { GameState, Position, UnitState } from "../model/game-state";
 import { findPath, positionsEqual } from "../pathfinding/find-path";
+import { hasClearMountainLineOfFire, isWithinAttackRange } from "./attack-range";
 
 export type ValidationFailureReason =
   | "match-finished"
   | "unit-not-found"
   | "unit-not-active-side"
   | "unit-main-action-already-taken"
+  | "unit-cannot-attack-after-moving"
   | "unit-has-no-movement-points"
   | "destination-unreachable"
   | "destination-out-of-range"
@@ -75,6 +77,10 @@ function validateAttack(state: GameState, unitId: string, targetUnitId: string):
     return unitValidation;
   }
 
+  if (unit.type === "artillery" && unit.hasMovedThisTurn) {
+    return invalid("unit-cannot-attack-after-moving");
+  }
+
   const target = state.units[targetUnitId];
 
   if (!target) {
@@ -85,7 +91,12 @@ function validateAttack(state: GameState, unitId: string, targetUnitId: string):
     return invalid("target-is-friendly");
   }
 
-  return isWithinRange(unit.position, target.position, unit.attackRange)
+  return isWithinAttackRange(
+    unit.position,
+    target.position,
+    unit.minAttackRange,
+    unit.attackRange,
+  ) && hasClearMountainLineOfFire(state.board, unit.position, target.position)
     ? VALID_ACTION
     : invalid("destination-out-of-range");
 }
@@ -132,14 +143,6 @@ function validateUnitTurn(state: GameState, unit: UnitState | undefined): Valida
   }
 
   return unit.side === state.activeSide ? VALID_ACTION : invalid("unit-not-active-side");
-}
-
-function isWithinRange(origin: Position, target: Position, range: number): boolean {
-  const horizontalDistance = Math.abs(origin.x - target.x);
-  const verticalDistance = Math.abs(origin.y - target.y);
-  const distance = Math.max(horizontalDistance, verticalDistance);
-
-  return distance > NO_MOVEMENT_POINTS && distance <= range;
 }
 
 function invalid(reason: ValidationFailureReason): ValidationResult {

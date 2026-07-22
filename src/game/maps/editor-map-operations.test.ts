@@ -63,5 +63,19 @@ describe("editor map operations", () => {
         position,
       ),
     ).toBe("mountain-on-tank");
+    expect(
+      getEditorToolRejection(
+        { ...mountainMap, units: [{ side: "red" as const, type: "artillery" as const, position }] },
+        mountainTool,
+        position,
+      ),
+    ).toBe("mountain-on-artillery");
+    expect(
+      getEditorToolRejection(
+        mountainMap,
+        { kind: "unit", side: "blue", unitType: "artillery" },
+        position,
+      ),
+    ).toBe("artillery-on-mountain");
   });
 });

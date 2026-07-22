@@ -49,7 +49,8 @@ export type MapValidationError =
   | "duplicate-terrain-position"
   | "invalid-terrain-type"
   | "mountain-control-point-conflict"
-  | "tank-on-mountain";
+  | "tank-on-mountain"
+  | "artillery-on-mountain";
 
 export interface MapValidationResult {
   readonly isValid: boolean;
@@ -59,13 +60,15 @@ export interface MapValidationResult {
 const INITIAL_TURN = 1;
 const BLUE_SIDE: SideId = "blue";
 const UNIT_STATS: Readonly<Record<UnitType, UnitStats>> = {
-  infantry: { health: 10, movementPoints: 4, attackRange: 1, baseDamage: 3 },
-  tank: { health: 16, movementPoints: 5, attackRange: 1, baseDamage: 5 },
+  infantry: { health: 10, movementPoints: 4, minAttackRange: 1, attackRange: 1, baseDamage: 3 },
+  tank: { health: 16, movementPoints: 5, minAttackRange: 1, attackRange: 1, baseDamage: 5 },
+  artillery: { health: 8, movementPoints: 3, minAttackRange: 2, attackRange: 4, baseDamage: 4 },
 };
 
 interface UnitStats {
   readonly health: number;
   readonly movementPoints: number;
+  readonly minAttackRange: number;
   readonly attackRange: number;
   readonly baseDamage: number;
 }
@@ -253,6 +256,9 @@ function addTerrainConflictErrors(map: MapDefinition, errors: MapValidationError
     if (unit.type === "tank" && mountainPositions.has(positionKey(unit.position))) {
       errors.push("tank-on-mountain");
     }
+    if (unit.type === "artillery" && mountainPositions.has(positionKey(unit.position))) {
+      errors.push("artillery-on-mountain");
+    }
   }
 }
 
@@ -272,8 +278,10 @@ function createUnits(placements: readonly MapUnitPlacement[]): Record<string, Un
       maxHealth: stats.health,
       movementPoints: stats.movementPoints,
       maxMovementPoints: stats.movementPoints,
+      minAttackRange: stats.minAttackRange,
       attackRange: stats.attackRange,
       baseDamage: stats.baseDamage,
+      hasMovedThisTurn: false,
       hasTakenMainAction: false,
     };
   }

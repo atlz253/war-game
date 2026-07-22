@@ -18,6 +18,7 @@ const RESIZED_WIDTH = 4;
 const RESIZED_HEIGHT = 3;
 const INFANTRY_MAX_HEALTH = 10;
 const TANK_MAX_HEALTH = 16;
+const ARTILLERY_MAX_HEALTH = 8;
 const MOUNTAIN_POSITION = { x: 2, y: 2 };
 const SECOND_MOUNTAIN_POSITION = { x: 3, y: 2 };
 const INITIAL_SCORES = { blue: 0, red: 0 };
@@ -93,6 +94,30 @@ describe("terrain map definitions", () => {
         "mountain-control-point-conflict",
         "tank-on-mountain",
       ],
+    });
+  });
+
+  it("rejects artillery on mountains and assigns its fixed combat statistics", () => {
+    const map = {
+      ...createMapDefinition(MAP_ID, MAP_NAME, WIDTH, HEIGHT),
+      terrain: [{ type: "mountain" as const, position: MOUNTAIN_POSITION }],
+      units: [{ side: "blue" as const, type: "artillery" as const, position: MOUNTAIN_POSITION }],
+    };
+    const validMap = {
+      ...map,
+      terrain: [],
+      units: [{ side: "blue" as const, type: "artillery" as const, position: { x: 0, y: 0 } }],
+    };
+
+    expect(validateMapDefinition(map).errors).toContain("artillery-on-mountain");
+    expect(createGameStateFromMap(validMap).units["blue-artillery-1"]).toMatchObject({
+      health: ARTILLERY_MAX_HEALTH,
+      maxHealth: ARTILLERY_MAX_HEALTH,
+      movementPoints: 3,
+      maxMovementPoints: 3,
+      minAttackRange: 2,
+      attackRange: 4,
+      baseDamage: 4,
     });
   });
 

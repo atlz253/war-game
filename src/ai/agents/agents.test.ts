@@ -8,6 +8,7 @@ import { RandomAgent } from "./RandomAgent";
 
 const RANDOM_SEED = 12345;
 const BLUE_INFANTRY_ID = "blue-infantry-1";
+const BLUE_ARTILLERY_ID = "blue-artillery-1";
 const RED_INFANTRY_ID = "red-infantry-1";
 const ADJACENT_ENEMY_POSITION = { x: 2, y: 2 };
 
@@ -51,6 +52,10 @@ describe("HeuristicAgent", () => {
         [RED_INFANTRY_ID]: {
           ...state.units[RED_INFANTRY_ID],
           position: ADJACENT_ENEMY_POSITION,
+        },
+        [BLUE_ARTILLERY_ID]: {
+          ...state.units[BLUE_ARTILLERY_ID],
+          hasTakenMainAction: true,
         },
       },
     };

@@ -45,7 +45,12 @@ function applyMove(
   const unit = requireUnit(state, unitId);
   const path = findPath(state.board, state.units, unit.id, unit.position, destination);
   const cost = path?.length ?? NO_MOVEMENT_COST;
-  const movedUnit = { ...unit, position: destination, movementPoints: unit.movementPoints - cost };
+  const movedUnit = {
+    ...unit,
+    position: destination,
+    movementPoints: unit.movementPoints - cost,
+    hasMovedThisTurn: true,
+  };
   const nextState = withUnit(state, movedUnit);
 
   return {
@@ -173,7 +178,12 @@ function refreshSideUnits(
     Object.entries(units).map(([unitId, unit]) => [
       unitId,
       unit.side === activeSide
-        ? { ...unit, movementPoints: unit.maxMovementPoints, hasTakenMainAction: false }
+        ? {
+            ...unit,
+            movementPoints: unit.maxMovementPoints,
+            hasMovedThisTurn: false,
+            hasTakenMainAction: false,
+          }
         : unit,
     ]),
   );

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { GameAction } from "../actions/game-actions";
+import type { GameState } from "../model/game-state";
 import { createSkirmishGameState } from "../scenarios/skirmish-12x8";
 import { applyAction } from "./apply-action";
 import { validateAction } from "./validate-action";
@@ -11,6 +12,7 @@ const RED_INFANTRY_ID = "red-infantry-1";
 const RED_INFANTRY_TWO_ID = "red-infantry-2";
 const RED_TANK_ID = "red-tank-1";
 const BLUE_TANK_ID = "blue-tank-1";
+const BLUE_ARTILLERY_ID = "blue-artillery-1";
 const CONTROL_POINT_ID = "control-point-1";
 const BLUE_INFANTRY_MAX_MOVEMENT = 4;
 const TANK_MAX_MOVEMENT = 5;
@@ -23,11 +25,59 @@ const OCCUPIED_DESTINATION = { x: 1, y: 3 };
 const INSUFFICIENT_MOVEMENT_DESTINATION = { x: 6, y: 1 };
 const DISTANT_TARGET_POSITION = { x: 4, y: 1 };
 const MOUNTAIN_POSITION = { x: 2, y: 1 };
+const ARTILLERY_MINIMUM_RANGE = 2;
+const ARTILLERY_MAXIMUM_RANGE = 4;
+const ARTILLERY_MOVE_DESTINATION = { x: 3, y: 0 };
+const ARTILLERY_TARGET_POSITION = { x: 5, y: 0 };
 const DAMAGE_WITH_ONE_DEFENCE_BONUS = 2;
 const MINIMUM_DAMAGE = 1;
 const CAPTURE_SCORE = 5;
 const OVERKILL_TARGET_HEALTH = 2;
 const INITIAL_SCORES = { blue: 0, red: 0 };
+
+function withArtillery(state: GameState, position: { x: number; y: number }): GameState {
+  const infantry = state.units[BLUE_INFANTRY_ID];
+
+  return {
+    ...state,
+    units: {
+      ...state.units,
+      [BLUE_ARTILLERY_ID]: {
+        ...infantry,
+        id: BLUE_ARTILLERY_ID,
+        type: "artillery" as const,
+        position,
+        attackRange: ARTILLERY_MAXIMUM_RANGE,
+        minAttackRange: ARTILLERY_MINIMUM_RANGE,
+      },
+    },
+  };
+}
+
+function withTargetPosition(state: GameState, position: { x: number; y: number }): GameState {
+  return {
+    ...state,
+    units: {
+      ...state.units,
+      [RED_INFANTRY_ID]: { ...state.units[RED_INFANTRY_ID], position },
+    },
+  };
+}
+
+function withMountainBetween(state: GameState, position: { x: number; y: number }): GameState {
+  return {
+    ...state,
+    board: { ...state.board, terrain: [{ type: "mountain" as const, position }] },
+  };
+}
+
+function validateArtilleryAttack(state: GameState, targetPosition: { x: number; y: number }) {
+  return validateAction(withTargetPosition(state, targetPosition), {
+    type: "attack",
+    unitId: BLUE_ARTILLERY_ID,
+    targetUnitId: RED_INFANTRY_ID,
+  });
+}
 
 const moveAction: GameAction = {
   type: "move",
@@ -273,6 +323,85 @@ describe("main action rules", () => {
       isValid: false,
       reason: "destination-out-of-range",
     });
+  });
+});
+
+describe("artillery attack rules", () => {
+  it("cannot attack after moving during the same turn", () => {
+    const state = withTargetPosition(createSkirmishGameState(), ARTILLERY_TARGET_POSITION);
+    const moveResult = applyAction(state, {
+      type: "move",
+      unitId: BLUE_ARTILLERY_ID,
+      destination: ARTILLERY_MOVE_DESTINATION,
+    });
+
+    expect(moveResult.accepted).toBe(true);
+    expect(
+      validateAction(moveResult.state, {
+        type: "attack",
+        unitId: BLUE_ARTILLERY_ID,
+        targetUnitId: RED_INFANTRY_ID,
+      }),
+    ).toEqual({ isValid: false, reason: "unit-cannot-attack-after-moving" });
+  });
+
+  it("can attack again when its side's next turn begins", () => {
+    const state = withTargetPosition(createSkirmishGameState(), ARTILLERY_TARGET_POSITION);
+    const movedState = applyAction(state, {
+      type: "move",
+      unitId: BLUE_ARTILLERY_ID,
+      destination: ARTILLERY_MOVE_DESTINATION,
+    }).state;
+    const redTurnState = applyAction(movedState, { type: "end-turn" }).state;
+    const nextBlueTurnState = applyAction(redTurnState, { type: "end-turn" }).state;
+
+    expect(
+      validateAction(nextBlueTurnState, {
+        type: "attack",
+        unitId: BLUE_ARTILLERY_ID,
+        targetUnitId: RED_INFANTRY_ID,
+      }),
+    ).toEqual({ isValid: true });
+  });
+
+  it("cannot attack adjacent units but can attack targets at distances two through four", () => {
+    const state = withArtillery(createSkirmishGameState(), { x: 1, y: 1 });
+
+    expect(validateArtilleryAttack(state, { x: 2, y: 2 })).toEqual({
+      isValid: false,
+      reason: "destination-out-of-range",
+    });
+    expect(validateArtilleryAttack(state, { x: 3, y: 1 })).toEqual({ isValid: true });
+    expect(validateArtilleryAttack(state, { x: 5, y: 1 })).toEqual({ isValid: true });
+    expect(validateArtilleryAttack(state, { x: 6, y: 1 })).toEqual({
+      isValid: false,
+      reason: "destination-out-of-range",
+    });
+  });
+
+  it("blocks artillery fire through intermediate mountains but not into mountains", () => {
+    const state = withArtillery(createSkirmishGameState(), { x: 1, y: 1 });
+    const targetPosition = { x: 4, y: 1 };
+
+    expect(
+      validateArtilleryAttack(withMountainBetween(state, { x: 2, y: 1 }), targetPosition),
+    ).toEqual({ isValid: false, reason: "destination-out-of-range" });
+    expect(validateArtilleryAttack(withArtillery(state, { x: 2, y: 1 }), targetPosition)).toEqual({
+      isValid: true,
+    });
+    expect(
+      validateArtilleryAttack(withMountainBetween(state, targetPosition), targetPosition),
+    ).toEqual({
+      isValid: true,
+    });
+  });
+
+  it("blocks a diagonal supercover ray when a mountain touches the line", () => {
+    const state = withArtillery(createSkirmishGameState(), { x: 1, y: 1 });
+
+    expect(
+      validateArtilleryAttack(withMountainBetween(state, { x: 2, y: 1 }), { x: 4, y: 3 }),
+    ).toEqual({ isValid: false, reason: "destination-out-of-range" });
   });
 });
 

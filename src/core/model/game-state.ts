@@ -5,7 +5,7 @@ export interface TeamScores {
   readonly red: number;
 }
 
-export type UnitType = "infantry" | "tank";
+export type UnitType = "infantry" | "tank" | "artillery";
 
 export type TerrainType = "mountain";
 
@@ -35,8 +35,10 @@ export interface UnitState {
   readonly maxHealth: number;
   readonly movementPoints: number;
   readonly maxMovementPoints: number;
+  readonly minAttackRange: number;
   readonly attackRange: number;
   readonly baseDamage: number;
+  readonly hasMovedThisTurn: boolean;
   readonly hasTakenMainAction: boolean;
 }
 

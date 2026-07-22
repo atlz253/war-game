@@ -51,7 +51,7 @@ Only the manifest contains runtime asset paths. `BootScene` loads textures from 
 
 First request terrain tiles: `plain.png`, `forest.png`, `road.png`, `water.png`, `mountain.png`, and neutral/blue/red control points in `public/assets/terrain/`. Each is a native 512×512 PNG, strict top-down, cohesive with `docs/art-direction.md`, and seamless where tiling requires it. Runtime assets are not downscaled. `mountain.png` is the manifest-backed tile used for the current infantry-only mountain terrain.
 
-Next request blue infantry and tank. Attempt a palette swap for Red only if it preserves material, skin, metal, and shadow colors; otherwise request separate Red variants. Request muzzle flash, explosion, hit, and destroyed-marker effects only after the playable core works.
+Next request blue infantry, tank, and artillery. Attempt a palette swap for Red only if it preserves material, skin, metal, and shadow colors; otherwise request separate Red variants. Request muzzle flash, explosion, hit, and destroyed-marker effects only after the playable core works.
 
 Do not request animations before they serve a functional need.
 

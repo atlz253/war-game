@@ -45,6 +45,17 @@ describe("BrowserReplayLibrary", () => {
     library.delete(replay.id);
     expect(library.list()).toEqual([imported]);
   });
+
+  it("discards malformed persisted replays so a completed match can still be saved", () => {
+    const storage = new MemoryStorage();
+    const library = new BrowserReplayLibrary(storage);
+    const replay = createReplay();
+    storage.setItem("ai-war-game.replays.v1", JSON.stringify([{ schemaVersion: 999 }]));
+
+    library.save(replay);
+
+    expect(library.list()).toEqual([replay]);
+  });
 });
 
 class MemoryStorage {

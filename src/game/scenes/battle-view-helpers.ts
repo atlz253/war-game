@@ -24,7 +24,15 @@ export function formatSelectedUnit(
   }
   const defenceBonus = getDefenceBonus(state, unit.position);
   const defenceText = defenceBonus > 0 ? `  Defence -${defenceBonus}` : "";
-  return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nRange ${unit.attackRange}  Action ${unit.hasTakenMainAction ? "used" : "ready"}${defenceText}`;
+  const range =
+    unit.minAttackRange === unit.attackRange
+      ? `${unit.attackRange}`
+      : `${unit.minAttackRange}-${unit.attackRange}`;
+
+  const artilleryMoveWarning =
+    unit.type === "artillery" && unit.hasMovedThisTurn ? "  Fire locked after move" : "";
+
+  return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nRange ${range}  Action ${unit.hasTakenMainAction ? "used" : "ready"}${artilleryMoveWarning}${defenceText}`;
 }
 
 export function formatEvent(event: GameEvent): string {

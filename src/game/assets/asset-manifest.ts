@@ -27,8 +27,10 @@ export const assetManifest: AssetManifest = {
   units: {
     "blue-infantry": createUnitDefinition("blue-infantry", "/assets/units/blue/infantry.png"),
     "blue-tank": createUnitDefinition("blue-tank", "/assets/units/blue/tank.png"),
+    "blue-artillery": createUnitDefinition("blue-artillery", "/assets/units/blue/artillery.png"),
     "red-infantry": createUnitDefinition("red-infantry", "/assets/units/red/infantry.png"),
     "red-tank": createUnitDefinition("red-tank", "/assets/units/red/tank.png"),
+    "red-artillery": createUnitDefinition("red-artillery", "/assets/units/red/artillery.png"),
   },
   terrain: {
     plain: createTerrainDefinition("terrain-plain", "/assets/terrain/plain.png"),

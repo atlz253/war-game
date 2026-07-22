@@ -47,7 +47,7 @@ const HUD_X = 56;
 const HUD_WIDTH = 864;
 const EDITOR_PANEL_RESERVED_WIDTH = HUD_X + HUD_WIDTH;
 const TOP_PANEL_Y = 56;
-const TOP_PANEL_HEIGHT = 2048;
+const TOP_PANEL_HEIGHT = 2208;
 const EDITOR_CONTENT_OFFSET = 64;
 const CONTENT_X = HUD_X + EDITOR_CONTENT_OFFSET;
 const BUTTON_X = HUD_X + HUD_WIDTH / HALF;
@@ -56,7 +56,7 @@ const BUTTON_HEIGHT = 64;
 const BUTTON_GAP = 80;
 const FIRST_BUTTON_Y = 332;
 const TOOL_TITLE_Y = 148;
-const STATUS_Y = 2052;
+const STATUS_Y = 2212;
 const DEFAULT_WIDTH = 12;
 const DEFAULT_HEIGHT = 8;
 const MAP_ID_PREFIX = "map";
@@ -76,21 +76,23 @@ const BUTTON_ROW = {
   newMap: 4,
   blueInfantry: 5,
   blueTank: 6,
-  redInfantry: 7,
-  redTank: 8,
-  mountain: 9,
-  neutralPoint: 10,
-  bluePoint: 11,
-  redPoint: 12,
-  erase: 13,
-  rename: 14,
-  save: 15,
-  saveCopy: 16,
-  testMatch: 17,
-  import: 18,
-  export: 19,
-  delete: 20,
-  back: 21,
+  blueArtillery: 7,
+  redInfantry: 8,
+  redTank: 9,
+  redArtillery: 10,
+  mountain: 11,
+  neutralPoint: 12,
+  bluePoint: 13,
+  redPoint: 14,
+  erase: 15,
+  rename: 16,
+  save: 17,
+  saveCopy: 18,
+  testMatch: 19,
+  import: 20,
+  export: 21,
+  delete: 22,
+  back: 23,
 } as const;
 
 const SINGLE_CHARACTER_KEY_LENGTH = 1;
@@ -253,10 +255,16 @@ export class MapEditorScene extends Phaser.Scene {
       this.createButton("BLUE TANK", BUTTON_ROW.blueTank, () =>
         this.selectUnitTool("blue", "tank"),
       ),
+      this.createButton("BLUE ARTILLERY", BUTTON_ROW.blueArtillery, () =>
+        this.selectUnitTool("blue", "artillery"),
+      ),
       this.createButton("RED INFANTRY", BUTTON_ROW.redInfantry, () =>
         this.selectUnitTool("red", "infantry"),
       ),
       this.createButton("RED TANK", BUTTON_ROW.redTank, () => this.selectUnitTool("red", "tank")),
+      this.createButton("RED ARTILLERY", BUTTON_ROW.redArtillery, () =>
+        this.selectUnitTool("red", "artillery"),
+      ),
       this.createButton("MOUNTAIN", BUTTON_ROW.mountain, () =>
         this.setTool({ kind: "terrain", terrainType: "mountain" }),
       ),
@@ -695,10 +703,14 @@ function editorToolRejectionMessage(rejection: ReturnType<typeof getEditorToolRe
       return "Remove the control point before placing a mountain.";
     case "mountain-on-tank":
       return "Tanks cannot occupy mountain cells.";
+    case "mountain-on-artillery":
+      return "Artillery cannot occupy mountain cells.";
     case "control-point-on-mountain":
       return "Control points cannot be placed on mountains.";
     case "tank-on-mountain":
       return "Tanks cannot be placed on mountains.";
+    case "artillery-on-mountain":
+      return "Artillery cannot be placed on mountains.";
     case null:
       return "";
   }

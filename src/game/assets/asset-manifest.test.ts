@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ASSET_FRAME_SIZE, assetManifest } from "./asset-manifest";
 
 const EXPECTED_TERRAIN_COUNT = 8;
-const EXPECTED_UNIT_COUNT = 4;
+const EXPECTED_UNIT_COUNT = 6;
 
 describe("assetManifest", () => {
   it("registers every provisional terrain and faction unit asset at native resolution", () => {

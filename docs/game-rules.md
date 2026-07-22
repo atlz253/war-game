@@ -12,16 +12,17 @@ Each side begins with the following units. Values are scenario configuration dat
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Infantry | 3 | 10 | 4 | 1 | 3 |
 | Tank | 1 | 16 | 5 | 1 | 5 |
+| Artillery | 1 | 8 | 3 | 2–4 | 4 |
 
 ## Turn and unit actions
 
 Sides alternate turns. During its turn, a side may issue legal orders to its units in any order and then submit `EndTurnAction`.
 
-A unit may spend movement points to move through legal cells, then take one main action: attack, capture, or wait. A unit that has taken its main action cannot move or take another main action until its side's next turn. Movement uses all eight neighbouring cells; every step costs one movement point. A diagonal step cannot pass between two occupied or impassable orthogonal cells. Attack range uses adjacent cells in all eight directions. Movement, range, occupancy, ownership, and action availability are validated by `validateAction`.
+A unit may spend movement points to move through legal cells, then take one main action: attack, capture, or wait. A unit that has taken its main action cannot move or take another main action until its side's next turn. Movement uses all eight neighbouring cells; every step costs one movement point. A diagonal step cannot pass between two occupied or impassable orthogonal cells. Attack range uses Chebyshev distance: infantry and tanks attack adjacent cells in all eight directions, while artillery attacks only at distances 2–4 and cannot attack after moving during the same turn. Intermediate mountain cells block an artillery shot along its deterministic supercover line, but a target may occupy a mountain cell. Movement, range, occupancy, ownership, line of fire, and action availability are validated by `validateAction`.
 
 ## Terrain and defence
 
-Grass is the implicit base terrain. Mountains are sparse map placements: infantry may enter and move through them at the normal movement cost, while tanks cannot enter or path through them. For a tank, a mountain is also impassable when applying the diagonal corner rule.
+Grass is the implicit base terrain. Mountains are sparse map placements: infantry may enter and move through them at the normal movement cost, while tanks and artillery cannot enter or path through them. For a tank or artillery unit, a mountain is also impassable when applying the diagonal corner rule.
 
 The built-in `skirmish-12x8` map contains two central mountains at `(4,2)` and `(7,5)`.
 
