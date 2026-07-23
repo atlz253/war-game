@@ -7,15 +7,11 @@ import { BattleMapRenderer } from "../board/BattleMapRenderer";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import {
   calculatePresentationViewport,
+  calculateRightAlignedContentX,
   type PresentationViewport,
 } from "../config/presentation-layout";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
-import {
-  calculateAnchoredScroll,
-  calculateInertialZoom,
-  calculateNextZoom,
-  INITIAL_MAP_ZOOM,
-} from "../input/camera-zoom";
+import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
 import {
   getNextReplayFrameIndex,
@@ -26,7 +22,9 @@ import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
+import { calculateWorldViewportWidth } from "./battle-presentation";
 import { formatEvent } from "./battle-view-helpers";
+import { calculateCameraCenterLimits } from "./camera-presentation";
 import { MAIN_MENU_SCENE_KEY } from "./scene-keys";
 
 const TILE_SIZE = 512;
@@ -71,13 +69,8 @@ export interface ReplaySceneData {
 interface DragState {
   readonly pointerX: number;
   readonly pointerY: number;
-  readonly scrollX: number;
-  readonly scrollY: number;
-}
-
-interface ZoomAnchor {
-  readonly pointerX: number;
-  readonly pointerY: number;
+  readonly centerX: number;
+  readonly centerY: number;
 }
 
 export class ReplayScene extends Phaser.Scene {
@@ -92,8 +85,9 @@ export class ReplayScene extends Phaser.Scene {
   private elapsedPlaybackMs = 0;
   private mapZoom = INITIAL_MAP_ZOOM;
   private targetMapZoom = INITIAL_MAP_ZOOM;
-  private zoomAnchor: ZoomAnchor | null = null;
+  private isZooming = false;
   private cameraVelocity = { x: 0, y: 0 };
+  private cameraCenter = { x: 0, y: 0 };
   private dragState: DragState | null = null;
   private mapRenderer!: BattleMapRenderer;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -136,8 +130,9 @@ export class ReplayScene extends Phaser.Scene {
     this.elapsedPlaybackMs = 0;
     this.mapZoom = INITIAL_MAP_ZOOM;
     this.targetMapZoom = INITIAL_MAP_ZOOM;
-    this.zoomAnchor = null;
+    this.isZooming = false;
     this.cameraVelocity = { x: 0, y: 0 };
+    this.cameraCenter = { x: 0, y: 0 };
     this.dragState = null;
   }
 
@@ -244,12 +239,7 @@ export class ReplayScene extends Phaser.Scene {
     const state = this.timeline.frames[0]?.state;
     if (!state) return;
     this.uiCamera = this.cameras.add();
-    this.cameras.main.setBounds(
-      0,
-      BOARD_ORIGIN_Y,
-      state.board.width * TILE_SIZE,
-      state.board.height * TILE_SIZE,
-    );
+    this.cameras.main.removeBounds();
     this.cameras.main.ignore(this.hudContainer);
     this.uiCamera.ignore(this.worldContainer);
     this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
@@ -281,33 +271,29 @@ export class ReplayScene extends Phaser.Scene {
     const nextMapZoom = calculateNextZoom(this.targetMapZoom, deltaY);
     if (nextMapZoom === this.targetMapZoom) return;
     this.targetMapZoom = nextMapZoom;
-    this.zoomAnchor = {
-      pointerX: pointer.x - this.presentationViewport.x,
-      pointerY: pointer.y - this.presentationViewport.y,
-    };
+    this.isZooming = true;
     this.stopCameraMotion();
   }
 
   private startDrag(pointer: Phaser.Input.Pointer): void {
     if (!pointer.middleButtonDown() || !this.isWorldPointer(pointer)) return;
-    const camera = this.cameras.main;
     this.dragState = {
       pointerX: pointer.x,
       pointerY: pointer.y,
-      scrollX: camera.scrollX,
-      scrollY: camera.scrollY,
+      centerX: this.cameraCenter.x,
+      centerY: this.cameraCenter.y,
     };
     this.stopCameraMotion();
   }
 
   private updateDrag(pointer: Phaser.Input.Pointer): void {
     if (!this.dragState || !pointer.middleButtonDown()) return;
-    const camera = this.cameras.main;
-    const zoom = camera.zoom;
-    camera.setScroll(
-      this.dragState.scrollX - (pointer.x - this.dragState.pointerX) / zoom,
-      this.dragState.scrollY - (pointer.y - this.dragState.pointerY) / zoom,
-    );
+    this.cameraCenter = {
+      x: this.dragState.centerX - (pointer.x - this.dragState.pointerX) / this.cameras.main.zoom,
+      y: this.dragState.centerY - (pointer.y - this.dragState.pointerY) / this.cameras.main.zoom,
+    };
+    this.applyCameraCenter();
+    this.stopCameraMotion();
   }
 
   private bindKeyboardCamera(): void {
@@ -323,20 +309,23 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private updateKeyboardCamera(delta: number): void {
+    const limits = this.getCameraCenterLimits(this.cameraCenter.x, this.cameraCenter.y);
+    const direction = this.getKeyboardCameraDirection();
     const velocity = calculateInertialCameraVelocity({
-      velocityX: this.cameraVelocity.x,
-      velocityY: this.cameraVelocity.y,
-      ...this.getKeyboardCameraDirection(),
+      velocityX: limits.canPanHorizontally ? this.cameraVelocity.x : 0,
+      velocityY: limits.canPanVertically ? this.cameraVelocity.y : 0,
+      horizontal: limits.canPanHorizontally ? direction.horizontal : 0,
+      vertical: limits.canPanVertically ? direction.vertical : 0,
       deltaMs: delta,
       speed: CAMERA_SCROLL_SPEED,
       deceleration: CAMERA_DECELERATION,
     });
     this.cameraVelocity = velocity;
-    const camera = this.cameras.main;
-    camera.setScroll(
-      camera.scrollX + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
-      camera.scrollY + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
-    );
+    this.cameraCenter = {
+      x: this.cameraCenter.x + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
+      y: this.cameraCenter.y + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
+    };
+    this.applyCameraCenter();
   }
 
   private getKeyboardCameraDirection(): { horizontal: number; vertical: number } {
@@ -351,7 +340,7 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private updateInertialZoom(delta: number): void {
-    if (!this.zoomAnchor || this.mapZoom === this.targetMapZoom) return;
+    if (!this.isZooming || this.mapZoom === this.targetMapZoom) return;
     const camera = this.cameras.main;
     const nextMapZoom = calculateInertialZoom({
       currentZoom: this.mapZoom,
@@ -360,18 +349,12 @@ export class ReplayScene extends Phaser.Scene {
       responsePerSecond: ZOOM_RESPONSE_PER_SECOND,
     });
     const nextZoom = nextMapZoom * this.presentationViewport.scale;
-    const nextScroll = calculateAnchoredScroll({
-      scrollX: camera.scrollX,
-      scrollY: camera.scrollY,
-      pointerX: this.zoomAnchor.pointerX,
-      pointerY: this.zoomAnchor.pointerY,
-      previousZoom: camera.zoom,
-      nextZoom,
-    });
     this.mapZoom = nextMapZoom;
-    camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
+    camera.setZoom(nextZoom);
+    this.resetCameraCenter();
+    this.applyCameraCenter();
     this.mapRenderer.updateHealthLabelScales(nextMapZoom);
-    if (this.mapZoom === this.targetMapZoom) this.zoomAnchor = null;
+    if (this.mapZoom === this.targetMapZoom) this.isZooming = false;
   }
 
   private stopCameraMotion(): void {
@@ -379,13 +362,12 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private isWorldPointer(pointer: Phaser.Input.Pointer): boolean {
-    const { x, y, width, height } = this.presentationViewport;
+    const camera = this.cameras.main;
     return (
-      pointer.x >= x &&
-      pointer.x < x + width &&
-      pointer.y >= y &&
-      pointer.y < y + height &&
-      pointer.x < x + HUD_X * this.presentationViewport.scale
+      pointer.x >= camera.x &&
+      pointer.x < camera.x + camera.width &&
+      pointer.y >= camera.y &&
+      pointer.y < camera.y + camera.height
     );
   }
 
@@ -428,15 +410,62 @@ export class ReplayScene extends Phaser.Scene {
   private updatePresentationViewport(): void {
     this.presentationViewport = calculatePresentationViewport(this.scale.width, this.scale.height);
     this.configureWorldCamera();
-    const { x, y, scale } = this.presentationViewport;
+    const { contentY, scale } = this.presentationViewport;
+    const hudX = calculateRightAlignedContentX(this.presentationViewport, HUD_X + HUD_WIDTH);
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
-    this.hudContainer.setPosition(x, y).setScale(scale);
+    this.hudContainer.setPosition(hudX, contentY).setScale(scale);
   }
 
   private configureWorldCamera(): void {
     const { x, y, width, height, scale } = this.presentationViewport;
-    this.cameras.main.setViewport(x, y, width, height).setZoom(this.mapZoom * scale);
+    const state = this.timeline.frames[0]?.state;
+    if (!state) return;
+    const worldViewportWidth = calculateWorldViewportWidth(width, HUD_WIDTH, scale);
+    this.cameras.main.removeBounds();
+    this.cameras.main.setViewport(x, y, worldViewportWidth, height).setZoom(this.mapZoom * scale);
+    this.resetCameraCenter();
+    this.applyCameraCenter();
+    this.stopCameraMotion();
     this.mapRenderer?.updateHealthLabelScales(this.mapZoom);
+  }
+
+  private resetCameraCenter(): void {
+    const state = this.timeline.frames[0]?.state;
+    if (!state) return;
+    this.cameraCenter = {
+      x: (state.board.width * TILE_SIZE) / 2,
+      y: BOARD_ORIGIN_Y + (state.board.height * TILE_SIZE) / 2,
+    };
+  }
+
+  private applyCameraCenter(): void {
+    const limits = this.getCameraCenterLimits(this.cameraCenter.x, this.cameraCenter.y);
+    this.cameraCenter = { x: limits.centerX, y: limits.centerY };
+    this.cameras.main.centerOn(limits.centerX, limits.centerY);
+  }
+
+  private getCameraCenterLimits(requestedCenterX: number, requestedCenterY: number) {
+    const state = this.timeline.frames[0]?.state;
+    if (!state) {
+      return {
+        centerX: requestedCenterX,
+        centerY: requestedCenterY,
+        canPanHorizontally: false,
+        canPanVertically: false,
+      };
+    }
+
+    const camera = this.cameras.main;
+    return calculateCameraCenterLimits({
+      requestedCenterX,
+      requestedCenterY,
+      boardLeft: 0,
+      boardTop: BOARD_ORIGIN_Y,
+      boardWidth: state.board.width * TILE_SIZE,
+      boardHeight: state.board.height * TILE_SIZE,
+      visibleWidth: camera.width / camera.zoom,
+      visibleHeight: camera.height / camera.zoom,
+    });
   }
 
   private unbindResize(): void {
