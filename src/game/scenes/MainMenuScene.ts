@@ -279,7 +279,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private updatePresentationViewport(): void {
-    const { x, y, width, height, scale } = calculatePresentationViewport(
+    const { width, height, scale, contentX, contentY } = calculatePresentationViewport(
       this.scale.width,
       this.scale.height,
     );
@@ -288,8 +288,8 @@ export class MainMenuScene extends Phaser.Scene {
       .setViewport(0, 0, this.scale.width, this.scale.height)
       .setScroll(0, 0)
       .setZoom(1);
-    this.safeAreaBackground.setPosition(x, y).setSize(width, height);
-    this.presentationContainer.setPosition(x, y).setScale(scale);
+    this.safeAreaBackground.setPosition(0, 0).setSize(width, height);
+    this.presentationContainer.setPosition(contentX, contentY).setScale(scale);
   }
 
   private toggleRole(side: "blue" | "red"): void {

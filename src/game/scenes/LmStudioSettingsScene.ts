@@ -453,7 +453,9 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     this.safeAreaBackground
       .setPosition(viewport.x, viewport.y)
       .setSize(viewport.width, viewport.height);
-    this.presentationContainer.setPosition(viewport.x, viewport.y).setScale(viewport.scale);
+    this.presentationContainer
+      .setPosition(viewport.contentX, viewport.contentY)
+      .setScale(viewport.scale);
   }
 
   private shutdown(): void {

@@ -11,6 +11,7 @@ import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
 import { BattleMapRenderer } from "../board/BattleMapRenderer";
 import {
   calculatePresentationViewport,
+  calculateRightAlignedContentX,
   type PresentationViewport,
 } from "../config/presentation-layout";
 import { getAttackHighlightPositions } from "../input/attack-highlights";
@@ -230,10 +231,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private configureUiCameraViewport(): void {
-    const { x, y, scale } = this.presentationViewport;
+    const { contentY, scale } = this.presentationViewport;
+    const hudX = calculateRightAlignedContentX(this.presentationViewport, HUD_X + HUD_WIDTH);
 
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
-    this.hudContainer.setPosition(x, y).setScale(scale);
+    this.hudContainer.setPosition(hudX, contentY).setScale(scale);
   }
 
   private unbindPresentationResize(): void {
