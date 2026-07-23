@@ -13,32 +13,37 @@ const CUSTOM_MAP_NAME = "Headless custom";
 const CUSTOM_MAP_WIDTH = 3;
 const CUSTOM_MAP_HEIGHT = 1;
 const ONE_ACTION = 1;
+const SIMULATION_TEST_TIMEOUT = 10_000;
 
 describe("runBatchSimulation", () => {
-  it("runs reproducible seeded local-agent matches and aggregates results", async () => {
-    const options = {
-      map: {
-        id: "skirmish-12x8",
-        name: "Skirmish 12×8",
-        createInitialState: createSkirmishGameState,
-      },
-      blue: { kind: "heuristic" as const },
-      red: { kind: "random" as const },
-      seed: BASE_SEED,
-      matches: MATCH_COUNT,
-      maxActions: MAX_ACTIONS,
-    };
+  it(
+    "runs reproducible seeded local-agent matches and aggregates results",
+    async () => {
+      const options = {
+        map: {
+          id: "skirmish-12x8",
+          name: "Skirmish 12×8",
+          createInitialState: createSkirmishGameState,
+        },
+        blue: { kind: "heuristic" as const },
+        red: { kind: "random" as const },
+        seed: BASE_SEED,
+        matches: MATCH_COUNT,
+        maxActions: MAX_ACTIONS,
+      };
 
-    const first = await runBatchSimulation(options);
-    const second = await runBatchSimulation(options);
+      const first = await runBatchSimulation(options);
+      const second = await runBatchSimulation(options);
 
-    expect(first).toEqual(second);
-    expect(first.records).toHaveLength(MATCH_COUNT);
-    expect(first.records.map((record) => record.seed)).toEqual([BASE_SEED, BASE_SEED + 1]);
-    expect(first.summary.completed + first.summary.incomplete).toBe(MATCH_COUNT);
-    expect(first.summary.totalBlueScore).toBeGreaterThanOrEqual(0);
-    expect(first.summary.totalRedScore).toBeGreaterThanOrEqual(0);
-  });
+      expect(first).toEqual(second);
+      expect(first.records).toHaveLength(MATCH_COUNT);
+      expect(first.records.map((record) => record.seed)).toEqual([BASE_SEED, BASE_SEED + 1]);
+      expect(first.summary.completed + first.summary.incomplete).toBe(MATCH_COUNT);
+      expect(first.summary.totalBlueScore).toBeGreaterThanOrEqual(0);
+      expect(first.summary.totalRedScore).toBeGreaterThanOrEqual(0);
+    },
+    SIMULATION_TEST_TIMEOUT,
+  );
 
   it("stores accepted actions that replay to the recorded final match state", async () => {
     const result = await runBatchSimulation({

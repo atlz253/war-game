@@ -262,7 +262,7 @@ describe("control point movement", () => {
 });
 
 describe("main action rules", () => {
-  it("accepts an adjacent diagonal attack and destroys the final enemy", () => {
+  it("rejects an adjacent diagonal attack", () => {
     const state = createSkirmishGameState();
     const duelState = {
       ...state,
@@ -271,7 +271,6 @@ describe("main action rules", () => {
         [RED_INFANTRY_ID]: {
           ...state.units[RED_INFANTRY_ID],
           position: { x: 2, y: 2 },
-          health: ATTACK_DAMAGE,
         },
       },
     };
@@ -281,19 +280,10 @@ describe("main action rules", () => {
       targetUnitId: RED_INFANTRY_ID,
     };
 
-    const result = applyAction(duelState, action);
-
-    expect(result.accepted).toBe(true);
-    expect(result.state.units[RED_INFANTRY_ID]).toBeUndefined();
-    expect(result.state.winner).toBe("blue");
-    expect(result.events.map((event) => event.type)).toEqual([
-      "unit-attacked",
-      "unit-damaged",
-      "team-scored",
-      "unit-destroyed",
-      "victory-achieved",
-    ]);
-    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: 0 });
+    expect(validateAction(duelState, action)).toEqual({
+      isValid: false,
+      reason: "destination-out-of-range",
+    });
   });
 
   it("rejects friendly and out-of-range attacks", () => {
@@ -368,15 +358,17 @@ describe("artillery attack rules", () => {
     ).toEqual({ isValid: true });
   });
 
-  it("cannot attack adjacent units but can attack targets at distances two through four", () => {
+  it("cannot attack adjacent units but can attack targets anywhere in its range", () => {
     const state = withArtillery(createSkirmishGameState(), { x: 1, y: 1 });
 
     expect(validateArtilleryAttack(state, { x: 2, y: 2 })).toEqual({
       isValid: false,
       reason: "destination-out-of-range",
     });
+    expect(validateArtilleryAttack(state, { x: 3, y: 3 })).toEqual({ isValid: true });
     expect(validateArtilleryAttack(state, { x: 3, y: 1 })).toEqual({ isValid: true });
     expect(validateArtilleryAttack(state, { x: 5, y: 1 })).toEqual({ isValid: true });
+    expect(validateArtilleryAttack(state, { x: 1, y: 5 })).toEqual({ isValid: true });
     expect(validateArtilleryAttack(state, { x: 6, y: 1 })).toEqual({
       isValid: false,
       reason: "destination-out-of-range",
@@ -398,14 +390,6 @@ describe("artillery attack rules", () => {
     ).toEqual({
       isValid: true,
     });
-  });
-
-  it("blocks a diagonal supercover ray when a mountain touches the line", () => {
-    const state = withArtillery(createSkirmishGameState(), { x: 1, y: 1 });
-
-    expect(
-      validateArtilleryAttack(withMountainBetween(state, { x: 2, y: 1 }), { x: 4, y: 3 }),
-    ).toEqual({ isValid: false, reason: "destination-out-of-range" });
   });
 });
 

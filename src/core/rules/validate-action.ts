@@ -96,6 +96,7 @@ function validateAttack(state: GameState, unitId: string, targetUnitId: string):
     target.position,
     unit.minAttackRange,
     unit.attackRange,
+    unit.type === "artillery",
   ) && hasClearMountainLineOfFire(state.board, unit.position, target.position)
     ? VALID_ACTION
     : invalid("destination-out-of-range");

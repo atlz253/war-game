@@ -12,7 +12,7 @@ const BLUE_INFANTRY_TWO_ID = "blue-infantry-2";
 const BLUE_INFANTRY_THREE_ID = "blue-infantry-3";
 const BLUE_ARTILLERY_ID = "blue-artillery-1";
 const RED_INFANTRY_ID = "red-infantry-1";
-const ADJACENT_ENEMY_POSITION = { x: 2, y: 2 };
+const ADJACENT_ENEMY_POSITION = { x: 2, y: 1 };
 const ARTILLERY_TARGET_POSITION = { x: 6, y: 0 };
 const ARTILLERY_FIRING_POSITION = { x: 4, y: 0 };
 

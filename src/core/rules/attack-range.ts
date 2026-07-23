@@ -9,10 +9,22 @@ export function isWithinAttackRange(
   target: Position,
   minimumRange: number,
   maximumRange: number,
+  canAttackDiagonally: boolean,
 ): boolean {
-  const distance = Math.max(Math.abs(origin.x - target.x), Math.abs(origin.y - target.y));
+  const horizontalDistance = Math.abs(origin.x - target.x);
+  const verticalDistance = Math.abs(origin.y - target.y);
+  const isOnSameRow = verticalDistance === ZERO_DISTANCE;
+  const isOnSameColumn = horizontalDistance === ZERO_DISTANCE;
+  const distance = canAttackDiagonally
+    ? Math.max(horizontalDistance, verticalDistance)
+    : horizontalDistance + verticalDistance;
 
-  return distance > ZERO_DISTANCE && distance >= minimumRange && distance <= maximumRange;
+  return (
+    (canAttackDiagonally || isOnSameRow || isOnSameColumn) &&
+    distance > ZERO_DISTANCE &&
+    distance >= minimumRange &&
+    distance <= maximumRange
+  );
 }
 
 export function hasClearMountainLineOfFire(

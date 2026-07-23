@@ -14,6 +14,29 @@ describe("getAttackHighlightPositions", () => {
     expect(getAttackHighlightPositions(state, BLUE_INFANTRY_ID, false)).toEqual([{ x: 2, y: 1 }]);
   });
 
+  it("excludes diagonal enemy targets", () => {
+    const state = withUnitPosition(createSkirmishGameState(), RED_INFANTRY_ID, { x: 2, y: 2 });
+
+    expect(getAttackHighlightPositions(state, BLUE_INFANTRY_ID, false)).toEqual([]);
+  });
+
+  it("includes diagonal targets within artillery range", () => {
+    const state = createSkirmishGameState();
+    const artillery = state.units[BLUE_ARTILLERY_ID];
+    const target = state.units[RED_INFANTRY_ID];
+    const artilleryState = {
+      ...state,
+      units: {
+        [BLUE_ARTILLERY_ID]: { ...artillery, position: { x: 1, y: 1 } },
+        [RED_INFANTRY_ID]: { ...target, position: { x: 3, y: 3 } },
+      },
+    };
+
+    expect(getAttackHighlightPositions(artilleryState, BLUE_ARTILLERY_ID, false)).toEqual([
+      { x: 3, y: 3 },
+    ]);
+  });
+
   it("excludes targets outside attack range, inside artillery minimum range, and behind mountains", () => {
     const state = withUnitsAndTerrain(createSkirmishGameState());
 
