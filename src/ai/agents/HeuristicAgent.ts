@@ -44,7 +44,7 @@ function findBestMove(state: GameState, actions: readonly GameAction[]): MoveAct
 
     const distance = distanceToNearestEnemy(state, unit, move);
 
-    if (distance < bestDistance && distance > NO_DISTANCE) {
+    if (distance < bestDistance && distance > NO_DISTANCE && isSafeArtilleryMove(unit, distance)) {
       bestMove = move;
       bestDistance = distance;
     }
@@ -57,6 +57,10 @@ function distanceToNearestEnemy(state: GameState, unit: UnitState, move: MoveAct
   const enemies = Object.values(state.units).filter((candidate) => candidate.side !== unit.side);
 
   return Math.min(...enemies.map((enemy) => chebyshevDistance(move.destination, enemy.position)));
+}
+
+function isSafeArtilleryMove(unit: UnitState, distanceToNearestEnemy: number): boolean {
+  return unit.type !== "artillery" || distanceToNearestEnemy >= unit.minAttackRange;
 }
 
 function findWait(actions: readonly GameAction[]): GameAction | undefined {

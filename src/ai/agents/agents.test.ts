@@ -8,9 +8,13 @@ import { RandomAgent } from "./RandomAgent";
 
 const RANDOM_SEED = 12345;
 const BLUE_INFANTRY_ID = "blue-infantry-1";
+const BLUE_INFANTRY_TWO_ID = "blue-infantry-2";
+const BLUE_INFANTRY_THREE_ID = "blue-infantry-3";
 const BLUE_ARTILLERY_ID = "blue-artillery-1";
 const RED_INFANTRY_ID = "red-infantry-1";
 const ADJACENT_ENEMY_POSITION = { x: 2, y: 2 };
+const ARTILLERY_TARGET_POSITION = { x: 6, y: 0 };
+const ARTILLERY_FIRING_POSITION = { x: 4, y: 0 };
 
 describe("getLegalActions", () => {
   it("returns only orders accepted by the shared validation path", () => {
@@ -66,5 +70,40 @@ describe("HeuristicAgent", () => {
       unitId: BLUE_INFANTRY_ID,
       targetUnitId: RED_INFANTRY_ID,
     });
+  });
+
+  it("keeps artillery at or beyond its minimum attack range while moving", async () => {
+    const state = createSkirmishGameState();
+    const artillery = state.units[BLUE_ARTILLERY_ID];
+    const movementState = {
+      ...state,
+      units: {
+        ...state.units,
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], hasTakenMainAction: true },
+        [BLUE_INFANTRY_TWO_ID]: {
+          ...state.units[BLUE_INFANTRY_TWO_ID],
+          hasTakenMainAction: true,
+        },
+        [BLUE_INFANTRY_THREE_ID]: {
+          ...state.units[BLUE_INFANTRY_THREE_ID],
+          hasTakenMainAction: true,
+        },
+        "blue-tank-1": { ...state.units["blue-tank-1"], hasTakenMainAction: true },
+        [BLUE_ARTILLERY_ID]: { ...artillery, hasMovedThisTurn: true },
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: ARTILLERY_TARGET_POSITION,
+        },
+      },
+    };
+    const agent = new HeuristicAgent();
+    const action = await agent.chooseAction(movementState, { actionsThisTurn: [] });
+
+    expect(action).toEqual({
+      type: "move",
+      unitId: BLUE_ARTILLERY_ID,
+      destination: ARTILLERY_FIRING_POSITION,
+    });
+    expect(validateAction(movementState, action)).toEqual({ isValid: true });
   });
 });
