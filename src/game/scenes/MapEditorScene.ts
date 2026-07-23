@@ -14,13 +14,7 @@ import {
   type PresentationViewport,
 } from "../config/presentation-layout";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
-import { calculateDraggedScroll } from "../input/camera-pan";
-import {
-  calculateAnchoredScroll,
-  calculateInertialZoom,
-  calculateNextZoom,
-  INITIAL_MAP_ZOOM,
-} from "../input/camera-zoom";
+import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
 import {
   applyEditorTool,
@@ -39,6 +33,8 @@ import { Button } from "../ui/components/Button";
 import { MapRenameDialog } from "../ui/components/MapRenameDialog";
 import { Panel } from "../ui/components/Panel";
 import { uiTheme } from "../ui/theme/ui-theme";
+import { calculateCameraCenterLimits } from "./camera-presentation";
+import { calculateEditorPanelScroll } from "./editor-panel-scroll";
 import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY } from "./scene-keys";
 
 const TILE_SIZE = 512;
@@ -47,9 +43,12 @@ const HUD_X = 56;
 const HUD_WIDTH = 864;
 const EDITOR_PANEL_RESERVED_WIDTH = HUD_X + HUD_WIDTH;
 const TOP_PANEL_Y = 56;
-const TOP_PANEL_HEIGHT = 2208;
+const TOP_PANEL_HEIGHT = 2048;
 const EDITOR_CONTENT_OFFSET = 64;
 const CONTENT_X = HUD_X + EDITOR_CONTENT_OFFSET;
+const PANEL_CONTENT_TOP = TOP_PANEL_Y + uiTheme.spacing.md;
+const PANEL_CONTENT_BOTTOM = TOP_PANEL_Y + TOP_PANEL_HEIGHT - uiTheme.spacing.sm;
+const PANEL_CONTENT_VIEWPORT_HEIGHT = PANEL_CONTENT_BOTTOM - PANEL_CONTENT_TOP;
 const BUTTON_X = HUD_X + HUD_WIDTH / HALF;
 const BUTTON_WIDTH = 704;
 const BUTTON_HEIGHT = 64;
@@ -57,6 +56,9 @@ const BUTTON_GAP = 80;
 const FIRST_BUTTON_Y = 332;
 const TOOL_TITLE_Y = 148;
 const STATUS_Y = 2212;
+const PANEL_CONTENT_BOTTOM_Y = STATUS_Y + uiTheme.font.smallSize;
+const PANEL_CONTENT_HEIGHT = PANEL_CONTENT_BOTTOM_Y - PANEL_CONTENT_TOP;
+const MASK_COLOR = 0xffffff;
 const DEFAULT_WIDTH = 12;
 const DEFAULT_HEIGHT = 8;
 const MAP_ID_PREFIX = "map";
@@ -113,13 +115,8 @@ interface PendingResize {
 interface CameraDrag {
   readonly pointerX: number;
   readonly pointerY: number;
-  readonly scrollX: number;
-  readonly scrollY: number;
-}
-
-interface ZoomAnchor {
-  readonly pointerX: number;
-  readonly pointerY: number;
+  readonly centerX: number;
+  readonly centerY: number;
 }
 
 export class MapEditorScene extends Phaser.Scene {
@@ -128,12 +125,16 @@ export class MapEditorScene extends Phaser.Scene {
   private matchConfiguration = createDefaultMatchConfiguration();
   private worldContainer!: Phaser.GameObjects.Container;
   private hudContainer!: Phaser.GameObjects.Container;
+  private editorContentContainer!: Phaser.GameObjects.Container;
+  private editorContentMask?: Phaser.GameObjects.Graphics;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private presentationViewport!: PresentationViewport;
   private mapZoom = INITIAL_MAP_ZOOM;
   private targetMapZoom = INITIAL_MAP_ZOOM;
-  private zoomAnchor: ZoomAnchor | null = null;
+  private isZooming = false;
+  private panelScrollOffset = 0;
   private cameraVelocity = { x: 0, y: 0 };
+  private cameraCenter = { x: 0, y: 0 };
   private tool: EditorTool = { kind: "unit", side: "blue", unitType: "infantry" };
   private statusText!: Phaser.GameObjects.Text;
   private mapInfoText!: Phaser.GameObjects.Text;
@@ -152,7 +153,8 @@ export class MapEditorScene extends Phaser.Scene {
     this.map = this.loadMap(data.mapId);
     this.mapZoom = INITIAL_MAP_ZOOM;
     this.targetMapZoom = INITIAL_MAP_ZOOM;
-    this.zoomAnchor = null;
+    this.isZooming = false;
+    this.panelScrollOffset = 0;
     this.renameDialog = null;
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
@@ -202,16 +204,15 @@ export class MapEditorScene extends Phaser.Scene {
       this.presentationViewport,
       EDITOR_PANEL_RESERVED_WIDTH,
     );
-    const boardWidth = this.map.width * TILE_SIZE;
-    const boardHeight = this.map.height * TILE_SIZE;
-
     this.cameras.main
       .setViewport(worldViewport.x, worldViewport.y, worldViewport.width, worldViewport.height)
-      .setBounds(0, 0, boardWidth, boardHeight)
       .setZoom(this.mapZoom * scale);
+    this.resetCameraCenter();
+    this.applyCameraCenter();
     this.stopCameraMotion();
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
     this.hudContainer.setPosition(x, y).setScale(scale);
+    this.updateEditorContentMask();
   }
 
   private createWorld(): void {
@@ -233,6 +234,7 @@ export class MapEditorScene extends Phaser.Scene {
       height: TOP_PANEL_HEIGHT,
       title: "MAP EDITOR",
     });
+    this.editorContentContainer = this.add.container().setScrollFactor(0);
     this.mapInfoText = this.addText(CONTENT_X, TOOL_TITLE_Y, "");
     this.statusText = this.addText(CONTENT_X, STATUS_Y, "");
     const buttons = [
@@ -290,12 +292,13 @@ export class MapEditorScene extends Phaser.Scene {
       ),
     ];
 
-    this.hudContainer.add([
-      panel.container,
+    this.editorContentContainer.add([
       this.mapInfoText,
       this.statusText,
       ...buttons.map((button) => button.container),
     ]);
+    this.createEditorContentMask();
+    this.hudContainer.add([panel.container, this.editorContentContainer]);
   }
 
   private createButton(label: string, row: number, onClick: () => void): Button {
@@ -323,8 +326,9 @@ export class MapEditorScene extends Phaser.Scene {
     });
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
-      (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) =>
-        this.zoom(pointer, y),
+      (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) => {
+        if (!this.scrollEditorPanel(pointer, y)) this.zoom(pointer, y);
+      },
     );
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
       this.updateCameraDrag(pointer);
@@ -335,25 +339,21 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   private startCameraDrag(pointer: Phaser.Input.Pointer): void {
-    const camera = this.cameras.main;
     this.cameraDrag = {
       pointerX: pointer.x,
       pointerY: pointer.y,
-      scrollX: camera.scrollX,
-      scrollY: camera.scrollY,
+      centerX: this.cameraCenter.x,
+      centerY: this.cameraCenter.y,
     };
   }
 
   private updateCameraDrag(pointer: Phaser.Input.Pointer): void {
     if (!this.cameraDrag || !pointer.middleButtonDown()) return;
-    const scroll = calculateDraggedScroll({
-      scrollX: this.cameraDrag.scrollX,
-      scrollY: this.cameraDrag.scrollY,
-      deltaX: pointer.x - this.cameraDrag.pointerX,
-      deltaY: pointer.y - this.cameraDrag.pointerY,
-      zoom: this.cameras.main.zoom,
-    });
-    this.cameras.main.setScroll(scroll.x, scroll.y);
+    this.cameraCenter = {
+      x: this.cameraDrag.centerX - (pointer.x - this.cameraDrag.pointerX) / this.cameras.main.zoom,
+      y: this.cameraDrag.centerY - (pointer.y - this.cameraDrag.pointerY) / this.cameras.main.zoom,
+    };
+    this.applyCameraCenter();
     this.stopCameraMotion();
   }
 
@@ -363,21 +363,39 @@ export class MapEditorScene extends Phaser.Scene {
     return logical !== null && logical.x >= EDITOR_PANEL_RESERVED_WIDTH;
   }
 
+  private scrollEditorPanel(pointer: Phaser.Input.Pointer, wheelDeltaY: number): boolean {
+    const logical = this.toLogicalPointer(pointer);
+    if (
+      !logical ||
+      logical.x < HUD_X ||
+      logical.x >= HUD_X + HUD_WIDTH ||
+      logical.y < TOP_PANEL_Y ||
+      logical.y >= TOP_PANEL_Y + TOP_PANEL_HEIGHT
+    )
+      return false;
+
+    this.panelScrollOffset = calculateEditorPanelScroll({
+      currentOffset: this.panelScrollOffset,
+      wheelDeltaY: wheelDeltaY / this.presentationViewport.scale,
+      contentHeight: PANEL_CONTENT_HEIGHT,
+      viewportHeight: PANEL_CONTENT_VIEWPORT_HEIGHT,
+    });
+    this.editorContentContainer.setY(-this.panelScrollOffset);
+    return true;
+  }
+
   private zoom(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
     if (this.renameDialog) return;
     if (!this.isMapPointer(pointer)) return;
     const nextMapZoom = calculateNextZoom(this.targetMapZoom, wheelDeltaY);
     if (nextMapZoom === this.targetMapZoom) return;
     this.targetMapZoom = nextMapZoom;
-    this.zoomAnchor = {
-      pointerX: pointer.x - this.presentationViewport.x,
-      pointerY: pointer.y - this.presentationViewport.y,
-    };
+    this.isZooming = true;
     this.stopCameraMotion();
   }
 
   private updateInertialZoom(delta: number): void {
-    if (!this.zoomAnchor || this.mapZoom === this.targetMapZoom) return;
+    if (!this.isZooming || this.mapZoom === this.targetMapZoom) return;
     const camera = this.cameras.main;
     const nextMapZoom = calculateInertialZoom({
       currentZoom: this.mapZoom,
@@ -386,36 +404,74 @@ export class MapEditorScene extends Phaser.Scene {
       responsePerSecond: ZOOM_RESPONSE_PER_SECOND,
     });
     const nextZoom = nextMapZoom * this.presentationViewport.scale;
-    const scroll = calculateAnchoredScroll({
-      scrollX: camera.scrollX,
-      scrollY: camera.scrollY,
-      pointerX: this.zoomAnchor.pointerX,
-      pointerY: this.zoomAnchor.pointerY,
-      previousZoom: camera.zoom,
-      nextZoom,
-    });
-
     this.mapZoom = nextMapZoom;
-    camera.setZoom(nextZoom).setScroll(scroll.x, scroll.y);
-    if (this.mapZoom === this.targetMapZoom) this.zoomAnchor = null;
+    camera.setZoom(nextZoom);
+    this.resetCameraCenter();
+    this.applyCameraCenter();
+    if (this.mapZoom === this.targetMapZoom) this.isZooming = false;
   }
 
   private updateKeyboardCamera(delta: number): void {
-    const camera = this.cameras.main;
+    const limits = this.getCameraCenterLimits(this.cameraCenter.x, this.cameraCenter.y);
+    const direction = this.getKeyboardCameraDirection();
     const velocity = calculateInertialCameraVelocity({
-      velocityX: this.cameraVelocity.x,
-      velocityY: this.cameraVelocity.y,
-      ...this.getKeyboardCameraDirection(),
+      velocityX: limits.canPanHorizontally ? this.cameraVelocity.x : 0,
+      velocityY: limits.canPanVertically ? this.cameraVelocity.y : 0,
+      horizontal: limits.canPanHorizontally ? direction.horizontal : 0,
+      vertical: limits.canPanVertically ? direction.vertical : 0,
       deltaMs: delta,
       speed: CAMERA_SCROLL_SPEED,
       deceleration: CAMERA_DECELERATION,
     });
 
     this.cameraVelocity = velocity;
-    camera.setScroll(
-      camera.scrollX + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
-      camera.scrollY + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
-    );
+    this.cameraCenter = {
+      x: this.cameraCenter.x + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
+      y: this.cameraCenter.y + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
+    };
+    this.applyCameraCenter();
+  }
+
+  private resetCameraCenter(): void {
+    this.cameraCenter = {
+      x: (this.map.width * TILE_SIZE) / HALF,
+      y: (this.map.height * TILE_SIZE) / HALF,
+    };
+  }
+
+  private applyCameraCenter(): void {
+    const limits = this.getCameraCenterLimits(this.cameraCenter.x, this.cameraCenter.y);
+    this.cameraCenter = { x: limits.centerX, y: limits.centerY };
+    this.cameras.main.centerOn(limits.centerX, limits.centerY);
+  }
+
+  private getCameraCenterLimits(requestedCenterX: number, requestedCenterY: number) {
+    const camera = this.cameras.main;
+    return calculateCameraCenterLimits({
+      requestedCenterX,
+      requestedCenterY,
+      boardLeft: 0,
+      boardTop: 0,
+      boardWidth: this.map.width * TILE_SIZE,
+      boardHeight: this.map.height * TILE_SIZE,
+      visibleWidth: camera.width / camera.zoom,
+      visibleHeight: camera.height / camera.zoom,
+    });
+  }
+
+  private createEditorContentMask(): void {
+    this.editorContentMask = this.make.graphics();
+    this.editorContentMask
+      .fillStyle(MASK_COLOR)
+      .fillRect(HUD_X, PANEL_CONTENT_TOP, HUD_WIDTH, PANEL_CONTENT_VIEWPORT_HEIGHT);
+    this.editorContentContainer.setMask(this.editorContentMask.createGeometryMask());
+    this.updateEditorContentMask();
+  }
+
+  private updateEditorContentMask(): void {
+    this.editorContentMask
+      ?.setPosition(this.presentationViewport.x, this.presentationViewport.y)
+      .setScale(this.presentationViewport.scale);
   }
 
   private getKeyboardCameraDirection(): { horizontal: number; vertical: number } {

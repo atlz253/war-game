@@ -16,12 +16,7 @@ import {
 } from "../config/presentation-layout";
 import { getAttackHighlightPositions } from "../input/attack-highlights";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
-import {
-  calculateAnchoredScroll,
-  calculateInertialZoom,
-  calculateNextZoom,
-  INITIAL_MAP_ZOOM,
-} from "../input/camera-zoom";
+import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
 import { decideAiAction } from "../match/choose-ai-action";
@@ -38,12 +33,14 @@ import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
 import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
+import { calculateWorldViewportWidth } from "./battle-presentation";
 import {
   findUnitAt,
   formatEvent,
   formatSelectedUnit,
   isInsideRectangle,
 } from "./battle-view-helpers";
+import { calculateCameraCenterLimits } from "./camera-presentation";
 import { RESULT_SCENE_KEY } from "./scene-keys";
 
 const TILE_SIZE = 512;
@@ -128,6 +125,7 @@ export class BattleScene extends Phaser.Scene {
   private targetMapZoom = INITIAL_MAP_ZOOM;
   private zoomAnchor: ZoomAnchor | null = null;
   private cameraVelocity = { x: 0, y: 0 };
+  private cameraCenter = { x: 0, y: 0 };
   private selectedUnitId: string | null = null;
   private inputLocked = false;
   private aiTurnActions: GameAction[] = [];
@@ -184,6 +182,7 @@ export class BattleScene extends Phaser.Scene {
     this.aiTurnActions = [];
     this.replayActions = [];
     this.cameraVelocity = { x: 0, y: 0 };
+    this.cameraCenter = { x: 0, y: 0 };
     this.zoomAnchor = null;
   }
 
@@ -193,12 +192,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private configureCameras(): void {
-    const boardWidth = this.gameState.board.width * TILE_SIZE;
-    const boardHeight = this.gameState.board.height * TILE_SIZE;
     const worldCamera = this.cameras.main;
     this.uiCamera = this.cameras.add();
 
-    worldCamera.setBounds(BOARD_ORIGIN_X, BOARD_ORIGIN_Y, boardWidth, boardHeight);
+    worldCamera.removeBounds();
     worldCamera.ignore(this.hudContainer);
     this.uiCamera.ignore(this.worldContainer);
     this.updatePresentationViewport();
@@ -225,8 +222,13 @@ export class BattleScene extends Phaser.Scene {
 
   private configureWorldCameraViewport(): void {
     const { x, y, width, height, scale } = this.presentationViewport;
-
-    this.cameras.main.setViewport(x, y, width, height).setZoom(this.mapZoom * scale);
+    const zoom = this.mapZoom * scale;
+    const worldViewportWidth = calculateWorldViewportWidth(width, HUD_WIDTH, scale);
+    this.worldContainer.setPosition(0, 0);
+    this.cameras.main.removeBounds();
+    this.cameras.main.setViewport(x, y, worldViewportWidth, height).setZoom(zoom);
+    this.resetCameraCenter();
+    this.applyCameraCenter();
     this.stopCameraMotion();
   }
 
@@ -444,37 +446,61 @@ export class BattleScene extends Phaser.Scene {
       responsePerSecond: ZOOM_RESPONSE_PER_SECOND,
     });
     const nextZoom = nextMapZoom * this.presentationViewport.scale;
-    const nextScroll = calculateAnchoredScroll({
-      scrollX: camera.scrollX,
-      scrollY: camera.scrollY,
-      pointerX: this.zoomAnchor.pointerX,
-      pointerY: this.zoomAnchor.pointerY,
-      previousZoom: camera.zoom,
-      nextZoom,
-    });
-
     this.mapZoom = nextMapZoom;
-    camera.setZoom(nextZoom).setScroll(nextScroll.x, nextScroll.y);
+    camera.removeBounds();
+    camera.setZoom(nextZoom);
+    this.resetCameraCenter();
+    this.applyCameraCenter();
     this.mapRenderer.updateHealthLabelScales(nextMapZoom);
     if (this.mapZoom === this.targetMapZoom) this.zoomAnchor = null;
   }
 
   private updateKeyboardCamera(delta: number): void {
-    const camera = this.cameras.main;
+    const limits = this.getCameraCenterLimits(this.cameraCenter.x, this.cameraCenter.y);
+    const direction = this.getKeyboardCameraDirection();
     const velocity = calculateInertialCameraVelocity({
-      velocityX: this.cameraVelocity.x,
-      velocityY: this.cameraVelocity.y,
-      ...this.getKeyboardCameraDirection(),
+      velocityX: limits.canPanHorizontally ? this.cameraVelocity.x : 0,
+      velocityY: limits.canPanVertically ? this.cameraVelocity.y : 0,
+      horizontal: limits.canPanHorizontally ? direction.horizontal : 0,
+      vertical: limits.canPanVertically ? direction.vertical : 0,
       deltaMs: delta,
       speed: CAMERA_SCROLL_SPEED,
       deceleration: CAMERA_DECELERATION,
     });
 
     this.cameraVelocity = velocity;
-    camera.setScroll(
-      camera.scrollX + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
-      camera.scrollY + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
-    );
+    this.cameraCenter = {
+      x: this.cameraCenter.x + (velocity.x * delta) / MILLISECONDS_PER_SECOND,
+      y: this.cameraCenter.y + (velocity.y * delta) / MILLISECONDS_PER_SECOND,
+    };
+    this.applyCameraCenter();
+  }
+
+  private resetCameraCenter(): void {
+    this.cameraCenter = {
+      x: BOARD_ORIGIN_X + (this.gameState.board.width * TILE_SIZE) / 2,
+      y: BOARD_ORIGIN_Y + (this.gameState.board.height * TILE_SIZE) / 2,
+    };
+  }
+
+  private applyCameraCenter(): void {
+    const limits = this.getCameraCenterLimits(this.cameraCenter.x, this.cameraCenter.y);
+    this.cameraCenter = { x: limits.centerX, y: limits.centerY };
+    this.cameras.main.centerOn(limits.centerX, limits.centerY);
+  }
+
+  private getCameraCenterLimits(requestedCenterX: number, requestedCenterY: number) {
+    const camera = this.cameras.main;
+    return calculateCameraCenterLimits({
+      requestedCenterX,
+      requestedCenterY,
+      boardLeft: BOARD_ORIGIN_X,
+      boardTop: BOARD_ORIGIN_Y,
+      boardWidth: this.gameState.board.width * TILE_SIZE,
+      boardHeight: this.gameState.board.height * TILE_SIZE,
+      visibleWidth: camera.width / camera.zoom,
+      visibleHeight: camera.height / camera.zoom,
+    });
   }
 
   private getKeyboardCameraDirection(): { horizontal: number; vertical: number } {
