@@ -17,16 +17,19 @@ export const INFANTRY_MOVEMENT_POINTS = 4;
 export const INFANTRY_MIN_ATTACK_RANGE = 1;
 export const INFANTRY_ATTACK_RANGE = 1;
 export const INFANTRY_BASE_DAMAGE = 3;
+export const INFANTRY_BASE_DEFENCE = 0;
 export const TANK_HEALTH = 16;
 export const TANK_MOVEMENT_POINTS = 5;
 export const TANK_MIN_ATTACK_RANGE = 1;
 export const TANK_ATTACK_RANGE = 1;
 export const TANK_BASE_DAMAGE = 5;
+export const TANK_BASE_DEFENCE = 2;
 export const ARTILLERY_HEALTH = 8;
 export const ARTILLERY_MOVEMENT_POINTS = 3;
 export const ARTILLERY_MIN_ATTACK_RANGE = 2;
 export const ARTILLERY_ATTACK_RANGE = 4;
 export const ARTILLERY_BASE_DAMAGE = 4;
+export const ARTILLERY_BASE_DEFENCE = 0;
 
 const BLUE_SIDE: SideId = "blue";
 const RED_SIDE: SideId = "red";
@@ -138,6 +141,7 @@ function createUnit(id: string, side: SideId, type: UnitType, position: Position
     minAttackRange: stats.minAttackRange,
     attackRange: stats.attackRange,
     baseDamage: stats.baseDamage,
+    baseDefence: stats.baseDefence,
     hasMovedThisTurn: false,
     hasTakenMainAction: false,
   };
@@ -151,6 +155,7 @@ function getUnitStats(type: UnitType) {
       minAttackRange: INFANTRY_MIN_ATTACK_RANGE,
       attackRange: INFANTRY_ATTACK_RANGE,
       baseDamage: INFANTRY_BASE_DAMAGE,
+      baseDefence: INFANTRY_BASE_DEFENCE,
     };
   }
 
@@ -161,6 +166,7 @@ function getUnitStats(type: UnitType) {
       minAttackRange: TANK_MIN_ATTACK_RANGE,
       attackRange: TANK_ATTACK_RANGE,
       baseDamage: TANK_BASE_DAMAGE,
+      baseDefence: TANK_BASE_DEFENCE,
     };
   }
 
@@ -170,6 +176,7 @@ function getUnitStats(type: UnitType) {
     minAttackRange: ARTILLERY_MIN_ATTACK_RANGE,
     attackRange: ARTILLERY_ATTACK_RANGE,
     baseDamage: ARTILLERY_BASE_DAMAGE,
+    baseDefence: ARTILLERY_BASE_DEFENCE,
   };
 }
 

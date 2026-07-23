@@ -23,7 +23,10 @@ export function formatSelectedUnit(
       : `${activeSide.toUpperCase()} AI is taking its turn.`;
   }
   const defenceBonus = getDefenceBonus(state, unit.position);
-  const defenceText = defenceBonus > 0 ? `  Defence -${defenceBonus}` : "";
+  const defenceText =
+    defenceBonus > 0
+      ? `  Defence ${unit.baseDefence} (+${defenceBonus} position)`
+      : `  Defence ${unit.baseDefence}`;
   const range =
     unit.minAttackRange === unit.attackRange
       ? `${unit.attackRange}`

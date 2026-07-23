@@ -19,6 +19,10 @@ const TANK_MAX_MOVEMENT = 5;
 const MOVEMENT_COST = 3;
 const ATTACK_DAMAGE = 3;
 const UNIT_DESTRUCTION_DAMAGE = 10;
+const TANK_HEALTH = 16;
+const ARTILLERY_DAMAGE_TO_TANK = 4;
+const ARTILLERY_DAMAGE_TO_TANK_WITH_ONE_POSITIONAL_DEFENCE = 3;
+const ARTILLERY_DAMAGE_TO_TANK_WITH_TWO_POSITIONAL_DEFENCES = 2;
 const NEXT_TURN = 2;
 const OUT_OF_BOUNDS_DESTINATION = { x: 12, y: 1 };
 const OCCUPIED_DESTINATION = { x: 1, y: 3 };
@@ -438,6 +442,143 @@ describe("combined defensive terrain", () => {
       expect.objectContaining({ type: "unit-damaged", damage: MINIMUM_DAMAGE }),
     );
     expect(result.state.scores).toEqual({ blue: MINIMUM_DAMAGE, red: 0 });
+  });
+});
+
+describe("unit base defence", () => {
+  it("reduces damage to tanks without positional defence", () => {
+    const state = createSkirmishGameState();
+    const tankTargetPosition = { x: 2, y: 1 };
+    const tankState = {
+      ...state,
+      units: {
+        [BLUE_TANK_ID]: { ...state.units[BLUE_TANK_ID], position: { x: 1, y: 1 } },
+        [RED_TANK_ID]: { ...state.units[RED_TANK_ID], position: tankTargetPosition },
+      },
+    };
+
+    const result = applyAction(tankState, {
+      type: "attack",
+      unitId: BLUE_TANK_ID,
+      targetUnitId: RED_TANK_ID,
+    });
+
+    expect(result.state.units[RED_TANK_ID]?.health).toBe(TANK_HEALTH - ATTACK_DAMAGE);
+  });
+
+  it("stacks tank and positional defence without dropping below one", () => {
+    const state = createSkirmishGameState();
+    const tankTargetPosition = { x: 2, y: 1 };
+    const tankDefendedByTerrain = {
+      ...state,
+      board: {
+        ...state.board,
+        terrain: [{ type: "mountain" as const, position: tankTargetPosition }],
+      },
+      units: {
+        [BLUE_TANK_ID]: { ...state.units[BLUE_TANK_ID], position: { x: 1, y: 1 } },
+        [RED_TANK_ID]: { ...state.units[RED_TANK_ID], position: tankTargetPosition },
+      },
+      controlPoints: {
+        [CONTROL_POINT_ID]: {
+          ...state.controlPoints[CONTROL_POINT_ID],
+          position: tankTargetPosition,
+        },
+      },
+    };
+
+    const result = applyAction(tankDefendedByTerrain, {
+      type: "attack",
+      unitId: BLUE_TANK_ID,
+      targetUnitId: RED_TANK_ID,
+    });
+
+    expect(result.state.units[RED_TANK_ID]?.health).toBe(TANK_HEALTH - MINIMUM_DAMAGE);
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ type: "unit-damaged", damage: MINIMUM_DAMAGE }),
+    );
+  });
+});
+
+describe("artillery armour penetration", () => {
+  it.each([
+    {
+      name: "without positional defence",
+      terrain: [],
+      hasControlPoint: false,
+      expectedDamage: ARTILLERY_DAMAGE_TO_TANK,
+    },
+    {
+      name: "with mountain defence",
+      terrain: [{ type: "mountain" as const, position: ARTILLERY_TARGET_POSITION }],
+      hasControlPoint: false,
+      expectedDamage: ARTILLERY_DAMAGE_TO_TANK_WITH_ONE_POSITIONAL_DEFENCE,
+    },
+    {
+      name: "with mountain and control point defence",
+      terrain: [{ type: "mountain" as const, position: ARTILLERY_TARGET_POSITION }],
+      hasControlPoint: true,
+      expectedDamage: ARTILLERY_DAMAGE_TO_TANK_WITH_TWO_POSITIONAL_DEFENCES,
+    },
+  ])(
+    "deals $expectedDamage damage to a tank $name",
+    ({ terrain, hasControlPoint, expectedDamage }) => {
+      const state = createSkirmishGameState();
+      const controlPoints: GameState["controlPoints"] = hasControlPoint
+        ? {
+            [CONTROL_POINT_ID]: {
+              id: CONTROL_POINT_ID,
+              position: ARTILLERY_TARGET_POSITION,
+              owner: null,
+            },
+          }
+        : {};
+      const artilleryState = {
+        ...state,
+        board: { ...state.board, terrain },
+        units: {
+          [BLUE_ARTILLERY_ID]: state.units[BLUE_ARTILLERY_ID],
+          [RED_TANK_ID]: { ...state.units[RED_TANK_ID], position: ARTILLERY_TARGET_POSITION },
+        },
+        controlPoints,
+      };
+
+      const result = applyAction(artilleryState, {
+        type: "attack",
+        unitId: BLUE_ARTILLERY_ID,
+        targetUnitId: RED_TANK_ID,
+      });
+
+      expect(result.state.units[RED_TANK_ID]?.health).toBe(TANK_HEALTH - expectedDamage);
+    },
+  );
+
+  it("continues to apply normal defence to artillery attacks against infantry", () => {
+    const state = createSkirmishGameState();
+    const artilleryState = {
+      ...state,
+      board: {
+        ...state.board,
+        terrain: [{ type: "mountain" as const, position: ARTILLERY_TARGET_POSITION }],
+      },
+      units: {
+        [BLUE_ARTILLERY_ID]: state.units[BLUE_ARTILLERY_ID],
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: ARTILLERY_TARGET_POSITION,
+        },
+      },
+    };
+
+    const result = applyAction(artilleryState, {
+      type: "attack",
+      unitId: BLUE_ARTILLERY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
+      UNIT_DESTRUCTION_DAMAGE - ATTACK_DAMAGE,
+    );
   });
 });
 

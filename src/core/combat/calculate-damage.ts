@@ -4,10 +4,10 @@ export const MOUNTAIN_DEFENCE_BONUS = 1;
 export const CONTROL_POINT_DEFENCE_BONUS = 1;
 export const MINIMUM_DAMAGE = 1;
 
-export function calculateDamage(state: GameState, target: UnitState, baseDamage: number): number {
-  const defenceBonus = getDefenceBonus(state, target.position);
+export function calculateDamage(state: GameState, attacker: UnitState, target: UnitState): number {
+  const defence = getTargetBaseDefence(attacker, target) + getDefenceBonus(state, target.position);
 
-  return Math.max(MINIMUM_DAMAGE, baseDamage - defenceBonus);
+  return Math.max(MINIMUM_DAMAGE, attacker.baseDamage - defence);
 }
 
 export function getDefenceBonus(state: GameState, position: Position): number {
@@ -28,6 +28,10 @@ function getControlPointDefenceBonus(state: GameState, position: Position): numb
   )
     ? CONTROL_POINT_DEFENCE_BONUS
     : 0;
+}
+
+function getTargetBaseDefence(attacker: UnitState, target: UnitState): number {
+  return attacker.type === "artillery" && target.type === "tank" ? 0 : target.baseDefence;
 }
 
 function positionsEqual(first: Position, second: Position): boolean {

@@ -118,6 +118,7 @@ describe("terrain map definitions", () => {
       minAttackRange: 2,
       attackRange: 4,
       baseDamage: 4,
+      baseDefence: 0,
     });
   });
 
@@ -136,7 +137,9 @@ describe("terrain map definitions", () => {
     expect(createGameStateFromMap(map).units["blue-infantry-1"]?.maxHealth).toBe(
       INFANTRY_MAX_HEALTH,
     );
+    expect(createGameStateFromMap(map).units["blue-infantry-1"]?.baseDefence).toBe(0);
     expect(createGameStateFromMap(map).units["red-tank-1"]?.maxHealth).toBe(TANK_MAX_HEALTH);
+    expect(createGameStateFromMap(map).units["red-tank-1"]?.baseDefence).toBe(2);
     expect(createGameStateFromMap(map).board.terrain).toEqual(map.terrain);
     expect(createGameStateFromMap(map).scores).toEqual(INITIAL_SCORES);
   });
@@ -159,7 +162,9 @@ describe("terrain map definitions", () => {
       terrain: [],
     });
   });
+});
 
+describe("legacy map definitions", () => {
   it("migrates schema-v1 maps to terrain-free schema-v2 maps", () => {
     const legacyMap = {
       schemaVersion: 1,

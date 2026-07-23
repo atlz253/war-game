@@ -44,12 +44,15 @@ describe("createSkirmishGameState", () => {
     expect(state.units["red-infantry-1"]?.position).toEqual({ x: 10, y: 1 });
     expect(state.units["blue-infantry-1"]?.health).toBe(BLUE_INFANTRY_HEALTH);
     expect(state.units["blue-infantry-1"]?.movementPoints).toBe(BLUE_INFANTRY_MOVEMENT);
+    expect(state.units["blue-infantry-1"]?.baseDefence).toBe(0);
     expect(state.units["blue-tank-1"]?.health).toBe(BLUE_TANK_HEALTH);
     expect(state.units["blue-tank-1"]?.movementPoints).toBe(BLUE_TANK_MOVEMENT);
+    expect(state.units["blue-tank-1"]?.baseDefence).toBe(2);
     expect(state.units["blue-artillery-1"]?.position).toEqual({ x: 2, y: 0 });
     expect(state.units["red-artillery-1"]?.position).toEqual({ x: 9, y: 7 });
     expect(state.units["blue-artillery-1"]?.health).toBe(BLUE_ARTILLERY_HEALTH);
     expect(state.units["blue-artillery-1"]?.movementPoints).toBe(BLUE_ARTILLERY_MOVEMENT);
+    expect(state.units["blue-artillery-1"]?.baseDefence).toBe(0);
     expect(state.units["blue-artillery-1"]?.minAttackRange).toBe(BLUE_ARTILLERY_MINIMUM_RANGE);
     expect(state.units["blue-artillery-1"]?.attackRange).toBe(BLUE_ARTILLERY_MAXIMUM_RANGE);
     expect(Object.keys(state.controlPoints)).toHaveLength(CONTROL_POINT_COUNT);

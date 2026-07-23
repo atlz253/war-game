@@ -59,10 +59,34 @@ export interface MapValidationResult {
 
 const INITIAL_TURN = 1;
 const BLUE_SIDE: SideId = "blue";
+const INFANTRY_BASE_DEFENCE = 0;
+const TANK_BASE_DEFENCE = 2;
+const ARTILLERY_BASE_DEFENCE = 0;
 const UNIT_STATS: Readonly<Record<UnitType, UnitStats>> = {
-  infantry: { health: 10, movementPoints: 4, minAttackRange: 1, attackRange: 1, baseDamage: 3 },
-  tank: { health: 16, movementPoints: 5, minAttackRange: 1, attackRange: 1, baseDamage: 5 },
-  artillery: { health: 8, movementPoints: 3, minAttackRange: 2, attackRange: 4, baseDamage: 4 },
+  infantry: {
+    health: 10,
+    movementPoints: 4,
+    minAttackRange: 1,
+    attackRange: 1,
+    baseDamage: 3,
+    baseDefence: INFANTRY_BASE_DEFENCE,
+  },
+  tank: {
+    health: 16,
+    movementPoints: 5,
+    minAttackRange: 1,
+    attackRange: 1,
+    baseDamage: 5,
+    baseDefence: TANK_BASE_DEFENCE,
+  },
+  artillery: {
+    health: 8,
+    movementPoints: 3,
+    minAttackRange: 2,
+    attackRange: 4,
+    baseDamage: 4,
+    baseDefence: ARTILLERY_BASE_DEFENCE,
+  },
 };
 
 interface UnitStats {
@@ -71,6 +95,7 @@ interface UnitStats {
   readonly minAttackRange: number;
   readonly attackRange: number;
   readonly baseDamage: number;
+  readonly baseDefence: number;
 }
 
 export function createMapDefinition(
@@ -281,6 +306,7 @@ function createUnits(placements: readonly MapUnitPlacement[]): Record<string, Un
       minAttackRange: stats.minAttackRange,
       attackRange: stats.attackRange,
       baseDamage: stats.baseDamage,
+      baseDefence: stats.baseDefence,
       hasMovedThisTurn: false,
       hasTakenMainAction: false,
     };

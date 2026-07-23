@@ -64,7 +64,7 @@ function applyAttack(state: GameState, unitId: string, targetUnitId: string): Ap
   const attacker = requireUnit(state, unitId);
   const target = requireUnit(state, targetUnitId);
   const committedAttacker = { ...attacker, hasTakenMainAction: true };
-  const damage = calculateDamage(state, target, attacker.baseDamage);
+  const damage = calculateDamage(state, attacker, target);
   const score = calculateAttackScore(target.health, damage);
   const remainingHealth = target.health - damage;
   const events: GameEvent[] = [
