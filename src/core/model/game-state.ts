@@ -39,6 +39,8 @@ export interface UnitState {
   readonly attackRange: number;
   readonly baseDamage: number;
   readonly baseDefence: number;
+  readonly ammo: number;
+  readonly maxAmmo: number;
   readonly hasMovedThisTurn: boolean;
   readonly hasTakenMainAction: boolean;
 }

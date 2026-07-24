@@ -65,12 +65,21 @@ function applyMove(
 function applyAttack(state: GameState, unitId: string, targetUnitId: string): ApplyActionResult {
   const attacker = requireUnit(state, unitId);
   const target = requireUnit(state, targetUnitId);
-  const committedAttacker = { ...attacker, hasTakenMainAction: true };
+  const committedAttacker = {
+    ...attacker,
+    ammo: attacker.ammo - 1,
+    hasTakenMainAction: true,
+  };
   const damage = calculateDamage(state, attacker, target);
   const score = calculateAttackScore(target.health, damage);
   const remainingHealth = target.health - damage;
   const events: GameEvent[] = [
-    { type: "unit-attacked", attackerUnitId: unitId, targetUnitId },
+    {
+      type: "unit-attacked",
+      attackerUnitId: unitId,
+      targetUnitId,
+      remainingAmmo: committedAttacker.ammo,
+    },
     {
       type: "unit-damaged",
       unitId: targetUnitId,
@@ -91,7 +100,10 @@ function applyAttack(state: GameState, unitId: string, targetUnitId: string): Ap
   const defendingUnit = { ...target, health: remainingHealth };
   const stateAfterAttack = withUnit(attackedState, defendingUnit);
 
-  if (!canUnitAttackTarget(state.board, defendingUnit, attacker)) {
+  if (
+    defendingUnit.ammo <= NO_MOVEMENT_COST ||
+    !canUnitAttackTarget(state.board, defendingUnit, attacker)
+  ) {
     return { accepted: true, state: stateAfterAttack, events };
   }
 
@@ -104,6 +116,7 @@ function applyCounterattack(
   target: UnitState,
   events: GameEvent[],
 ): ApplyActionResult {
+  const committedCounterattacker = { ...counterattacker, ammo: counterattacker.ammo - 1 };
   const damage = calculateDamage(state, counterattacker, target);
   const score = calculateAttackScore(target.health, damage);
   const remainingHealth = target.health - damage;
@@ -112,6 +125,7 @@ function applyCounterattack(
       type: "unit-counterattacked",
       counterattackerUnitId: counterattacker.id,
       targetUnitId: target.id,
+      remainingAmmo: committedCounterattacker.ammo,
     },
     {
       type: "unit-damaged",
@@ -121,7 +135,11 @@ function applyCounterattack(
     },
     { type: "team-scored", side: counterattacker.side, points: score, reason: "attack" },
   );
-  const counterattackedState = withScore(state, counterattacker.side, score);
+  const counterattackedState = withScore(
+    withUnit(state, committedCounterattacker),
+    counterattacker.side,
+    score,
+  );
 
   if (remainingHealth > NO_MOVEMENT_COST) {
     return {
@@ -173,8 +191,13 @@ function applyWait(state: GameState, unitId: string): ApplyActionResult {
 function applyEndTurn(state: GameState): ApplyActionResult {
   const activeSide = oppositeSide(state.activeSide);
   const refreshedUnits = refreshSideUnits(state.units, activeSide);
-  const { units, events } = healUnitsOnOwnedControlPoints(
+  const { units: healedUnits, events: healingEvents } = healUnitsOnOwnedControlPoints(
     refreshedUnits,
+    state.controlPoints,
+    activeSide,
+  );
+  const { units, events: reloadEvents } = reloadUnitsOnOwnedControlPoints(
+    healedUnits,
     state.controlPoints,
     activeSide,
   );
@@ -183,8 +206,41 @@ function applyEndTurn(state: GameState): ApplyActionResult {
   return {
     accepted: true,
     state: nextState,
-    events: [...events, { type: "turn-ended", turn: nextState.turn, activeSide }],
+    events: [
+      ...healingEvents,
+      ...reloadEvents,
+      { type: "turn-ended", turn: nextState.turn, activeSide },
+    ],
   };
+}
+
+function reloadUnitsOnOwnedControlPoints(
+  units: Readonly<Record<string, UnitState>>,
+  controlPoints: GameState["controlPoints"],
+  activeSide: SideId,
+): { readonly units: Record<string, UnitState>; readonly events: readonly GameEvent[] } {
+  const events: GameEvent[] = [];
+  const nextUnits = { ...units };
+  const ownedControlPoints = Object.values(controlPoints).filter(
+    (controlPoint) => controlPoint.owner === activeSide,
+  );
+
+  for (const unit of Object.values(units).sort((first, second) =>
+    first.id.localeCompare(second.id),
+  )) {
+    if (!canUnitReloadOnControlPoint(unit, activeSide, ownedControlPoints)) continue;
+
+    const ammoRestored = unit.maxAmmo - unit.ammo;
+    nextUnits[unit.id] = { ...unit, ammo: unit.maxAmmo };
+    events.push({
+      type: "unit-reloaded",
+      unitId: unit.id,
+      ammoRestored,
+      remainingAmmo: unit.maxAmmo,
+    });
+  }
+
+  return { units: nextUnits, events };
 }
 
 function completeVictoryIfNeeded(
@@ -271,6 +327,18 @@ function canUnitHealOnControlPoint(
   return (
     unit.side === activeSide &&
     unit.health < unit.maxHealth &&
+    ownedControlPoints.some((controlPoint) => positionsEqual(unit.position, controlPoint.position))
+  );
+}
+
+function canUnitReloadOnControlPoint(
+  unit: UnitState,
+  activeSide: SideId,
+  ownedControlPoints: readonly GameState["controlPoints"][string][],
+): boolean {
+  return (
+    unit.side === activeSide &&
+    unit.ammo < unit.maxAmmo &&
     ownedControlPoints.some((controlPoint) => positionsEqual(unit.position, controlPoint.position))
   );
 }

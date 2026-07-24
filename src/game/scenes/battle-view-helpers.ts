@@ -35,7 +35,7 @@ export function formatSelectedUnit(
   const artilleryMoveWarning =
     unit.type === "artillery" && unit.hasMovedThisTurn ? "  Fire locked after move" : "";
 
-  return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nRange ${range}  Action ${unit.hasTakenMainAction ? "used" : "ready"}${artilleryMoveWarning}${defenceText}`;
+  return `${unit.type.toUpperCase()}\nHP ${unit.health}/${unit.maxHealth}  MP ${unit.movementPoints}/${unit.maxMovementPoints}\nAmmo ${unit.ammo}/${unit.maxAmmo}  Range ${range}\nAction ${unit.hasTakenMainAction ? "used" : "ready"}${artilleryMoveWarning}${defenceText}`;
 }
 
 export function formatEvent(event: GameEvent): string {
@@ -43,13 +43,15 @@ export function formatEvent(event: GameEvent): string {
     case "unit-moved":
       return `${event.unitId} moved.`;
     case "unit-attacked":
-      return `${event.attackerUnitId} attacked ${event.targetUnitId}.`;
+      return `${event.attackerUnitId} attacked ${event.targetUnitId} (${event.remainingAmmo} ammo).`;
     case "unit-counterattacked":
-      return `${event.counterattackerUnitId} counterattacked ${event.targetUnitId}.`;
+      return `${event.counterattackerUnitId} counterattacked ${event.targetUnitId} (${event.remainingAmmo} ammo).`;
     case "unit-damaged":
       return `${event.unitId} took ${event.damage} damage.`;
     case "unit-healed":
       return `${event.unitId} restored ${event.healthRestored} HP.`;
+    case "unit-reloaded":
+      return `${event.unitId} restored ${event.ammoRestored} ammo.`;
     case "unit-destroyed":
       return `${event.unitId} was destroyed.`;
     case "control-point-captured":

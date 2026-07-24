@@ -13,12 +13,14 @@ export interface UnitAttackedEvent {
   readonly type: "unit-attacked";
   readonly attackerUnitId: string;
   readonly targetUnitId: string;
+  readonly remainingAmmo: number;
 }
 
 export interface UnitCounterattackedEvent {
   readonly type: "unit-counterattacked";
   readonly counterattackerUnitId: string;
   readonly targetUnitId: string;
+  readonly remainingAmmo: number;
 }
 
 export interface UnitDamagedEvent {
@@ -33,6 +35,13 @@ export interface UnitHealedEvent {
   readonly unitId: string;
   readonly healthRestored: number;
   readonly remainingHealth: number;
+}
+
+export interface UnitReloadedEvent {
+  readonly type: "unit-reloaded";
+  readonly unitId: string;
+  readonly ammoRestored: number;
+  readonly remainingAmmo: number;
 }
 
 export interface UnitDestroyedEvent {
@@ -75,6 +84,7 @@ export type GameEvent =
   | UnitCounterattackedEvent
   | UnitDamagedEvent
   | UnitHealedEvent
+  | UnitReloadedEvent
   | UnitDestroyedEvent
   | ControlPointCapturedEvent
   | TeamScoredEvent

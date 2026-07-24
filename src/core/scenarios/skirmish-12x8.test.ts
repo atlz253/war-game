@@ -16,7 +16,10 @@ const BLUE_ARTILLERY_HEALTH = 8;
 const BLUE_ARTILLERY_MOVEMENT = 3;
 const BLUE_ARTILLERY_MINIMUM_RANGE = 2;
 const BLUE_ARTILLERY_MAXIMUM_RANGE = 4;
-const CONTROL_POINT_COUNT = 2;
+const CONTROL_POINT_COUNT = 4;
+const INFANTRY_MAX_AMMO = 6;
+const TANK_MAX_AMMO = 5;
+const ARTILLERY_MAX_AMMO = 4;
 const BLUE_UNIT_COUNT = 5;
 const RED_UNIT_COUNT = 5;
 const INITIAL_SCORES = { blue: 0, red: 0 };
@@ -45,9 +48,12 @@ describe("createSkirmishGameState", () => {
     expect(state.units["blue-infantry-1"]?.health).toBe(BLUE_INFANTRY_HEALTH);
     expect(state.units["blue-infantry-1"]?.movementPoints).toBe(BLUE_INFANTRY_MOVEMENT);
     expect(state.units["blue-infantry-1"]?.baseDefence).toBe(0);
+    expect(state.units["blue-infantry-1"]?.ammo).toBe(INFANTRY_MAX_AMMO);
+    expect(state.units["blue-infantry-1"]?.maxAmmo).toBe(INFANTRY_MAX_AMMO);
     expect(state.units["blue-tank-1"]?.health).toBe(BLUE_TANK_HEALTH);
     expect(state.units["blue-tank-1"]?.movementPoints).toBe(BLUE_TANK_MOVEMENT);
     expect(state.units["blue-tank-1"]?.baseDefence).toBe(2);
+    expect(state.units["blue-tank-1"]?.maxAmmo).toBe(TANK_MAX_AMMO);
     expect(state.units["blue-artillery-1"]?.position).toEqual({ x: 2, y: 0 });
     expect(state.units["red-artillery-1"]?.position).toEqual({ x: 9, y: 7 });
     expect(state.units["blue-artillery-1"]?.health).toBe(BLUE_ARTILLERY_HEALTH);
@@ -55,7 +61,16 @@ describe("createSkirmishGameState", () => {
     expect(state.units["blue-artillery-1"]?.baseDefence).toBe(0);
     expect(state.units["blue-artillery-1"]?.minAttackRange).toBe(BLUE_ARTILLERY_MINIMUM_RANGE);
     expect(state.units["blue-artillery-1"]?.attackRange).toBe(BLUE_ARTILLERY_MAXIMUM_RANGE);
+    expect(state.units["blue-artillery-1"]?.maxAmmo).toBe(ARTILLERY_MAX_AMMO);
     expect(Object.keys(state.controlPoints)).toHaveLength(CONTROL_POINT_COUNT);
+    expect(state.controlPoints["control-point-3"]).toMatchObject({
+      position: { x: 0, y: 4 },
+      owner: "blue",
+    });
+    expect(state.controlPoints["control-point-2"]).toMatchObject({
+      position: { x: 11, y: 3 },
+      owner: "red",
+    });
     expect(Object.values(state.units).filter((unit) => unit.side === "blue")).toHaveLength(
       BLUE_UNIT_COUNT,
     );

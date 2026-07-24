@@ -9,6 +9,7 @@ export type ValidationFailureReason =
   | "unit-not-active-side"
   | "unit-main-action-already-taken"
   | "unit-cannot-attack-after-moving"
+  | "unit-has-no-ammunition"
   | "unit-has-no-movement-points"
   | "destination-unreachable"
   | "destination-out-of-range"
@@ -79,6 +80,10 @@ function validateAttack(state: GameState, unitId: string, targetUnitId: string):
 
   if (unit.type === "artillery" && unit.hasMovedThisTurn) {
     return invalid("unit-cannot-attack-after-moving");
+  }
+
+  if (unit.ammo <= NO_MOVEMENT_POINTS) {
+    return invalid("unit-has-no-ammunition");
   }
 
   const target = state.units[targetUnitId];

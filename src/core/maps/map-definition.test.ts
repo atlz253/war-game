@@ -19,6 +19,9 @@ const RESIZED_HEIGHT = 3;
 const INFANTRY_MAX_HEALTH = 10;
 const TANK_MAX_HEALTH = 16;
 const ARTILLERY_MAX_HEALTH = 8;
+const INFANTRY_MAX_AMMO = 6;
+const TANK_MAX_AMMO = 5;
+const ARTILLERY_MAX_AMMO = 4;
 const MOUNTAIN_POSITION = { x: 2, y: 2 };
 const SECOND_MOUNTAIN_POSITION = { x: 3, y: 2 };
 const INITIAL_SCORES = { blue: 0, red: 0 };
@@ -119,6 +122,8 @@ describe("terrain map definitions", () => {
       attackRange: 4,
       baseDamage: 4,
       baseDefence: 0,
+      ammo: ARTILLERY_MAX_AMMO,
+      maxAmmo: ARTILLERY_MAX_AMMO,
     });
   });
 
@@ -137,8 +142,10 @@ describe("terrain map definitions", () => {
     expect(createGameStateFromMap(map).units["blue-infantry-1"]?.maxHealth).toBe(
       INFANTRY_MAX_HEALTH,
     );
+    expect(createGameStateFromMap(map).units["blue-infantry-1"]?.maxAmmo).toBe(INFANTRY_MAX_AMMO);
     expect(createGameStateFromMap(map).units["blue-infantry-1"]?.baseDefence).toBe(0);
     expect(createGameStateFromMap(map).units["red-tank-1"]?.maxHealth).toBe(TANK_MAX_HEALTH);
+    expect(createGameStateFromMap(map).units["red-tank-1"]?.maxAmmo).toBe(TANK_MAX_AMMO);
     expect(createGameStateFromMap(map).units["red-tank-1"]?.baseDefence).toBe(2);
     expect(createGameStateFromMap(map).board.terrain).toEqual(map.terrain);
     expect(createGameStateFromMap(map).scores).toEqual(INITIAL_SCORES);

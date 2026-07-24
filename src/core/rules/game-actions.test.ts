@@ -42,6 +42,8 @@ const CONTROL_POINT_HEAL_AMOUNT = 2;
 const DAMAGED_INFANTRY_HEALTH = 5;
 const NEAR_MAXIMUM_INFANTRY_HEALTH = 9;
 const INITIAL_SCORES = { blue: 0, red: 0 };
+const INFANTRY_MAX_AMMO = 6;
+const INFANTRY_AMMO_AFTER_SHOT = INFANTRY_MAX_AMMO - 1;
 
 function withArtillery(state: GameState, position: { x: number; y: number }): GameState {
   const infantry = state.units[BLUE_INFANTRY_ID];
@@ -461,6 +463,8 @@ describe("counterattacks", () => {
     expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
       UNIT_DESTRUCTION_DAMAGE - ATTACK_DAMAGE,
     );
+    expect(result.state.units[BLUE_INFANTRY_ID]?.ammo).toBe(INFANTRY_AMMO_AFTER_SHOT);
+    expect(result.state.units[RED_INFANTRY_ID]?.ammo).toBe(INFANTRY_AMMO_AFTER_SHOT);
     expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: ATTACK_DAMAGE });
     expect(result.events.map((event) => event.type)).toEqual([
       "unit-attacked",
@@ -520,6 +524,33 @@ describe("counterattacks", () => {
     });
 
     expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(UNIT_DESTRUCTION_DAMAGE);
+    expect(result.events.map((event) => event.type)).not.toContain("unit-counterattacked");
+  });
+});
+
+describe("counterattack ammunition", () => {
+  it("does not counterattack when the defender has no ammunition", () => {
+    const state = createSkirmishGameState();
+    const duelState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], position: { x: 1, y: 1 } },
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: { x: 2, y: 1 },
+          ammo: 0,
+        },
+      },
+    };
+
+    const result = applyAction(duelState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(UNIT_DESTRUCTION_DAMAGE);
+    expect(result.state.units[BLUE_INFANTRY_ID]?.ammo).toBe(INFANTRY_AMMO_AFTER_SHOT);
     expect(result.events.map((event) => event.type)).not.toContain("unit-counterattacked");
   });
 });
@@ -744,6 +775,26 @@ describe("control point defence", () => {
 });
 
 describe("main action rules", () => {
+  it("rejects an attack when the active unit has no ammunition", () => {
+    const state = createSkirmishGameState();
+    const noAmmoState = {
+      ...state,
+      units: {
+        ...state.units,
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], ammo: 0 },
+        [RED_INFANTRY_ID]: { ...state.units[RED_INFANTRY_ID], position: { x: 2, y: 1 } },
+      },
+    };
+
+    expect(
+      validateAction(noAmmoState, {
+        type: "attack",
+        unitId: BLUE_INFANTRY_ID,
+        targetUnitId: RED_INFANTRY_ID,
+      }),
+    ).toEqual({ isValid: false, reason: "unit-has-no-ammunition" });
+  });
+
   it("captures a neutral point and consumes the unit main action", () => {
     const state = createSkirmishGameState();
     const capturingState = {
@@ -887,6 +938,52 @@ it("heals damaged units on control points owned by the newly active side before 
   expect(healingState.units[RED_INFANTRY_ID]?.health).toBe(DAMAGED_INFANTRY_HEALTH);
 });
 
+it("fully reloads active-side units on owned control points in ID order", () => {
+  const state = createSkirmishGameState();
+  const controlPoint = state.controlPoints[CONTROL_POINT_ID];
+  const reloadState = {
+    ...state,
+    units: {
+      ...state.units,
+      [RED_INFANTRY_TWO_ID]: {
+        ...state.units[RED_INFANTRY_TWO_ID],
+        position: controlPoint.position,
+        ammo: 1,
+      },
+      [RED_INFANTRY_ID]: {
+        ...state.units[RED_INFANTRY_ID],
+        position: state.controlPoints["control-point-4"].position,
+        ammo: 2,
+      },
+    },
+    controlPoints: {
+      ...state.controlPoints,
+      [CONTROL_POINT_ID]: { ...controlPoint, owner: "red" as const },
+      "control-point-4": { ...state.controlPoints["control-point-4"], owner: "red" as const },
+    },
+  };
+
+  const result = applyAction(reloadState, { type: "end-turn" });
+
+  expect(result.state.units[RED_INFANTRY_ID]?.ammo).toBe(INFANTRY_MAX_AMMO);
+  expect(result.state.units[RED_INFANTRY_TWO_ID]?.ammo).toBe(INFANTRY_MAX_AMMO);
+  expect(result.events).toEqual([
+    {
+      type: "unit-reloaded",
+      unitId: RED_INFANTRY_ID,
+      ammoRestored: INFANTRY_MAX_AMMO - 2,
+      remainingAmmo: INFANTRY_MAX_AMMO,
+    },
+    {
+      type: "unit-reloaded",
+      unitId: RED_INFANTRY_TWO_ID,
+      ammoRestored: INFANTRY_MAX_AMMO - 1,
+      remainingAmmo: INFANTRY_MAX_AMMO,
+    },
+    expect.objectContaining({ type: "turn-ended", activeSide: "red" }),
+  ]);
+});
+
 it("limits control point healing to maximum health and excludes ineligible units", () => {
   const state = createSkirmishGameState();
   const controlPoint = state.controlPoints[CONTROL_POINT_ID];
@@ -901,7 +998,7 @@ it("limits control point healing to maximum health and excludes ineligible units
       },
       [RED_INFANTRY_TWO_ID]: {
         ...state.units[RED_INFANTRY_TWO_ID],
-        position: state.controlPoints["control-point-2"].position,
+        position: state.controlPoints["control-point-4"].position,
         health: DAMAGED_INFANTRY_HEALTH,
       },
       [RED_TANK_ID]: {
@@ -930,7 +1027,7 @@ it("limits control point healing to maximum health and excludes ineligible units
 it("does not heal units on neutral, enemy-owned, or empty control points", () => {
   const state = createSkirmishGameState();
   const firstControlPoint = state.controlPoints[CONTROL_POINT_ID];
-  const secondControlPoint = state.controlPoints["control-point-2"];
+  const secondControlPoint = state.controlPoints["control-point-4"];
   const healingState = {
     ...state,
     activeSide: "red" as const,
@@ -950,7 +1047,7 @@ it("does not heal units on neutral, enemy-owned, or empty control points", () =>
     controlPoints: {
       ...state.controlPoints,
       [CONTROL_POINT_ID]: { ...firstControlPoint, owner: null },
-      "control-point-2": { ...secondControlPoint, owner: "red" as const },
+      "control-point-4": { ...secondControlPoint, owner: "red" as const },
     },
   };
 

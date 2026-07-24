@@ -60,8 +60,11 @@ export interface MapValidationResult {
 const INITIAL_TURN = 1;
 const BLUE_SIDE: SideId = "blue";
 const INFANTRY_BASE_DEFENCE = 0;
+const INFANTRY_MAX_AMMO = 6;
 const TANK_BASE_DEFENCE = 2;
+const TANK_MAX_AMMO = 5;
 const ARTILLERY_BASE_DEFENCE = 0;
+const ARTILLERY_MAX_AMMO = 4;
 const UNIT_STATS: Readonly<Record<UnitType, UnitStats>> = {
   infantry: {
     health: 10,
@@ -70,6 +73,7 @@ const UNIT_STATS: Readonly<Record<UnitType, UnitStats>> = {
     attackRange: 1,
     baseDamage: 3,
     baseDefence: INFANTRY_BASE_DEFENCE,
+    maxAmmo: INFANTRY_MAX_AMMO,
   },
   tank: {
     health: 16,
@@ -78,6 +82,7 @@ const UNIT_STATS: Readonly<Record<UnitType, UnitStats>> = {
     attackRange: 1,
     baseDamage: 5,
     baseDefence: TANK_BASE_DEFENCE,
+    maxAmmo: TANK_MAX_AMMO,
   },
   artillery: {
     health: 8,
@@ -86,6 +91,7 @@ const UNIT_STATS: Readonly<Record<UnitType, UnitStats>> = {
     attackRange: 4,
     baseDamage: 4,
     baseDefence: ARTILLERY_BASE_DEFENCE,
+    maxAmmo: ARTILLERY_MAX_AMMO,
   },
 };
 
@@ -96,6 +102,7 @@ interface UnitStats {
   readonly attackRange: number;
   readonly baseDamage: number;
   readonly baseDefence: number;
+  readonly maxAmmo: number;
 }
 
 export function createMapDefinition(
@@ -307,6 +314,8 @@ function createUnits(placements: readonly MapUnitPlacement[]): Record<string, Un
       attackRange: stats.attackRange,
       baseDamage: stats.baseDamage,
       baseDefence: stats.baseDefence,
+      ammo: stats.maxAmmo,
+      maxAmmo: stats.maxAmmo,
       hasMovedThisTurn: false,
       hasTakenMainAction: false,
     };
