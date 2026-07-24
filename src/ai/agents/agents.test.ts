@@ -15,6 +15,8 @@ const RED_INFANTRY_ID = "red-infantry-1";
 const ADJACENT_ENEMY_POSITION = { x: 2, y: 1 };
 const ARTILLERY_TARGET_POSITION = { x: 6, y: 0 };
 const ARTILLERY_FIRING_POSITION = { x: 4, y: 0 };
+const SUPPLY_POINT_POSITION = { x: 0, y: 4 };
+const ARTILLERY_ATTACK_TARGET_POSITION = { x: 2, y: 2 };
 
 describe("getLegalActions", () => {
   it("returns only orders accepted by the shared validation path", () => {
@@ -47,6 +49,60 @@ describe("RandomAgent", () => {
 });
 
 describe("HeuristicAgent", () => {
+  it("moves a unit without ammunition toward an owned control point before attacking", async () => {
+    const state = createSkirmishGameState();
+    const resupplyState = {
+      ...state,
+      units: {
+        ...state.units,
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], ammo: 0 },
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: ARTILLERY_ATTACK_TARGET_POSITION,
+        },
+      },
+    };
+    const agent = new HeuristicAgent();
+    const action = await agent.chooseAction(resupplyState, { actionsThisTurn: [] });
+
+    expect(action).toEqual({
+      type: "move",
+      unitId: BLUE_INFANTRY_ID,
+      destination: SUPPLY_POINT_POSITION,
+    });
+    expect(validateAction(resupplyState, action)).toEqual({ isValid: true });
+  });
+
+  it("keeps its existing priority when no owned control point is available for resupply", async () => {
+    const state = createSkirmishGameState();
+    const fallbackState = {
+      ...state,
+      units: {
+        ...state.units,
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], ammo: 0 },
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: ARTILLERY_ATTACK_TARGET_POSITION,
+        },
+      },
+      controlPoints: Object.fromEntries(
+        Object.entries(state.controlPoints).map(([controlPointId, controlPoint]) => [
+          controlPointId,
+          { ...controlPoint, owner: null },
+        ]),
+      ),
+    };
+    const agent = new HeuristicAgent();
+
+    await expect(agent.chooseAction(fallbackState, { actionsThisTurn: [] })).resolves.toEqual({
+      type: "attack",
+      unitId: BLUE_ARTILLERY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+  });
+});
+
+describe("HeuristicAgent baseline behavior", () => {
   it("prioritizes a legal adjacent attack", async () => {
     const state = createSkirmishGameState();
     const combatState = {
