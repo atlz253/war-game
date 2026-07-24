@@ -6,10 +6,21 @@ import {
   formatEvent,
   formatRejectedOrder,
   formatSelectedUnit,
+  toContainerPosition,
 } from "./battle-view-helpers";
 
 const BLUE_TANK_ID = "blue-tank-1";
 const CONTROL_POINT_ID = "control-point-1";
+const HUD_ORIGIN = { x: 100, y: 200 };
+const HUD_SCALE = 0.5;
+const SCREEN_POINTER = { x: 300, y: 400 };
+const HUD_POINTER = { x: 400, y: 400 };
+
+describe("toContainerPosition", () => {
+  it("converts a screen pointer into scaled HUD coordinates", () => {
+    expect(toContainerPosition(SCREEN_POINTER, HUD_ORIGIN, HUD_SCALE)).toEqual(HUD_POINTER);
+  });
+});
 
 describe("formatSelectedUnit", () => {
   it("shows the selected unit's base defence", () => {

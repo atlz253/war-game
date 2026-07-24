@@ -1,6 +1,7 @@
 import type { MoveAction } from "../../core/actions/game-actions";
 import { getLegalActions } from "../../core/actions/get-legal-actions";
 import type { GameState, Position, UnitState } from "../../core/model/game-state";
+import { validateAction } from "../../core/rules/validate-action";
 
 export function getMovementHighlightPositions(
   state: GameState,
@@ -15,6 +16,7 @@ export function getMovementHighlightPositions(
 
   return getLegalActions(state)
     .filter((action): action is MoveAction => isSelectedUnitMove(action, selectedUnit.id))
+    .filter((action) => validateAction(state, action).isValid)
     .map((action) => action.destination)
     .filter((position) => !positionsEqual(position, selectedUnit.position));
 }

@@ -135,6 +135,17 @@ export function isInsideRectangle(
   );
 }
 
+export function toContainerPosition(
+  pointer: Position,
+  containerPosition: Position,
+  containerScale: number,
+): Position {
+  return {
+    x: (pointer.x - containerPosition.x) / containerScale,
+    y: (pointer.y - containerPosition.y) / containerScale,
+  };
+}
+
 export function getUnitTextureKey(unit: UnitState): string {
   return assetManifest.units[`${unit.side}-${unit.type}`]?.textureKey ?? "";
 }

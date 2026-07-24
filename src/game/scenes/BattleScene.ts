@@ -42,7 +42,7 @@ import {
   formatActionRejection,
   formatEvent,
   formatSelectedUnit,
-  isInsideRectangle,
+  toContainerPosition,
 } from "./battle-view-helpers";
 import { calculateCameraCenterLimits } from "./camera-presentation";
 import { MAIN_MENU_SCENE_KEY, RESULT_SCENE_KEY } from "./scene-keys";
@@ -484,7 +484,7 @@ export class BattleScene extends Phaser.Scene {
   private zoomWorldCamera(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
     const logicalPointer = this.toLogicalPointer(pointer);
 
-    if (!logicalPointer || logicalPointer.x >= HUD_X) {
+    if (!logicalPointer || this.isPointerInsideHud(pointer)) {
       return;
     }
 
@@ -588,33 +588,31 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleHudClick(pointer: Phaser.Input.Pointer): boolean {
-    const logicalPointer = this.toLogicalPointer(pointer);
-
-    if (!logicalPointer) {
+    if (!this.toLogicalPointer(pointer)) {
       return true;
     }
 
-    if (
-      isInsideRectangle(
-        logicalPointer,
-        WAIT_BUTTON_X,
-        WAIT_BUTTON_Y,
-        BUTTON_WIDTH,
-        BUTTON_HEIGHT,
-      ) ||
-      isInsideRectangle(logicalPointer, END_BUTTON_X, END_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT) ||
-      isInsideRectangle(
-        logicalPointer,
-        CAPTURE_BUTTON_X,
-        CAPTURE_BUTTON_Y,
-        CAPTURE_BUTTON_WIDTH,
-        BUTTON_HEIGHT,
-      )
-    ) {
-      return true;
-    }
+    return this.isPointerInsideHud(pointer);
+  }
 
-    return logicalPointer.x >= HUD_X;
+  private toHudPosition(pointer: Phaser.Input.Pointer): Position {
+    return toContainerPosition(
+      pointer,
+      { x: this.hudContainer.x, y: this.hudContainer.y },
+      this.presentationViewport.scale,
+    );
+  }
+
+  private isPointerInsideHud(pointer: Phaser.Input.Pointer): boolean {
+    const hudPointer = this.toHudPosition(pointer);
+    const hudBottom = LOG_PANEL_Y + LOG_PANEL_HEIGHT;
+
+    return (
+      hudPointer.x >= HUD_X &&
+      hudPointer.x < HUD_X + HUD_WIDTH &&
+      hudPointer.y >= TOP_PANEL_Y &&
+      hudPointer.y < hudBottom
+    );
   }
 
   private handleBoardClick(pointer: Phaser.Input.Pointer): void {
