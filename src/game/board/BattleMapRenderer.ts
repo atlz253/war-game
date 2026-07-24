@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 
+import { getLegalActions } from "../../core/actions/get-legal-actions";
 import type { GameState, Position, UnitState } from "../../core/model/game-state";
 import { assetManifest } from "../assets/asset-manifest";
 import {
@@ -21,6 +22,7 @@ const UNIT_HEALTH_LABEL_BACKGROUND_COLOR = 0x101820;
 const UNIT_HEALTH_LABEL_BACKGROUND_ALPHA = 0.85;
 const UNIT_HEALTH_LABEL_BORDER_COLOR = 0xeaf4ff;
 const UNIT_HEALTH_LABEL_BORDER_WIDTH = 4;
+const MOVED_UNIT_TINT = 0x8d8d8d;
 const DOUBLE_SIZE_MULTIPLIER = 2;
 const CENTER_ORIGIN = 0.5;
 
@@ -74,7 +76,7 @@ export class BattleMapRenderer {
 
   public renderState(state: GameState): void {
     this.updateControlPointViews(state);
-    this.updateUnitViews(state);
+    this.updateUnitViews(state, getUnitsWithAvailableMainActions(state));
     this.bringHealthLabelsToFront();
   }
 
@@ -95,7 +97,10 @@ export class BattleMapRenderer {
     this.controlPointViews.clear();
   }
 
-  private updateUnitViews(state: GameState): void {
+  private updateUnitViews(
+    state: GameState,
+    unitsWithAvailableMainActions: ReadonlySet<string>,
+  ): void {
     const unitIds = new Set(Object.keys(state.units));
     for (const [id, view] of this.unitViews) {
       if (unitIds.has(id)) continue;
@@ -104,18 +109,47 @@ export class BattleMapRenderer {
       this.unitViews.delete(id);
       this.unitHealthViews.delete(id);
     }
-    for (const unit of Object.values(state.units)) this.upsertUnit(unit);
+    for (const unit of Object.values(state.units)) {
+      this.upsertUnit(unit, state.activeSide, unitsWithAvailableMainActions);
+    }
   }
 
-  private upsertUnit(unit: UnitState): void {
+  private upsertUnit(
+    unit: UnitState,
+    activeSide: GameState["activeSide"],
+    unitsWithAvailableMainActions: ReadonlySet<string>,
+  ): void {
     const point = this.toScreenPosition(unit.position);
     const view =
       this.unitViews.get(unit.id) ??
       this.scene.add.image(point.x, point.y, getUnitTextureKey(unit));
     view.setPosition(point.x, point.y).setTexture(getUnitTextureKey(unit));
+    this.updateUnitTint(view, unit, activeSide, unitsWithAvailableMainActions);
     this.unitViews.set(unit.id, view);
     if (!view.parentContainer) this.worldContainer.add(view);
     this.upsertUnitHealthView(unit, point);
+  }
+
+  private updateUnitTint(
+    view: Phaser.GameObjects.Image,
+    unit: UnitState,
+    activeSide: GameState["activeSide"],
+    unitsWithAvailableMainActions: ReadonlySet<string>,
+  ): void {
+    if (unit.side !== activeSide) {
+      view.clearTint();
+      return;
+    }
+
+    if (
+      unit.hasTakenMainAction ||
+      (unit.hasMovedThisTurn && !unitsWithAvailableMainActions.has(unit.id))
+    ) {
+      view.setTint(MOVED_UNIT_TINT);
+      return;
+    }
+
+    view.clearTint();
   }
 
   private upsertUnitHealthView(unit: UnitState, point: Position): void {
@@ -179,4 +213,17 @@ export class BattleMapRenderer {
       y: this.options.boardOriginY + position.y * this.options.tileSize + tileCenter,
     };
   }
+}
+
+function getUnitsWithAvailableMainActions(state: GameState): ReadonlySet<string> {
+  const hasMovedActiveUnit = Object.values(state.units).some(
+    (unit) => unit.side === state.activeSide && unit.hasMovedThisTurn && !unit.hasTakenMainAction,
+  );
+  if (!hasMovedActiveUnit) return new Set();
+
+  return new Set(
+    getLegalActions(state).flatMap((action) =>
+      action.type === "attack" || action.type === "capture" ? [action.unitId] : [],
+    ),
+  );
 }
