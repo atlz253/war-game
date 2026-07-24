@@ -25,6 +25,9 @@ function createReplay(id = "replay", name = "Blue victory") {
       { type: "end-turn" },
       { type: "end-turn" },
       { type: "attack", unitId: "blue-tank-1", targetUnitId: "red-infantry-1" },
+      { type: "end-turn" },
+      { type: "end-turn" },
+      { type: "attack", unitId: "blue-tank-1", targetUnitId: "red-infantry-1" },
     ],
   });
 }

@@ -38,6 +38,7 @@ const ARTILLERY_MAXIMUM_RANGE = 4;
 const ARTILLERY_MOVE_DESTINATION = { x: 3, y: 0 };
 const ARTILLERY_TARGET_POSITION = { x: 5, y: 0 };
 const DAMAGE_WITH_ONE_DEFENCE_BONUS = 2;
+const DAMAGED_COUNTERATTACK_DAMAGE = 2;
 const MINIMUM_DAMAGE = 1;
 const CAPTURE_SCORE = 5;
 const OVERKILL_TARGET_HEALTH = 2;
@@ -472,12 +473,51 @@ describe("combined defensive terrain", () => {
     expect(result.events).toContainEqual(
       expect.objectContaining({ type: "unit-damaged", damage: MINIMUM_DAMAGE }),
     );
-    expect(result.state.scores).toEqual({ blue: MINIMUM_DAMAGE, red: ATTACK_DAMAGE });
+    expect(result.state.scores).toEqual({
+      blue: MINIMUM_DAMAGE,
+      red: DAMAGED_COUNTERATTACK_DAMAGE,
+    });
+  });
+});
+
+describe("damaged counterattacks", () => {
+  it("scales a damaged defender's counterattack damage, score, and event", () => {
+    const state = createSkirmishGameState();
+    const duelState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], position: { x: 1, y: 1 } },
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          health: DAMAGED_INFANTRY_HEALTH,
+          position: { x: 2, y: 1 },
+          hasTakenMainAction: true,
+        },
+      },
+    };
+
+    const result = applyAction(duelState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(
+      UNIT_DESTRUCTION_DAMAGE - MINIMUM_DAMAGE,
+    );
+    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: MINIMUM_DAMAGE });
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: "unit-damaged",
+        unitId: BLUE_INFANTRY_ID,
+        damage: MINIMUM_DAMAGE,
+      }),
+    );
   });
 });
 
 describe("counterattacks", () => {
-  it("has a surviving defender immediately return normal damage and score", () => {
+  it("has a surviving defender immediately return scaled damage and score", () => {
     const state = createSkirmishGameState();
     const duelState = {
       ...state,
@@ -498,7 +538,7 @@ describe("counterattacks", () => {
     });
 
     expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(
-      UNIT_DESTRUCTION_DAMAGE - ATTACK_DAMAGE,
+      UNIT_DESTRUCTION_DAMAGE - DAMAGED_COUNTERATTACK_DAMAGE,
     );
     expect(result.state.units[BLUE_INFANTRY_ID]?.hasTakenMainAction).toBe(true);
     expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
@@ -506,7 +546,7 @@ describe("counterattacks", () => {
     );
     expect(result.state.units[BLUE_INFANTRY_ID]?.ammo).toBe(INFANTRY_AMMO_AFTER_SHOT);
     expect(result.state.units[RED_INFANTRY_ID]?.ammo).toBe(INFANTRY_AMMO_AFTER_SHOT);
-    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: ATTACK_DAMAGE });
+    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: DAMAGED_COUNTERATTACK_DAMAGE });
     expect(result.events.map((event) => event.type)).toEqual([
       "unit-attacked",
       "unit-damaged",
@@ -636,7 +676,7 @@ describe("counterattack victory", () => {
 
     expect(result.state.units[BLUE_INFANTRY_ID]).toBeUndefined();
     expect(result.state.winner).toBe("red");
-    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: OVERKILL_TARGET_HEALTH });
+    expect(result.state.scores).toEqual({ blue: MINIMUM_DAMAGE, red: OVERKILL_TARGET_HEALTH });
     expect(result.events.map((event) => event.type)).toEqual([
       "unit-attacked",
       "unit-damaged",

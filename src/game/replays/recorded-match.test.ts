@@ -10,7 +10,7 @@ import {
 
 const MAP_WIDTH = 4;
 const MAP_HEIGHT = 2;
-const FINAL_TURN = 3;
+const FINAL_TURN = 5;
 const MAP = {
   ...createMapDefinition("replay-map", "Replay map", MAP_WIDTH, MAP_HEIGHT),
   units: [
@@ -34,6 +34,9 @@ describe("RecordedMatch", () => {
         },
       },
       actions: [
+        { type: "attack", unitId: "blue-tank-1", targetUnitId: "red-infantry-1" },
+        { type: "end-turn" },
+        { type: "end-turn" },
         { type: "attack", unitId: "blue-tank-1", targetUnitId: "red-infantry-1" },
         { type: "end-turn" },
         { type: "end-turn" },

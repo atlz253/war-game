@@ -6,8 +6,10 @@ export const MINIMUM_DAMAGE = 1;
 
 export function calculateDamage(state: GameState, attacker: UnitState, target: UnitState): number {
   const defence = getTargetBaseDefence(attacker, target) + getDefenceBonus(state, target.position);
+  const damageBeforeHealthScaling = attacker.baseDamage - defence;
+  const healthRatio = attacker.health / attacker.maxHealth;
 
-  return Math.max(MINIMUM_DAMAGE, attacker.baseDamage - defence);
+  return Math.max(MINIMUM_DAMAGE, Math.floor(damageBeforeHealthScaling * healthRatio));
 }
 
 export function getDefenceBonus(state: GameState, position: Position): number {
