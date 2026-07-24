@@ -788,6 +788,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.mapRenderer.hasLoadedAssets()) {
       this.mapRenderer.renderState(nextState);
       this.updateSelectionView(nextState);
+      this.mapRenderer.bringHealthLabelsToFront();
       return;
     }
 

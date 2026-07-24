@@ -75,11 +75,18 @@ export class BattleMapRenderer {
   public renderState(state: GameState): void {
     this.updateControlPointViews(state);
     this.updateUnitViews(state);
+    this.bringHealthLabelsToFront();
   }
 
   public updateHealthLabelScales(cameraZoom: number): void {
     const scale = calculateUnitHealthLabelScale(cameraZoom);
     for (const healthView of this.unitHealthViews.values()) healthView.container.setScale(scale);
+  }
+
+  public bringHealthLabelsToFront(): void {
+    for (const healthView of this.unitHealthViews.values()) {
+      this.worldContainer.bringToTop(healthView.container);
+    }
   }
 
   public reset(): void {
