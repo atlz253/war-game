@@ -1,4 +1,4 @@
-import type { BoardState, Position } from "../model/game-state";
+import type { BoardState, Position, UnitState } from "../model/game-state";
 import { positionsEqual } from "../pathfinding/find-path";
 
 const ZERO_DISTANCE = 0;
@@ -24,6 +24,22 @@ export function isWithinAttackRange(
     distance > ZERO_DISTANCE &&
     distance >= minimumRange &&
     distance <= maximumRange
+  );
+}
+
+export function canUnitAttackTarget(
+  board: BoardState,
+  attacker: UnitState,
+  target: UnitState,
+): boolean {
+  return (
+    isWithinAttackRange(
+      attacker.position,
+      target.position,
+      attacker.minAttackRange,
+      attacker.attackRange,
+      attacker.type === "artillery",
+    ) && hasClearMountainLineOfFire(board, attacker.position, target.position)
   );
 }
 

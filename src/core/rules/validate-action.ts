@@ -1,7 +1,7 @@
 import type { GameAction } from "../actions/game-actions";
 import type { GameState, Position, UnitState } from "../model/game-state";
 import { findPath, positionsEqual } from "../pathfinding/find-path";
-import { hasClearMountainLineOfFire, isWithinAttackRange } from "./attack-range";
+import { canUnitAttackTarget } from "./attack-range";
 
 export type ValidationFailureReason =
   | "match-finished"
@@ -91,13 +91,7 @@ function validateAttack(state: GameState, unitId: string, targetUnitId: string):
     return invalid("target-is-friendly");
   }
 
-  return isWithinAttackRange(
-    unit.position,
-    target.position,
-    unit.minAttackRange,
-    unit.attackRange,
-    unit.type === "artillery",
-  ) && hasClearMountainLineOfFire(state.board, unit.position, target.position)
+  return canUnitAttackTarget(state.board, unit, target)
     ? VALID_ACTION
     : invalid("destination-out-of-range");
 }

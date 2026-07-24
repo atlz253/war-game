@@ -4,6 +4,7 @@ import type { GameAction } from "../actions/game-actions";
 import type { GameState } from "../model/game-state";
 import { createSkirmishGameState } from "../scenarios/skirmish-12x8";
 import { applyAction } from "./apply-action";
+import { canUnitAttackTarget } from "./attack-range";
 import { validateAction } from "./validate-action";
 
 const BLUE_INFANTRY_ID = "blue-infantry-1";
@@ -425,7 +426,152 @@ describe("combined defensive terrain", () => {
     expect(result.events).toContainEqual(
       expect.objectContaining({ type: "unit-damaged", damage: MINIMUM_DAMAGE }),
     );
-    expect(result.state.scores).toEqual({ blue: MINIMUM_DAMAGE, red: 0 });
+    expect(result.state.scores).toEqual({ blue: MINIMUM_DAMAGE, red: ATTACK_DAMAGE });
+  });
+});
+
+describe("counterattacks", () => {
+  it("has a surviving defender immediately return normal damage and score", () => {
+    const state = createSkirmishGameState();
+    const duelState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], position: { x: 1, y: 1 } },
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: { x: 2, y: 1 },
+          hasTakenMainAction: true,
+        },
+      },
+    };
+
+    const result = applyAction(duelState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(
+      UNIT_DESTRUCTION_DAMAGE - ATTACK_DAMAGE,
+    );
+    expect(result.state.units[BLUE_INFANTRY_ID]?.hasTakenMainAction).toBe(true);
+    expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
+      UNIT_DESTRUCTION_DAMAGE - ATTACK_DAMAGE,
+    );
+    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: ATTACK_DAMAGE });
+    expect(result.events.map((event) => event.type)).toEqual([
+      "unit-attacked",
+      "unit-damaged",
+      "team-scored",
+      "unit-counterattacked",
+      "unit-damaged",
+      "team-scored",
+    ]);
+  });
+
+  it("does not counterattack after the defender is destroyed", () => {
+    const state = createSkirmishGameState();
+    const duelState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: state.units[BLUE_INFANTRY_ID],
+        [RED_INFANTRY_ID]: {
+          ...state.units[RED_INFANTRY_ID],
+          position: { x: 2, y: 1 },
+          health: OVERKILL_TARGET_HEALTH,
+        },
+      },
+    };
+
+    const result = applyAction(duelState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(UNIT_DESTRUCTION_DAMAGE);
+    expect(result.state.scores).toEqual({ blue: OVERKILL_TARGET_HEALTH, red: 0 });
+    expect(result.events.map((event) => event.type)).not.toContain("unit-counterattacked");
+  });
+
+  it("does not counterattack from artillery inside its minimum range", () => {
+    const state = createSkirmishGameState();
+    const redArtilleryId = "red-artillery-counter";
+    const duelState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], position: { x: 1, y: 1 } },
+        [redArtilleryId]: {
+          ...state.units[BLUE_ARTILLERY_ID],
+          id: redArtilleryId,
+          side: "red" as const,
+          position: { x: 2, y: 1 },
+        },
+      },
+    };
+
+    const result = applyAction(duelState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: redArtilleryId,
+    });
+
+    expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(UNIT_DESTRUCTION_DAMAGE);
+    expect(result.events.map((event) => event.type)).not.toContain("unit-counterattacked");
+  });
+});
+
+describe("counterattack attack eligibility", () => {
+  it("uses mountain line of fire when determining whether a counterattack is possible", () => {
+    const state = withMountainBetween(
+      withTargetPosition(withArtillery(createSkirmishGameState(), { x: 1, y: 1 }), { x: 4, y: 1 }),
+      MOUNTAIN_POSITION,
+    );
+    const artillery = state.units[BLUE_ARTILLERY_ID];
+    const infantry = state.units[RED_INFANTRY_ID];
+
+    if (!artillery || !infantry) {
+      throw new Error("Expected test units are missing.");
+    }
+
+    expect(canUnitAttackTarget(state.board, artillery, infantry)).toBe(false);
+  });
+});
+
+describe("counterattack victory", () => {
+  it("lets a counterattack destroy the attacker and award victory", () => {
+    const state = createSkirmishGameState();
+    const duelState = {
+      ...state,
+      units: {
+        [BLUE_INFANTRY_ID]: {
+          ...state.units[BLUE_INFANTRY_ID],
+          position: { x: 1, y: 1 },
+          health: OVERKILL_TARGET_HEALTH,
+        },
+        [RED_INFANTRY_ID]: { ...state.units[RED_INFANTRY_ID], position: { x: 2, y: 1 } },
+      },
+    };
+
+    const result = applyAction(duelState, {
+      type: "attack",
+      unitId: BLUE_INFANTRY_ID,
+      targetUnitId: RED_INFANTRY_ID,
+    });
+
+    expect(result.state.units[BLUE_INFANTRY_ID]).toBeUndefined();
+    expect(result.state.winner).toBe("red");
+    expect(result.state.scores).toEqual({ blue: ATTACK_DAMAGE, red: OVERKILL_TARGET_HEALTH });
+    expect(result.events.map((event) => event.type)).toEqual([
+      "unit-attacked",
+      "unit-damaged",
+      "team-scored",
+      "unit-counterattacked",
+      "unit-damaged",
+      "team-scored",
+      "unit-destroyed",
+      "victory-achieved",
+    ]);
   });
 });
 

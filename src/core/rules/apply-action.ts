@@ -4,6 +4,7 @@ import type { GameEvent } from "../model/game-events";
 import type { GameState, SideId, UnitState } from "../model/game-state";
 import { findPath } from "../pathfinding/find-path";
 import { addTeamScore, CAPTURE_SCORE, calculateAttackScore } from "../scoring/team-scores";
+import { canUnitAttackTarget } from "./attack-range";
 import { validateAction } from "./validate-action";
 
 export interface ApplyActionResult {
@@ -79,18 +80,60 @@ function applyAttack(state: GameState, unitId: string, targetUnitId: string): Ap
   ];
   const attackedState = withScore(withUnit(state, committedAttacker), attacker.side, score);
 
+  if (remainingHealth <= NO_MOVEMENT_COST) {
+    const destroyedState = withoutUnit(attackedState, targetUnitId);
+    events.push({ type: "unit-destroyed", unitId: targetUnitId });
+
+    return completeVictoryIfNeeded(destroyedState, attacker.side, events);
+  }
+
+  const defendingUnit = { ...target, health: remainingHealth };
+  const stateAfterAttack = withUnit(attackedState, defendingUnit);
+
+  if (!canUnitAttackTarget(state.board, defendingUnit, attacker)) {
+    return { accepted: true, state: stateAfterAttack, events };
+  }
+
+  return applyCounterattack(stateAfterAttack, defendingUnit, committedAttacker, events);
+}
+
+function applyCounterattack(
+  state: GameState,
+  counterattacker: UnitState,
+  target: UnitState,
+  events: GameEvent[],
+): ApplyActionResult {
+  const damage = calculateDamage(state, counterattacker, target);
+  const score = calculateAttackScore(target.health, damage);
+  const remainingHealth = target.health - damage;
+  events.push(
+    {
+      type: "unit-counterattacked",
+      counterattackerUnitId: counterattacker.id,
+      targetUnitId: target.id,
+    },
+    {
+      type: "unit-damaged",
+      unitId: target.id,
+      damage,
+      remainingHealth: Math.max(remainingHealth, NO_MOVEMENT_COST),
+    },
+    { type: "team-scored", side: counterattacker.side, points: score, reason: "attack" },
+  );
+  const counterattackedState = withScore(state, counterattacker.side, score);
+
   if (remainingHealth > NO_MOVEMENT_COST) {
     return {
       accepted: true,
-      state: withUnit(attackedState, { ...target, health: remainingHealth }),
+      state: withUnit(counterattackedState, { ...target, health: remainingHealth }),
       events,
     };
   }
 
-  const destroyedState = withoutUnit(attackedState, targetUnitId);
-  events.push({ type: "unit-destroyed", unitId: targetUnitId });
+  const destroyedState = withoutUnit(counterattackedState, target.id);
+  events.push({ type: "unit-destroyed", unitId: target.id });
 
-  return completeVictoryIfNeeded(destroyedState, attacker.side, events);
+  return completeVictoryIfNeeded(destroyedState, counterattacker.side, events);
 }
 
 function applyCapture(state: GameState, unitId: string, controlPointId: string): ApplyActionResult {

@@ -15,6 +15,12 @@ export interface UnitAttackedEvent {
   readonly targetUnitId: string;
 }
 
+export interface UnitCounterattackedEvent {
+  readonly type: "unit-counterattacked";
+  readonly counterattackerUnitId: string;
+  readonly targetUnitId: string;
+}
+
 export interface UnitDamagedEvent {
   readonly type: "unit-damaged";
   readonly unitId: string;
@@ -59,6 +65,7 @@ export interface VictoryAchievedEvent {
 export type GameEvent =
   | UnitMovedEvent
   | UnitAttackedEvent
+  | UnitCounterattackedEvent
   | UnitDamagedEvent
   | UnitDestroyedEvent
   | ControlPointCapturedEvent
