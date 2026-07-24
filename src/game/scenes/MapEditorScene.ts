@@ -32,6 +32,7 @@ import {
 import { Button } from "../ui/components/Button";
 import { MapRenameDialog } from "../ui/components/MapRenameDialog";
 import { Panel } from "../ui/components/Panel";
+import { PauseMenu } from "../ui/components/PauseMenu";
 import { uiTheme } from "../ui/theme/ui-theme";
 import { calculateCameraCenterLimits } from "./camera-presentation";
 import { calculateEditorPanelScroll } from "./editor-panel-scroll";
@@ -143,6 +144,8 @@ export class MapEditorScene extends Phaser.Scene {
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
   private cameraDrag: CameraDrag | null = null;
   private renameDialog: MapRenameDialog | null = null;
+  private pauseMenu!: PauseMenu;
+  private escapeKey?: Phaser.Input.Keyboard.Key;
 
   public constructor() {
     super("map-editor");
@@ -161,11 +164,13 @@ export class MapEditorScene extends Phaser.Scene {
     this.configureCameras();
     this.createWorld();
     this.createHud();
+    this.createPauseMenu();
     this.bindInput();
     this.render();
   }
 
   public update(_time: number, delta: number): void {
+    if (this.pauseMenu.isOpen) return;
     if (this.renameDialog) {
       this.stopCameraMotion();
       return;
@@ -213,6 +218,7 @@ export class MapEditorScene extends Phaser.Scene {
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
     this.hudContainer.setPosition(x, y).setScale(scale);
     this.updateEditorContentMask();
+    this.updatePauseMenuPresentation();
   }
 
   private createWorld(): void {
@@ -314,6 +320,7 @@ export class MapEditorScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+      if (this.pauseMenu.isOpen) return;
       if (this.renameDialog) return;
       if (pointer.middleButtonDown() && this.isMapPointer(pointer)) {
         this.startCameraDrag(pointer);
@@ -327,15 +334,56 @@ export class MapEditorScene extends Phaser.Scene {
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
       (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) => {
+        if (this.pauseMenu.isOpen) return;
         if (!this.scrollEditorPanel(pointer, y)) this.zoom(pointer, y);
       },
     );
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+      if (this.pauseMenu.isOpen) return;
       this.updateCameraDrag(pointer);
     });
     this.input.on(Phaser.Input.Events.POINTER_UP, () => {
+      if (this.pauseMenu.isOpen) return;
       this.cameraDrag = null;
     });
+    this.bindPauseKey();
+  }
+
+  private createPauseMenu(): void {
+    this.pauseMenu = new PauseMenu(this, {
+      onResume: () => this.pauseMenu.close(),
+      onExit: () =>
+        this.scene.start(MAIN_MENU_SCENE_KEY, { matchConfiguration: this.matchConfiguration }),
+    });
+    this.cameras.main.ignore([this.pauseMenu.overlay, this.pauseMenu.container]);
+    this.updatePauseMenuPresentation();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownPauseMenu, this);
+  }
+
+  private updatePauseMenuPresentation(): void {
+    if (!this.pauseMenu) return;
+    this.pauseMenu.container
+      .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
+      .setScale(this.presentationViewport.scale);
+    this.pauseMenu.setOverlaySize(this.scale.width, this.scale.height);
+  }
+
+  private bindPauseKey(): void {
+    this.escapeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.escapeKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
+  }
+
+  private handleEscapeKey(): void {
+    if (this.renameDialog) return;
+    if (this.pauseMenu.isOpen) this.pauseMenu.close();
+    else {
+      this.stopCameraMotion();
+      this.pauseMenu.open();
+    }
+  }
+
+  private shutdownPauseMenu(): void {
+    this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
   }
 
   private startCameraDrag(pointer: Phaser.Input.Pointer): void {

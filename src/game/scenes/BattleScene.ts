@@ -19,6 +19,7 @@ import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
+import type { AiActionDecision } from "../match/choose-ai-action";
 import { decideAiAction } from "../match/choose-ai-action";
 import {
   createAgentForParticipant,
@@ -30,9 +31,11 @@ import { createRecordedMatch } from "../replays/recorded-match";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
+import { PauseMenu } from "../ui/components/PauseMenu";
 import { ProgressBar } from "../ui/components/ProgressBar";
 import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
+import { BattleAiPauseController } from "./battle-ai-pause-controller";
 import { calculateWorldViewportWidth } from "./battle-presentation";
 import {
   findUnitAt,
@@ -41,7 +44,7 @@ import {
   isInsideRectangle,
 } from "./battle-view-helpers";
 import { calculateCameraCenterLimits } from "./camera-presentation";
-import { RESULT_SCENE_KEY } from "./scene-keys";
+import { MAIN_MENU_SCENE_KEY, RESULT_SCENE_KEY } from "./scene-keys";
 
 const TILE_SIZE = 512;
 const BOARD_ORIGIN_X = 0;
@@ -143,6 +146,10 @@ export class BattleScene extends Phaser.Scene {
   private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private attackHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private mapRenderer!: BattleMapRenderer;
+  private pauseMenu!: PauseMenu;
+  private escapeKey?: Phaser.Input.Keyboard.Key;
+  private aiDelayEvent?: Phaser.Time.TimerEvent;
+  private aiPauseController = new BattleAiPauseController<AiActionDecision>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
 
@@ -166,6 +173,7 @@ export class BattleScene extends Phaser.Scene {
     this.configureCameras();
     this.createWorld();
     this.createHud();
+    this.createPauseMenu();
     this.bindInput();
     this.renderGameState(null, this.gameState);
     this.startAiTurnIfNeeded();
@@ -173,6 +181,9 @@ export class BattleScene extends Phaser.Scene {
 
   private resetRenderingState(): void {
     this.mapRenderer?.reset();
+    this.aiDelayEvent?.remove(false);
+    this.aiDelayEvent = undefined;
+    this.aiPauseController = new BattleAiPauseController<AiActionDecision>();
     this.selectionView = null;
     this.diagnosticUnitLayer = null;
     this.movementHighlightLayer = null;
@@ -187,6 +198,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
+    if (this.pauseMenu.isOpen) return;
     this.updateKeyboardCamera(delta);
     this.updateInertialZoom(delta);
   }
@@ -218,6 +230,7 @@ export class BattleScene extends Phaser.Scene {
     this.presentationViewport = calculatePresentationViewport(this.scale.width, this.scale.height);
     this.configureWorldCameraViewport();
     this.configureUiCameraViewport();
+    this.updatePauseMenuPresentation();
   }
 
   private configureWorldCameraViewport(): void {
@@ -398,6 +411,7 @@ export class BattleScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+      if (this.pauseMenu.isOpen) return;
       if (this.handleHudClick(pointer)) {
         return;
       }
@@ -407,9 +421,61 @@ export class BattleScene extends Phaser.Scene {
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
       (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) => {
+        if (this.pauseMenu.isOpen) return;
         this.zoomWorldCamera(pointer, y);
       },
     );
+    this.bindPauseKey();
+  }
+
+  private createPauseMenu(): void {
+    this.pauseMenu = new PauseMenu(this, {
+      onResume: () => this.resumeFromPause(),
+      onExit: () => this.exitToMainMenu(),
+    });
+    this.cameras.main.ignore([this.pauseMenu.overlay, this.pauseMenu.container]);
+    this.updatePauseMenuPresentation();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownPauseMenu, this);
+  }
+  private updatePauseMenuPresentation(): void {
+    if (!this.pauseMenu) return;
+    this.pauseMenu.container
+      .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
+      .setScale(this.presentationViewport.scale);
+    this.pauseMenu.setOverlaySize(this.scale.width, this.scale.height);
+  }
+  private bindPauseKey(): void {
+    this.escapeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.escapeKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
+  }
+  private handleEscapeKey(): void {
+    if (this.pauseMenu.isOpen) this.resumeFromPause();
+    else this.openPauseMenu();
+  }
+  private openPauseMenu(): void {
+    const { cancelDelay } = this.aiPauseController.pause();
+    if (cancelDelay) this.aiDelayEvent?.remove(false);
+    if (cancelDelay) this.aiDelayEvent = undefined;
+    this.stopCameraMotion();
+    this.pauseMenu.open();
+  }
+  private resumeFromPause(): void {
+    this.pauseMenu.close();
+    const resume = this.aiPauseController.resume();
+    if (resume.kind === "apply") this.applyAiDecision(resume.decision);
+    if (resume.kind === "start-delay") this.runAiAction();
+  }
+  private exitToMainMenu(): void {
+    this.aiPauseController.exit();
+    this.aiDelayEvent?.remove(false);
+    this.aiDelayEvent = undefined;
+    this.scene.start(MAIN_MENU_SCENE_KEY, { matchConfiguration: this.matchConfiguration });
+  }
+  private shutdownPauseMenu(): void {
+    this.aiPauseController.exit();
+    this.aiDelayEvent?.remove(false);
+    this.aiDelayEvent = undefined;
+    this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
   }
 
   private zoomWorldCamera(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
@@ -629,7 +695,12 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private runAiAction(): void {
-    this.time.delayedCall(AI_ACTION_DELAY, () => void this.executeAiAction());
+    this.aiPauseController.beginDelay();
+    this.aiDelayEvent = this.time.delayedCall(AI_ACTION_DELAY, () => {
+      this.aiDelayEvent = undefined;
+      this.aiPauseController.delayStarted();
+      void this.executeAiAction();
+    });
   }
 
   private async executeAiAction(): Promise<void> {
@@ -643,6 +714,13 @@ export class BattleScene extends Phaser.Scene {
     const decision = agent
       ? await decideAiAction(this.gameState, context, agent, fallbackAgent)
       : { action: await fallbackAgent.chooseAction(this.gameState, context), usedFallback: true };
+    const receipt = this.aiPauseController.receiveDecision(decision);
+    if (receipt.kind !== "apply") return;
+    this.applyAiDecision(decision);
+  }
+
+  private applyAiDecision(decision: AiActionDecision): void {
+    const participant = this.matchConfiguration[this.gameState.activeSide];
     const result = applyAction(this.gameState, decision.action);
 
     if (!result.accepted) {

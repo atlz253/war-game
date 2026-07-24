@@ -20,6 +20,7 @@ import {
 } from "../replays/replay-playback";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
+import { PauseMenu } from "../ui/components/PauseMenu";
 import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
 import { calculateWorldViewportWidth } from "./battle-presentation";
@@ -96,6 +97,9 @@ export class ReplayScene extends Phaser.Scene {
   private playButton!: Button;
   private speedButton!: Button;
   private eventLog!: ScrollableList;
+  private pauseMenu!: PauseMenu;
+  private escapeKey?: Phaser.Input.Keyboard.Key;
+  private resumePlaybackAfterPause = false;
 
   public constructor() {
     super("replay");
@@ -118,6 +122,7 @@ export class ReplayScene extends Phaser.Scene {
     this.createWorld(this.timeline.frames[0]?.state);
     this.createHud(replay.name);
     this.configureCameras();
+    this.createPauseMenu();
     this.bindInput();
     this.showFrame(0);
   }
@@ -137,6 +142,7 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
+    if (this.pauseMenu.isOpen) return;
     this.updateKeyboardCamera(delta);
     this.updateInertialZoom(delta);
     if (!this.isPlaying) return;
@@ -253,17 +259,76 @@ export class ReplayScene extends Phaser.Scene {
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
       (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, deltaY: number) =>
-        this.zoom(pointer, deltaY),
+        this.handleWheel(pointer, deltaY),
     );
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) =>
-      this.startDrag(pointer),
+      this.handlePointerDown(pointer),
     );
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) =>
-      this.updateDrag(pointer),
+      this.handlePointerMove(pointer),
     );
     this.input.on(Phaser.Input.Events.POINTER_UP, () => {
+      if (this.pauseMenu.isOpen) return;
       this.dragState = null;
     });
+    this.bindPauseKey();
+  }
+
+  private createPauseMenu(): void {
+    this.pauseMenu = new PauseMenu(this, {
+      onResume: () => this.resumeFromPause(),
+      onExit: () => this.scene.start(MAIN_MENU_SCENE_KEY),
+    });
+    this.cameras.main.ignore([this.pauseMenu.overlay, this.pauseMenu.container]);
+    this.updatePauseMenuPresentation();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownPauseMenu, this);
+  }
+
+  private updatePauseMenuPresentation(): void {
+    if (!this.pauseMenu) return;
+    this.pauseMenu.container
+      .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
+      .setScale(this.presentationViewport.scale);
+    this.pauseMenu.setOverlaySize(this.scale.width, this.scale.height);
+  }
+
+  private bindPauseKey(): void {
+    this.escapeKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.escapeKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
+  }
+
+  private handleEscapeKey(): void {
+    if (this.pauseMenu.isOpen) this.resumeFromPause();
+    else this.openPauseMenu();
+  }
+
+  private openPauseMenu(): void {
+    this.resumePlaybackAfterPause = this.isPlaying;
+    this.pausePlayback();
+    this.stopCameraMotion();
+    this.pauseMenu.open();
+  }
+
+  private resumeFromPause(): void {
+    this.pauseMenu.close();
+    if (this.resumePlaybackAfterPause) this.togglePlayback();
+    this.resumePlaybackAfterPause = false;
+  }
+
+  private shutdownPauseMenu(): void {
+    this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
+  }
+
+  private handleWheel(pointer: Phaser.Input.Pointer, deltaY: number): void {
+    if (!this.pauseMenu.isOpen) this.zoom(pointer, deltaY);
+  }
+
+  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (!this.pauseMenu.isOpen) this.startDrag(pointer);
+  }
+
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.pauseMenu.isOpen) this.updateDrag(pointer);
   }
 
   private zoom(pointer: Phaser.Input.Pointer, deltaY: number): void {
@@ -414,6 +479,7 @@ export class ReplayScene extends Phaser.Scene {
     const hudX = calculateRightAlignedContentX(this.presentationViewport, HUD_X + HUD_WIDTH);
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
     this.hudContainer.setPosition(hudX, contentY).setScale(scale);
+    this.updatePauseMenuPresentation();
   }
 
   private configureWorldCamera(): void {
