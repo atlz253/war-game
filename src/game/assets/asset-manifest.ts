@@ -33,6 +33,7 @@ export const assetManifest: AssetManifest = {
     "red-artillery": createUnitDefinition("red-artillery", "/assets/units/red/artillery.png"),
   },
   terrain: {
+    background: createTerrainDefinition("terrain-background", "/assets/terrain/background.png"),
     plain: createTerrainDefinition("terrain-plain", "/assets/terrain/plain.png"),
     forest: createTerrainDefinition("terrain-forest", "/assets/terrain/forest.png"),
     road: createTerrainDefinition("terrain-road", "/assets/terrain/road.png"),

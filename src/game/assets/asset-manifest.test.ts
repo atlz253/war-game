@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ASSET_FRAME_SIZE, assetManifest } from "./asset-manifest";
 
-const EXPECTED_TERRAIN_COUNT = 8;
+const EXPECTED_TERRAIN_COUNT = 9;
 const EXPECTED_UNIT_COUNT = 6;
 
 describe("assetManifest", () => {
@@ -22,5 +22,12 @@ describe("assetManifest", () => {
       expect(definition.frameHeight).toBe(ASSET_FRAME_SIZE);
       expect(definition.frameCount).toBe(1);
     }
+  });
+
+  it("registers the repeating world background texture", () => {
+    expect(assetManifest.terrain.background).toMatchObject({
+      textureKey: "terrain-background",
+      path: "/assets/terrain/background.png",
+    });
   });
 });

@@ -14,6 +14,7 @@ import {
   calculateUnitHealthLabelY,
   formatUnitHealthLabel,
 } from "./unit-health-label";
+import { WorldBackground } from "./world-background";
 
 const UNIT_HEALTH_LABEL_GAP = 24;
 const UNIT_HEALTH_LABEL_PADDING_X = 16;
@@ -43,6 +44,7 @@ export class BattleMapRenderer {
   private readonly unitViews = new Map<string, Phaser.GameObjects.Image>();
   private readonly unitHealthViews = new Map<string, UnitHealthView>();
   private readonly controlPointViews = new Map<string, Phaser.GameObjects.Image>();
+  private worldBackground?: WorldBackground;
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -57,6 +59,12 @@ export class BattleMapRenderer {
   public createTerrain(state: GameState): void {
     const boardWidth = state.board.width * this.options.tileSize;
     const boardHeight = state.board.height * this.options.tileSize;
+    this.worldBackground = new WorldBackground(this.scene, this.worldContainer, {
+      boardLeft: this.options.boardOriginX,
+      boardTop: this.options.boardOriginY,
+      boardWidth,
+      boardHeight,
+    });
     const tile = this.scene.add.tileSprite(
       this.options.boardOriginX + boardWidth / DOUBLE_SIZE_MULTIPLIER,
       this.options.boardOriginY + boardHeight / DOUBLE_SIZE_MULTIPLIER,
@@ -81,6 +89,7 @@ export class BattleMapRenderer {
   }
 
   public updateHealthLabelScales(cameraZoom: number): void {
+    this.worldBackground?.refresh();
     const scale = calculateUnitHealthLabelScale(cameraZoom);
     for (const healthView of this.unitHealthViews.values()) healthView.container.setScale(scale);
   }
@@ -92,6 +101,7 @@ export class BattleMapRenderer {
   }
 
   public reset(): void {
+    this.worldBackground = undefined;
     this.unitViews.clear();
     this.unitHealthViews.clear();
     this.controlPointViews.clear();

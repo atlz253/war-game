@@ -8,6 +8,7 @@ import {
 } from "../../core/maps/map-definition";
 import type { Position, SideId, TerrainType, UnitType } from "../../core/model/game-state";
 import { assetManifest } from "../assets/asset-manifest";
+import { WorldBackground } from "../board/world-background";
 import { calculateEditorWorldViewport } from "../config/editor-presentation";
 import {
   calculatePresentationViewport,
@@ -126,6 +127,7 @@ export class MapEditorScene extends Phaser.Scene {
   private map!: MapDefinition;
   private matchConfiguration = createDefaultMatchConfiguration();
   private worldContainer!: Phaser.GameObjects.Container;
+  private worldBackground!: WorldBackground;
   private hudContainer!: Phaser.GameObjects.Container;
   private editorContentContainer!: Phaser.GameObjects.Container;
   private editorContentMask?: Phaser.GameObjects.Graphics;
@@ -215,6 +217,7 @@ export class MapEditorScene extends Phaser.Scene {
       .setZoom(this.mapZoom * scale);
     this.resetCameraCenter();
     this.applyCameraCenter();
+    this.worldBackground?.refresh();
     this.stopCameraMotion();
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
     this.hudContainer.setPosition(x, y).setScale(scale);
@@ -223,14 +226,12 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   private createWorld(): void {
-    const grass = this.add.tileSprite(
-      (this.map.width * TILE_SIZE) / HALF,
-      (this.map.height * TILE_SIZE) / HALF,
-      this.map.width * TILE_SIZE,
-      this.map.height * TILE_SIZE,
-      assetManifest.terrain.plain.textureKey,
-    );
-    this.worldContainer.add(grass);
+    this.worldBackground = new WorldBackground(this, this.worldContainer, {
+      boardLeft: 0,
+      boardTop: 0,
+      boardWidth: this.map.width * TILE_SIZE,
+      boardHeight: this.map.height * TILE_SIZE,
+    });
   }
 
   private createHud(): void {
@@ -460,6 +461,7 @@ export class MapEditorScene extends Phaser.Scene {
     camera.setZoom(nextZoom);
     this.resetCameraCenter();
     this.applyCameraCenter();
+    this.worldBackground.refresh();
     if (this.mapZoom === this.targetMapZoom) this.isZooming = false;
   }
 
