@@ -6,3 +6,5 @@ export const MAP_EDITOR_SCENE_KEY = "map-editor";
 export const LM_STUDIO_SETTINGS_SCENE_KEY = "lm-studio-settings";
 export const REPLAY_LIBRARY_SCENE_KEY = "replay-library";
 export const REPLAY_SCENE_KEY = "replay";
+export const MULTIPLAYER_HOST_SCENE_KEY = "multiplayer-host";
+export const MULTIPLAYER_JOIN_SCENE_KEY = "multiplayer-join";

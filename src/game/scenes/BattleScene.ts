@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: Battle rendering and network action coordination share one scene state owner.
 import Phaser from "phaser";
 
 import { HeuristicAgent } from "../../ai/agents/HeuristicAgent";
@@ -27,6 +28,7 @@ import {
   isHumanTurn,
   type MatchConfiguration,
 } from "../match/match-configuration";
+import type { MultiplayerSession } from "../multiplayer/multiplayer-session";
 import { createRecordedMatch } from "../replays/recorded-match";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
 import { Button } from "../ui/components/Button";
@@ -86,6 +88,7 @@ const CAPTURE_BUTTON_X = HUD_X + HUD_WIDTH / 2;
 const CAPTURE_BUTTON_Y = SELECTED_PANEL_Y + CAPTURE_BUTTON_OFFSET_Y;
 const EVENT_LOG_ENTRIES = 10;
 const AI_ACTION_DELAY = 500;
+const MULTIPLAYER_RECONNECT_TIMEOUT_MS = 60_000;
 const CAMERA_SCROLL_SPEED = 2400;
 const CAMERA_DECELERATION = 8;
 const ZOOM_RESPONSE_PER_SECOND = 8;
@@ -114,6 +117,8 @@ interface ZoomAnchor {
 export interface BattleSceneData {
   readonly matchConfiguration?: MatchConfiguration;
   readonly mapDefinition?: MapDefinition;
+  readonly initialState?: GameState;
+  readonly multiplayerSession?: MultiplayerSession;
 }
 
 export class BattleScene extends Phaser.Scene {
@@ -125,6 +130,8 @@ export class BattleScene extends Phaser.Scene {
   private mapDefinition: MapDefinition | null = null;
   private replayMapDefinition!: MapDefinition;
   private matchConfiguration = createDefaultMatchConfiguration();
+  private multiplayerSession: MultiplayerSession | null = null;
+  private actionSequence = 0;
   private mapZoom = INITIAL_MAP_ZOOM;
   private targetMapZoom = INITIAL_MAP_ZOOM;
   private zoomAnchor: ZoomAnchor | null = null;
@@ -161,12 +168,16 @@ export class BattleScene extends Phaser.Scene {
   public create(data: BattleSceneData = {}): void {
     this.resetRenderingState();
     this.mapDefinition = data.mapDefinition ?? null;
-    this.gameState = this.mapDefinition
-      ? createGameStateFromMap(this.mapDefinition)
-      : createSkirmishGameState();
+    this.gameState =
+      data.initialState ??
+      (this.mapDefinition ? createGameStateFromMap(this.mapDefinition) : createSkirmishGameState());
     this.replayMapDefinition =
       this.mapDefinition ?? createMapDefinitionFromState(this.gameState, "Skirmish 12×8");
-    this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
+    this.multiplayerSession = data.multiplayerSession ?? null;
+    this.matchConfiguration = this.multiplayerSession
+      ? { ...createDefaultMatchConfiguration(), red: "human" }
+      : (data.matchConfiguration ?? createDefaultMatchConfiguration());
+    this.bindMultiplayerSession();
     this.mapZoom = INITIAL_MAP_ZOOM;
     this.targetMapZoom = INITIAL_MAP_ZOOM;
     this.worldContainer = this.add.container();
@@ -194,6 +205,7 @@ export class BattleScene extends Phaser.Scene {
     this.inputLocked = false;
     this.aiTurnActions = [];
     this.replayActions = [];
+    this.actionSequence = 0;
     this.cameraVelocity = { x: 0, y: 0 };
     this.cameraCenter = { x: 0, y: 0 };
     this.zoomAnchor = null;
@@ -676,6 +688,15 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private submitAction(action: GameAction): void {
+    if (this.multiplayerSession?.role === "client") {
+      this.multiplayerSession.requestAction(action);
+      this.eventLog.push("ORDER SENT TO HOST.");
+      return;
+    }
+    this.applyAcceptedAction(action, true);
+  }
+
+  private applyAcceptedAction(action: GameAction, publishToPeer: boolean): void {
     const result = applyAction(this.gameState, action);
 
     if (!result.accepted)
@@ -685,6 +706,10 @@ export class BattleScene extends Phaser.Scene {
     this.gameState = result.state;
     this.recordTurnAction(action);
     this.recordReplayAction(action);
+    if (publishToPeer && this.multiplayerSession?.role === "host") {
+      this.actionSequence += 1;
+      this.multiplayerSession.publishAcceptedAction(this.actionSequence, action);
+    }
     this.clearSelectionAfterTurnEnd(action);
     this.addEventMessages(result.events);
     this.renderGameState(previousState, this.gameState);
@@ -743,6 +768,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private startAiTurnIfNeeded(): void {
+    if (this.multiplayerSession) {
+      this.inputLocked = this.gameState.activeSide !== this.multiplayerSession.localSide;
+      this.renderGameState(this.gameState, this.gameState);
+      return;
+    }
     if (this.gameState.winner || this.isActiveSideHuman()) {
       this.inputLocked = false;
       return;
@@ -772,7 +802,45 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private isActiveSideHuman(): boolean {
+    if (this.multiplayerSession)
+      return this.gameState.activeSide === this.multiplayerSession.localSide;
     return isHumanTurn(this.matchConfiguration, this.gameState.activeSide);
+  }
+
+  private bindMultiplayerSession(): void {
+    if (!this.multiplayerSession) return;
+    this.multiplayerSession.setEvents({
+      onActionRequest: (action) => this.applyAcceptedAction(action, true),
+      onAcceptedAction: (sequence, action) => this.applyRemoteAcceptedAction(sequence, action),
+      onSnapshot: (sequence, state) => this.applyRemoteSnapshot(sequence, state),
+      onResyncRequest: () =>
+        this.multiplayerSession?.publishSnapshot(this.actionSequence, this.gameState),
+      onStatus: (status) => this.eventLog?.push(status),
+      onDisconnect: () => {
+        this.inputLocked = true;
+        this.eventLog?.push("CONNECTION LOST — MATCH PAUSED.");
+        this.time.delayedCall(MULTIPLAYER_RECONNECT_TIMEOUT_MS, () => {
+          if (!this.multiplayerSession?.isConnected) this.exitToMainMenu();
+        });
+      },
+    });
+  }
+
+  private applyRemoteAcceptedAction(sequence: number, action: GameAction): void {
+    if (sequence !== this.actionSequence + 1) {
+      this.multiplayerSession?.requestResync();
+      this.eventLog.push("OUT OF SYNC — REQUESTING SNAPSHOT.");
+      return;
+    }
+    this.actionSequence = sequence;
+    this.applyAcceptedAction(action, false);
+  }
+
+  private applyRemoteSnapshot(sequence: number, state: GameState): void {
+    const previousState = this.gameState;
+    this.actionSequence = sequence;
+    this.gameState = state;
+    this.renderGameState(previousState, state);
   }
 
   private checkForResult(): boolean {

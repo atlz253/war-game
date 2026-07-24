@@ -17,6 +17,8 @@ import {
   BATTLE_SCENE_KEY,
   LM_STUDIO_SETTINGS_SCENE_KEY,
   MAP_EDITOR_SCENE_KEY,
+  MULTIPLAYER_HOST_SCENE_KEY,
+  MULTIPLAYER_JOIN_SCENE_KEY,
   REPLAY_LIBRARY_SCENE_KEY,
 } from "./scene-keys";
 
@@ -45,6 +47,8 @@ const EDITOR_BUTTON_Y = 1640;
 const REPLAY_LIBRARY_BUTTON_X = 2240;
 const MAP_EDITOR_BUTTON_X = 1600;
 const MENU_SECONDARY_BUTTON_WIDTH = 520;
+const MULTIPLAYER_HOST_BUTTON_X = 1050;
+const MULTIPLAYER_JOIN_BUTTON_X = 2790;
 const MENU_START_BUTTON_Y = 1820;
 const MENU_START_BUTTON_WIDTH = 1120;
 const MENU_START_BUTTON_HEIGHT = 176;
@@ -174,6 +178,22 @@ export class MainMenuScene extends Phaser.Scene {
       label: "LM STUDIO SETTINGS",
       onClick: () => this.openLmStudioSettings(),
     });
+    const hostMultiplayerButton = new Button(this, {
+      x: MULTIPLAYER_HOST_BUTTON_X,
+      y: LM_STUDIO_SETTINGS_Y,
+      width: MENU_SECONDARY_BUTTON_WIDTH,
+      height: MAP_BUTTON_HEIGHT,
+      label: "HOST P2P",
+      onClick: () => this.scene.start(MULTIPLAYER_HOST_SCENE_KEY),
+    });
+    const joinMultiplayerButton = new Button(this, {
+      x: MULTIPLAYER_JOIN_BUTTON_X,
+      y: LM_STUDIO_SETTINGS_Y,
+      width: MENU_SECONDARY_BUTTON_WIDTH,
+      height: MAP_BUTTON_HEIGHT,
+      label: "JOIN P2P",
+      onClick: () => this.scene.start(MULTIPLAYER_JOIN_SCENE_KEY),
+    });
 
     return [
       this.selectedMapText,
@@ -182,6 +202,8 @@ export class MainMenuScene extends Phaser.Scene {
       editorButton.container,
       replayLibraryButton.container,
       lmStudioSettingsButton.container,
+      hostMultiplayerButton.container,
+      joinMultiplayerButton.container,
     ];
   }
 

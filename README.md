@@ -54,6 +54,18 @@ configuration in `.env`.
 
 Every completed match is saved locally as a deterministic replay. Open `REPLAYS` from the main Canvas menu to watch, export, import, or delete records. A replay stores its initial map snapshot, participant configuration, and accepted actions; playback never contacts LM Studio and regenerates domain events through the game rules.
 
+## P2P multiplayer
+
+Choose `HOST P2P` to create a room code, then share it with the Red player, who chooses `JOIN P2P` and enters the code. The host selects the map and starts the match. WebRTC carries game traffic directly between browsers; the host validates every action and sends accepted actions to the client.
+
+Run the signaling relay locally with Docker:
+
+```sh
+docker compose up --build signaling
+```
+
+The relay listens on port `8080` and provides `GET /health`. Set `VITE_SIGNALING_URL` to its public `wss://` URL for deployed HTTPS builds. The relay only exchanges WebRTC offers, answers, and ICE candidates; it never receives game state or orders. The default public STUN server supports direct connections. For restrictive NATs, set `VITE_TURN_URL`, `VITE_TURN_USERNAME`, and `VITE_TURN_CREDENTIAL` in untracked `.env.local`; never commit TURN credentials. A public signaling service needs HTTPS/WSS in production. Normal WebRTC connections do not require port forwarding, but a TURN relay may be needed when direct traversal fails.
+
 ## LM Studio opponent
 
 Start the local server in LM Studio, then run the game with `npm run dev` and open `LM STUDIO SETTINGS`

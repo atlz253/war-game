@@ -1,0 +1,10 @@
+services:
+  signaling:
+    build:
+      context: ./services/signaling
+    environment:
+      PORT: 8080
+      ROOM_TTL_MS: 600000
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
