@@ -6,8 +6,41 @@ import { getAttackHighlightPositions } from "./attack-highlights";
 const BLUE_INFANTRY_ID = "blue-infantry-1";
 const BLUE_ARTILLERY_ID = "blue-artillery-1";
 const RED_INFANTRY_ID = "red-infantry-1";
+const BLUE_TANK_ID = "blue-tank-1";
+const CONTROL_POINT_ID = "control-point-1";
+const CONTROL_POINT_POSITION = { x: 5, y: 3 };
+const ADJACENT_CONTROL_POINT_ATTACKER_POSITION = { x: 4, y: 3 };
 
 describe("getAttackHighlightPositions", () => {
+  it("highlights an enemy on an already captured control point for infantry and tanks", () => {
+    const state = createSkirmishGameState();
+
+    for (const attackerId of [BLUE_INFANTRY_ID, BLUE_TANK_ID]) {
+      const controlPointState = {
+        ...state,
+        controlPoints: {
+          ...state.controlPoints,
+          [CONTROL_POINT_ID]: { ...state.controlPoints[CONTROL_POINT_ID], owner: "blue" as const },
+        },
+        units: {
+          ...state.units,
+          [attackerId]: {
+            ...state.units[attackerId],
+            position: ADJACENT_CONTROL_POINT_ATTACKER_POSITION,
+          },
+          [RED_INFANTRY_ID]: {
+            ...state.units[RED_INFANTRY_ID],
+            position: CONTROL_POINT_POSITION,
+          },
+        },
+      };
+
+      expect(getAttackHighlightPositions(controlPointState, attackerId, false)).toEqual([
+        CONTROL_POINT_POSITION,
+      ]);
+    }
+  });
+
   it("returns positions of legal enemy targets for the selected unit", () => {
     const state = withUnitPosition(createSkirmishGameState(), RED_INFANTRY_ID, { x: 2, y: 1 });
 

@@ -1,6 +1,8 @@
+import type { GameAction } from "../../core/actions/game-actions";
 import { getDefenceBonus } from "../../core/combat/calculate-damage";
 import type { GameEvent } from "../../core/model/game-events";
 import type { GameState, Position, SideId, UnitState } from "../../core/model/game-state";
+import { type ValidationFailureReason, validateAction } from "../../core/rules/validate-action";
 import { assetManifest } from "../assets/asset-manifest";
 
 export function findUnitAt(state: GameState, position: Position): UnitState | undefined {
@@ -64,6 +66,49 @@ export function formatEvent(event: GameEvent): string {
       return `Turn ${event.turn}: ${event.activeSide}.`;
     case "victory-achieved":
       return `${event.winner.toUpperCase()} wins.`;
+  }
+}
+
+export function formatRejectedOrder(reason: ValidationFailureReason): string {
+  return `Order rejected: ${formatValidationFailure(reason)}`;
+}
+
+export function formatActionRejection(state: GameState, action: GameAction): string {
+  const validation = validateAction(state, action);
+
+  return validation.isValid ? "Order rejected." : formatRejectedOrder(validation.reason);
+}
+
+function formatValidationFailure(reason: ValidationFailureReason): string {
+  switch (reason) {
+    case "match-finished":
+      return "the match is finished.";
+    case "unit-not-found":
+      return "the selected unit no longer exists.";
+    case "unit-not-active-side":
+      return "it is not that unit's turn.";
+    case "unit-main-action-already-taken":
+      return "that unit has already acted.";
+    case "unit-cannot-attack-after-moving":
+      return "artillery cannot fire after moving.";
+    case "unit-has-no-ammunition":
+      return "the unit has no ammunition.";
+    case "unit-has-no-movement-points":
+      return "the unit has no movement points.";
+    case "destination-unreachable":
+      return "the destination is unreachable.";
+    case "destination-out-of-range":
+      return "the target is out of range.";
+    case "target-not-found":
+      return "the target no longer exists.";
+    case "target-is-friendly":
+      return "the target is friendly.";
+    case "control-point-not-found":
+      return "the control point no longer exists.";
+    case "control-point-not-at-unit-position":
+      return "the unit is not on that control point.";
+    case "control-point-already-owned":
+      return "the control point is already owned by that side.";
   }
 }
 

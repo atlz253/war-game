@@ -39,6 +39,7 @@ import { BattleAiPauseController } from "./battle-ai-pause-controller";
 import { calculateWorldViewportWidth } from "./battle-presentation";
 import {
   findUnitAt,
+  formatActionRejection,
   formatEvent,
   formatSelectedUnit,
   isInsideRectangle,
@@ -679,10 +680,8 @@ export class BattleScene extends Phaser.Scene {
   private submitAction(action: GameAction): void {
     const result = applyAction(this.gameState, action);
 
-    if (!result.accepted) {
-      this.eventLog.push("Order rejected.");
-      return;
-    }
+    if (!result.accepted)
+      return void this.eventLog.push(formatActionRejection(this.gameState, action));
 
     const previousState = this.gameState;
     this.gameState = result.state;

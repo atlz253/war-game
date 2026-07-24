@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
-import { formatEvent, formatSelectedUnit } from "./battle-view-helpers";
+import {
+  formatActionRejection,
+  formatEvent,
+  formatRejectedOrder,
+  formatSelectedUnit,
+} from "./battle-view-helpers";
 
 const BLUE_TANK_ID = "blue-tank-1";
 const CONTROL_POINT_ID = "control-point-1";
@@ -42,5 +47,28 @@ describe("formatEvent", () => {
         remainingHealth: 7,
       }),
     ).toBe("red-infantry-1 restored 2 HP.");
+  });
+});
+
+describe("formatRejectedOrder", () => {
+  it("explains why an attack target cannot be selected", () => {
+    expect(formatRejectedOrder("destination-out-of-range")).toBe(
+      "Order rejected: the target is out of range.",
+    );
+    expect(formatRejectedOrder("unit-has-no-ammunition")).toBe(
+      "Order rejected: the unit has no ammunition.",
+    );
+  });
+
+  it("derives the reason from the rejected action", () => {
+    const state = createSkirmishGameState();
+
+    expect(
+      formatActionRejection(state, {
+        type: "attack",
+        unitId: "blue-infantry-1",
+        targetUnitId: "red-infantry-1",
+      }),
+    ).toBe("Order rejected: the target is out of range.");
   });
 });

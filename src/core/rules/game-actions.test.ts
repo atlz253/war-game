@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { GameAction } from "../actions/game-actions";
+import { getLegalActions } from "../actions/get-legal-actions";
 import type { GameState } from "../model/game-state";
 import { createSkirmishGameState } from "../scenarios/skirmish-12x8";
 import { applyAction } from "./apply-action";
@@ -15,6 +16,8 @@ const RED_TANK_ID = "red-tank-1";
 const BLUE_TANK_ID = "blue-tank-1";
 const BLUE_ARTILLERY_ID = "blue-artillery-1";
 const CONTROL_POINT_ID = "control-point-1";
+const CONTROL_POINT_POSITION = { x: 5, y: 3 };
+const ADJACENT_CONTROL_POINT_ATTACKER_POSITION = { x: 4, y: 3 };
 const BLUE_INFANTRY_MAX_MOVEMENT = 4;
 const TANK_MAX_MOVEMENT = 5;
 const MOVEMENT_COST = 3;
@@ -268,6 +271,44 @@ describe("control point movement", () => {
 });
 
 describe("main action rules", () => {
+  it("allows infantry and tanks to attack enemies on an already captured control point", () => {
+    const state = createSkirmishGameState();
+
+    for (const attackerId of [BLUE_INFANTRY_ID, BLUE_TANK_ID]) {
+      const controlPointState = {
+        ...state,
+        controlPoints: {
+          ...state.controlPoints,
+          [CONTROL_POINT_ID]: { ...state.controlPoints[CONTROL_POINT_ID], owner: "blue" as const },
+        },
+        units: {
+          ...state.units,
+          [attackerId]: {
+            ...state.units[attackerId],
+            position: ADJACENT_CONTROL_POINT_ATTACKER_POSITION,
+          },
+          [RED_INFANTRY_ID]: {
+            ...state.units[RED_INFANTRY_ID],
+            position: CONTROL_POINT_POSITION,
+          },
+        },
+      };
+      const action: GameAction = {
+        type: "attack",
+        unitId: attackerId,
+        targetUnitId: RED_INFANTRY_ID,
+      };
+      const result = applyAction(controlPointState, action);
+
+      expect(validateAction(controlPointState, action)).toEqual({ isValid: true });
+      expect(getLegalActions(controlPointState)).toContainEqual(action);
+      expect(result.accepted).toBe(true);
+      expect(result.state.units[RED_INFANTRY_ID]?.health).toBeLessThan(
+        controlPointState.units[RED_INFANTRY_ID].health,
+      );
+    }
+  });
+
   it("rejects an adjacent diagonal attack", () => {
     const state = createSkirmishGameState();
     const duelState = {
