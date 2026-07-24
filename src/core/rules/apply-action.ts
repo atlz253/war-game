@@ -4,6 +4,7 @@ import type { GameEvent } from "../model/game-events";
 import type { GameState, SideId, UnitState } from "../model/game-state";
 import { findPath, positionsEqual } from "../pathfinding/find-path";
 import { addTeamScore, CAPTURE_SCORE, calculateAttackScore } from "../scoring/team-scores";
+import { getPathMovementCost } from "../terrain/terrain-rules";
 import { canUnitAttackTarget } from "./attack-range";
 import { validateAction } from "./validate-action";
 
@@ -46,7 +47,7 @@ function applyMove(
 ): ApplyActionResult {
   const unit = requireUnit(state, unitId);
   const path = findPath(state.board, state.units, unit.id, unit.position, destination);
-  const cost = path?.length ?? NO_MOVEMENT_COST;
+  const cost = path ? getPathMovementCost(state.board, path) : NO_MOVEMENT_COST;
   const movedUnit = {
     ...unit,
     position: destination,

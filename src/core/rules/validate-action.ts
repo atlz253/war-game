@@ -1,6 +1,7 @@
 import type { GameAction } from "../actions/game-actions";
 import type { GameState, Position, UnitState } from "../model/game-state";
 import { findPath, positionsEqual } from "../pathfinding/find-path";
+import { getPathMovementCost } from "../terrain/terrain-rules";
 import { canUnitAttackTarget } from "./attack-range";
 
 export type ValidationFailureReason =
@@ -63,7 +64,11 @@ function validateMove(state: GameState, unitId: string, destination: Position): 
 
   const path = findPath(state.board, state.units, unit.id, unit.position, destination);
 
-  if (!path || path.length === NO_MOVEMENT_POINTS || path.length > unit.movementPoints) {
+  if (
+    !path ||
+    path.length === NO_MOVEMENT_POINTS ||
+    getPathMovementCost(state.board, path) > unit.movementPoints
+  ) {
     return invalid("destination-unreachable");
   }
 

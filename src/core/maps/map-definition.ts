@@ -405,5 +405,5 @@ function isMapDefinition(value: unknown): value is MapDefinition {
 }
 
 function isTerrainType(value: string): value is TerrainType {
-  return value === "mountain";
+  return value === "forest" || value === "mountain";
 }

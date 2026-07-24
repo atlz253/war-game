@@ -1,6 +1,7 @@
 import type { GameState, Position, UnitState } from "../model/game-state";
+import { getTerrainDefenceBonus } from "../terrain/terrain-rules";
 
-export const MOUNTAIN_DEFENCE_BONUS = 1;
+export { MOUNTAIN_DEFENCE_BONUS } from "../terrain/terrain-rules";
 export const CONTROL_POINT_DEFENCE_BONUS = 1;
 export const MINIMUM_DAMAGE = 1;
 
@@ -13,15 +14,9 @@ export function calculateDamage(state: GameState, attacker: UnitState, target: U
 }
 
 export function getDefenceBonus(state: GameState, position: Position): number {
-  return getMountainDefenceBonus(state, position) + getControlPointDefenceBonus(state, position);
-}
-
-function getMountainDefenceBonus(state: GameState, position: Position): number {
-  return state.board.terrain.some(
-    (terrain) => terrain.type === "mountain" && positionsEqual(terrain.position, position),
-  )
-    ? MOUNTAIN_DEFENCE_BONUS
-    : 0;
+  return (
+    getTerrainDefenceBonus(state.board, position) + getControlPointDefenceBonus(state, position)
+  );
 }
 
 function getControlPointDefenceBonus(state: GameState, position: Position): number {

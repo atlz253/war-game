@@ -78,4 +78,19 @@ describe("editor map operations", () => {
       ),
     ).toBe("artillery-on-mountain");
   });
+
+  it("places forest underneath units and control points", () => {
+    const position = { x: 1, y: 1 };
+    const map = {
+      ...createMapDefinition("map", "Map", WIDTH, HEIGHT),
+      units: [{ side: "blue" as const, type: "tank" as const, position }],
+      controlPoints: [{ owner: null, position }],
+    };
+
+    const result = applyEditorTool(map, { kind: "terrain", terrainType: "forest" }, position);
+
+    expect(result.terrain).toEqual([{ type: "forest", position }]);
+    expect(result.units).toEqual(map.units);
+    expect(result.controlPoints).toEqual(map.controlPoints);
+  });
 });

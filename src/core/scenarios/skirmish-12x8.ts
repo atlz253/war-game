@@ -55,6 +55,10 @@ const BLUE_SUPPLY_POINT_POSITION: Position = { x: 0, y: 4 };
 const RED_SUPPLY_POINT_POSITION: Position = { x: 11, y: 3 };
 const MOUNTAIN_ONE_POSITION: Position = { x: 4, y: 2 };
 const MOUNTAIN_TWO_POSITION: Position = { x: 7, y: 5 };
+const FOREST_ONE_POSITION: Position = { x: 3, y: 3 };
+const FOREST_TWO_POSITION: Position = { x: 4, y: 4 };
+const FOREST_THREE_POSITION: Position = { x: 7, y: 3 };
+const FOREST_FOUR_POSITION: Position = { x: 8, y: 4 };
 
 export function createSkirmishGameState(): GameState {
   return {
@@ -66,6 +70,10 @@ export function createSkirmishGameState(): GameState {
       terrain: [
         { type: "mountain", position: MOUNTAIN_ONE_POSITION },
         { type: "mountain", position: MOUNTAIN_TWO_POSITION },
+        { type: "forest", position: FOREST_ONE_POSITION },
+        { type: "forest", position: FOREST_TWO_POSITION },
+        { type: "forest", position: FOREST_THREE_POSITION },
+        { type: "forest", position: FOREST_FOUR_POSITION },
       ],
     },
     turn: INITIAL_TURN,

@@ -27,6 +27,12 @@ const STARTING_MOUNTAINS = [
   { type: "mountain", position: { x: 4, y: 2 } },
   { type: "mountain", position: { x: 7, y: 5 } },
 ];
+const STARTING_FORESTS = [
+  { type: "forest", position: { x: 3, y: 3 } },
+  { type: "forest", position: { x: 4, y: 4 } },
+  { type: "forest", position: { x: 7, y: 3 } },
+  { type: "forest", position: { x: 8, y: 4 } },
+];
 
 describe("createSkirmishGameState", () => {
   it("creates the documented deterministic v1 setup", () => {
@@ -37,7 +43,7 @@ describe("createSkirmishGameState", () => {
       width: BOARD_WIDTH,
       height: BOARD_HEIGHT,
       blockedCells: [],
-      terrain: STARTING_MOUNTAINS,
+      terrain: [...STARTING_MOUNTAINS, ...STARTING_FORESTS],
     });
     expect(state.turn).toBe(INITIAL_TURN);
     expect(state.activeSide).toBe("blue");

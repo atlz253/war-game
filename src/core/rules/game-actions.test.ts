@@ -25,14 +25,15 @@ const ATTACK_DAMAGE = 3;
 const UNIT_DESTRUCTION_DAMAGE = 10;
 const TANK_HEALTH = 16;
 const ARTILLERY_DAMAGE_TO_TANK = 4;
-const ARTILLERY_DAMAGE_TO_TANK_WITH_ONE_POSITIONAL_DEFENCE = 3;
-const ARTILLERY_DAMAGE_TO_TANK_WITH_TWO_POSITIONAL_DEFENCES = 2;
+const ARTILLERY_DAMAGE_TO_TANK_WITH_MOUNTAIN_DEFENCE = 2;
+const ARTILLERY_DAMAGE_TO_TANK_WITH_MOUNTAIN_AND_CONTROL_POINT_DEFENCE = 1;
 const NEXT_TURN = 2;
 const OUT_OF_BOUNDS_DESTINATION = { x: 12, y: 1 };
 const OCCUPIED_DESTINATION = { x: 1, y: 3 };
 const INSUFFICIENT_MOVEMENT_DESTINATION = { x: 6, y: 1 };
 const DISTANT_TARGET_POSITION = { x: 4, y: 1 };
 const MOUNTAIN_POSITION = { x: 2, y: 1 };
+const FOREST_POSITION = { x: 2, y: 1 };
 const ARTILLERY_MINIMUM_RANGE = 2;
 const ARTILLERY_MAXIMUM_RANGE = 4;
 const ARTILLERY_MOVE_DESTINATION = { x: 3, y: 0 };
@@ -192,6 +193,36 @@ describe("movement validation", () => {
 });
 
 describe("terrain movement", () => {
+  it("allows every unit type to enter forest and charges two movement points", () => {
+    const state = createSkirmishGameState();
+    const forestState = {
+      ...state,
+      board: { ...state.board, terrain: [{ type: "forest" as const, position: FOREST_POSITION }] },
+      units: {
+        [BLUE_INFANTRY_ID]: { ...state.units[BLUE_INFANTRY_ID], position: { x: 1, y: 1 } },
+        [BLUE_TANK_ID]: { ...state.units[BLUE_TANK_ID], position: { x: 1, y: 2 } },
+        [BLUE_ARTILLERY_ID]: { ...state.units[BLUE_ARTILLERY_ID], position: { x: 1, y: 0 } },
+      },
+    };
+
+    for (const unitId of [BLUE_INFANTRY_ID, BLUE_TANK_ID, BLUE_ARTILLERY_ID]) {
+      expect(
+        validateAction(forestState, { type: "move", unitId, destination: FOREST_POSITION }),
+      ).toEqual({ isValid: true });
+    }
+
+    const result = applyAction(forestState, {
+      type: "move",
+      unitId: BLUE_INFANTRY_ID,
+      destination: FOREST_POSITION,
+    });
+
+    expect(result.state.units[BLUE_INFANTRY_ID]?.movementPoints).toBe(
+      BLUE_INFANTRY_MAX_MOVEMENT - 2,
+    );
+    expect(result.events).toEqual([expect.objectContaining({ type: "unit-moved", cost: 2 })]);
+  });
+
   it("allows infantry but not tanks to enter mountains", () => {
     const state = createSkirmishGameState();
     const mountainState = {
@@ -757,13 +788,13 @@ describe("artillery armour penetration", () => {
       name: "with mountain defence",
       terrain: [{ type: "mountain" as const, position: ARTILLERY_TARGET_POSITION }],
       hasControlPoint: false,
-      expectedDamage: ARTILLERY_DAMAGE_TO_TANK_WITH_ONE_POSITIONAL_DEFENCE,
+      expectedDamage: ARTILLERY_DAMAGE_TO_TANK_WITH_MOUNTAIN_DEFENCE,
     },
     {
       name: "with mountain and control point defence",
       terrain: [{ type: "mountain" as const, position: ARTILLERY_TARGET_POSITION }],
       hasControlPoint: true,
-      expectedDamage: ARTILLERY_DAMAGE_TO_TANK_WITH_TWO_POSITIONAL_DEFENCES,
+      expectedDamage: ARTILLERY_DAMAGE_TO_TANK_WITH_MOUNTAIN_AND_CONTROL_POINT_DEFENCE,
     },
   ])(
     "deals $expectedDamage damage to a tank $name",
@@ -822,7 +853,7 @@ describe("artillery armour penetration", () => {
     });
 
     expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
-      UNIT_DESTRUCTION_DAMAGE - ATTACK_DAMAGE,
+      UNIT_DESTRUCTION_DAMAGE - DAMAGE_WITH_ONE_DEFENCE_BONUS,
     );
   });
 });

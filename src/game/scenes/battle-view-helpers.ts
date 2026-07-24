@@ -1,7 +1,13 @@
 import type { GameAction } from "../../core/actions/game-actions";
 import { getDefenceBonus } from "../../core/combat/calculate-damage";
 import type { GameEvent } from "../../core/model/game-events";
-import type { GameState, Position, SideId, UnitState } from "../../core/model/game-state";
+import type {
+  GameState,
+  Position,
+  SideId,
+  TerrainType,
+  UnitState,
+} from "../../core/model/game-state";
 import { type ValidationFailureReason, validateAction } from "../../core/rules/validate-action";
 import { assetManifest } from "../assets/asset-manifest";
 
@@ -138,6 +144,6 @@ export function getControlPointTextureKey(owner: "blue" | "red" | null): string 
   return assetManifest.terrain[controlPointKey]?.textureKey ?? "";
 }
 
-export function getTerrainTextureKey(terrainType: "mountain"): string {
+export function getTerrainTextureKey(terrainType: TerrainType): string {
   return assetManifest.terrain[terrainType]?.textureKey ?? "";
 }

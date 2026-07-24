@@ -7,7 +7,7 @@ export interface TeamScores {
 
 export type UnitType = "infantry" | "tank" | "artillery";
 
-export type TerrainType = "mountain";
+export type TerrainType = "forest" | "mountain";
 
 export interface Position {
   readonly x: number;

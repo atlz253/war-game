@@ -76,6 +76,20 @@ describe("map definitions", () => {
   });
 });
 
+describe("forest map definitions", () => {
+  it("accepts forest beneath units and control points", () => {
+    const map = {
+      ...createMapDefinition(MAP_ID, MAP_NAME, WIDTH, HEIGHT),
+      terrain: [{ type: "forest" as const, position: MOUNTAIN_POSITION }],
+      units: [{ side: "blue" as const, type: "tank" as const, position: MOUNTAIN_POSITION }],
+      controlPoints: [{ owner: null, position: MOUNTAIN_POSITION }],
+    };
+
+    expect(validateMapDefinition(map)).toEqual({ isValid: true, errors: [] });
+    expect(deserializeMapDefinition(serializeMapDefinition(map))).toEqual(map);
+  });
+});
+
 describe("terrain map definitions", () => {
   it("validates mountains, their conflicts, and tank placement", () => {
     const map = {

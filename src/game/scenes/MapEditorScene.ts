@@ -6,7 +6,7 @@ import {
   type MapDefinition,
   resizeMapDefinition,
 } from "../../core/maps/map-definition";
-import type { Position, SideId, UnitType } from "../../core/model/game-state";
+import type { Position, SideId, TerrainType, UnitType } from "../../core/model/game-state";
 import { assetManifest } from "../assets/asset-manifest";
 import { calculateEditorWorldViewport } from "../config/editor-presentation";
 import {
@@ -83,19 +83,20 @@ const BUTTON_ROW = {
   redInfantry: 8,
   redTank: 9,
   redArtillery: 10,
-  mountain: 11,
-  neutralPoint: 12,
-  bluePoint: 13,
-  redPoint: 14,
-  erase: 15,
-  rename: 16,
-  save: 17,
-  saveCopy: 18,
-  testMatch: 19,
-  import: 20,
-  export: 21,
-  delete: 22,
-  back: 23,
+  forest: 11,
+  mountain: 12,
+  neutralPoint: 13,
+  bluePoint: 14,
+  redPoint: 15,
+  erase: 16,
+  rename: 17,
+  save: 18,
+  saveCopy: 19,
+  testMatch: 20,
+  import: 21,
+  export: 22,
+  delete: 23,
+  back: 24,
 } as const;
 
 const SINGLE_CHARACTER_KEY_LENGTH = 1;
@@ -272,6 +273,9 @@ export class MapEditorScene extends Phaser.Scene {
       this.createButton("RED TANK", BUTTON_ROW.redTank, () => this.selectUnitTool("red", "tank")),
       this.createButton("RED ARTILLERY", BUTTON_ROW.redArtillery, () =>
         this.selectUnitTool("red", "artillery"),
+      ),
+      this.createButton("FOREST", BUTTON_ROW.forest, () =>
+        this.setTool({ kind: "terrain", terrainType: "forest" }),
       ),
       this.createButton("MOUNTAIN", BUTTON_ROW.mountain, () =>
         this.setTool({ kind: "terrain", terrainType: "mountain" }),
@@ -792,7 +796,7 @@ function tileCenter(coordinate: number): number {
 function controlPointTextureKey(owner: SideId | null): string {
   return assetManifest.terrain[`control-point-${owner ?? "neutral"}`].textureKey;
 }
-function terrainTextureKey(terrainType: "mountain"): string {
+function terrainTextureKey(terrainType: TerrainType): string {
   return assetManifest.terrain[terrainType].textureKey;
 }
 function toolLabel(tool: EditorTool): string {

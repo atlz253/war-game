@@ -1,10 +1,10 @@
 import type { MapDefinition } from "../../core/maps/map-definition";
-import type { Position, SideId, UnitType } from "../../core/model/game-state";
+import type { Position, SideId, TerrainType, UnitType } from "../../core/model/game-state";
 
 export type EditorTool =
   | { readonly kind: "unit"; readonly side: SideId; readonly unitType: UnitType }
   | { readonly kind: "control-point"; readonly owner: SideId | null }
-  | { readonly kind: "terrain"; readonly terrainType: "mountain" }
+  | { readonly kind: "terrain"; readonly terrainType: TerrainType }
   | { readonly kind: "erase" };
 
 export type EditorToolRejection =
@@ -76,8 +76,9 @@ export function getEditorToolRejection(
     (unit) => unit.type === "artillery" && samePosition(unit.position, position),
   );
 
-  if (tool.kind === "terrain")
+  if (tool.kind === "terrain" && tool.terrainType === "mountain")
     return getMountainToolRejection(hasControlPoint, hasTank, hasArtillery);
+  if (tool.kind === "terrain") return null;
   if (tool.kind === "control-point") {
     return hasMountain ? "control-point-on-mountain" : null;
   }
