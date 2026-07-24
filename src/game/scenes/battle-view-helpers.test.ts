@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
-import { formatSelectedUnit } from "./battle-view-helpers";
+import { formatEvent, formatSelectedUnit } from "./battle-view-helpers";
 
 const BLUE_TANK_ID = "blue-tank-1";
 const CONTROL_POINT_ID = "control-point-1";
@@ -29,5 +29,18 @@ describe("formatSelectedUnit", () => {
     expect(formatSelectedUnit(defendedState, tank, "blue", true)).toContain(
       "Defence 2 (+1 position)",
     );
+  });
+});
+
+describe("formatEvent", () => {
+  it("describes restored health", () => {
+    expect(
+      formatEvent({
+        type: "unit-healed",
+        unitId: "red-infantry-1",
+        healthRestored: 2,
+        remainingHealth: 7,
+      }),
+    ).toBe("red-infantry-1 restored 2 HP.");
   });
 });

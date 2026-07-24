@@ -7,6 +7,8 @@ import { createReplayTimeline } from "./replay-timeline";
 
 const BLUE_INFANTRY_ID = "blue-infantry-1";
 const FRAME_COUNT_WITH_MOVE_AND_TURN_END = 3;
+const CONTROL_POINT_ID = "control-point-1";
+const DAMAGED_RED_INFANTRY_HEALTH = 5;
 const MOVE_ACTION: GameAction = {
   type: "move",
   unitId: BLUE_INFANTRY_ID,
@@ -38,5 +40,33 @@ describe("createReplayTimeline", () => {
     expect(() => createReplayTimeline(createSkirmishGameState, [invalidAction])).toThrow(
       "Replay action was rejected: move",
     );
+  });
+
+  it("replays control point healing deterministically", () => {
+    const initialState = createSkirmishGameState();
+    const controlPoint = initialState.controlPoints[CONTROL_POINT_ID];
+    const damagedState = {
+      ...initialState,
+      units: {
+        ...initialState.units,
+        "red-infantry-1": {
+          ...initialState.units["red-infantry-1"],
+          position: controlPoint.position,
+          health: DAMAGED_RED_INFANTRY_HEALTH,
+        },
+      },
+      controlPoints: {
+        ...initialState.controlPoints,
+        [CONTROL_POINT_ID]: { ...controlPoint, owner: "red" as const },
+      },
+    };
+
+    const timeline = createReplayTimeline(() => damagedState, [{ type: "end-turn" }]);
+
+    expect(timeline.frames[1]?.events.map((event) => event.type)).toEqual([
+      "unit-healed",
+      "turn-ended",
+    ]);
+    expect(timeline.finalState).toEqual(applyAction(damagedState, { type: "end-turn" }).state);
   });
 });

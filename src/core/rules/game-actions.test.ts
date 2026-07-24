@@ -38,6 +38,9 @@ const DAMAGE_WITH_ONE_DEFENCE_BONUS = 2;
 const MINIMUM_DAMAGE = 1;
 const CAPTURE_SCORE = 5;
 const OVERKILL_TARGET_HEALTH = 2;
+const CONTROL_POINT_HEAL_AMOUNT = 2;
+const DAMAGED_INFANTRY_HEALTH = 5;
+const NEAR_MAXIMUM_INFANTRY_HEALTH = 9;
 const INITIAL_SCORES = { blue: 0, red: 0 };
 
 function withArtillery(state: GameState, position: { x: number; y: number }): GameState {
@@ -813,7 +816,7 @@ describe("main action rules", () => {
   });
 });
 
-describe("turn and immutability rules", () => {
+describe("turn refresh rules", () => {
   it("ends the turn and refreshes only the newly active side", () => {
     const state = createSkirmishGameState();
     const changedState = {
@@ -842,7 +845,145 @@ describe("turn and immutability rules", () => {
     expect(result.state.units[BLUE_TANK_ID]?.movementPoints).toBe(0);
     expect(result.events).toEqual([expect.objectContaining({ type: "turn-ended" })]);
   });
+});
 
+it("heals damaged units on control points owned by the newly active side before ending its turn", () => {
+  const state = createSkirmishGameState();
+  const controlPoint = state.controlPoints[CONTROL_POINT_ID];
+  const healingState = {
+    ...state,
+    units: {
+      ...state.units,
+      [RED_INFANTRY_ID]: {
+        ...state.units[RED_INFANTRY_ID],
+        position: controlPoint.position,
+        health: DAMAGED_INFANTRY_HEALTH,
+        movementPoints: 0,
+        hasTakenMainAction: true,
+      },
+    },
+    controlPoints: {
+      ...state.controlPoints,
+      [CONTROL_POINT_ID]: { ...controlPoint, owner: "red" as const },
+    },
+  };
+
+  const result = applyAction(healingState, { type: "end-turn" });
+
+  expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(
+    DAMAGED_INFANTRY_HEALTH + CONTROL_POINT_HEAL_AMOUNT,
+  );
+  expect(result.state.units[RED_INFANTRY_ID]?.movementPoints).toBe(BLUE_INFANTRY_MAX_MOVEMENT);
+  expect(result.state.units[RED_INFANTRY_ID]?.hasTakenMainAction).toBe(false);
+  expect(result.events).toEqual([
+    {
+      type: "unit-healed",
+      unitId: RED_INFANTRY_ID,
+      healthRestored: CONTROL_POINT_HEAL_AMOUNT,
+      remainingHealth: DAMAGED_INFANTRY_HEALTH + CONTROL_POINT_HEAL_AMOUNT,
+    },
+    expect.objectContaining({ type: "turn-ended", activeSide: "red" }),
+  ]);
+  expect(healingState.units[RED_INFANTRY_ID]?.health).toBe(DAMAGED_INFANTRY_HEALTH);
+});
+
+it("limits control point healing to maximum health and excludes ineligible units", () => {
+  const state = createSkirmishGameState();
+  const controlPoint = state.controlPoints[CONTROL_POINT_ID];
+  const healingState = {
+    ...state,
+    units: {
+      ...state.units,
+      [RED_INFANTRY_ID]: {
+        ...state.units[RED_INFANTRY_ID],
+        position: controlPoint.position,
+        health: NEAR_MAXIMUM_INFANTRY_HEALTH,
+      },
+      [RED_INFANTRY_TWO_ID]: {
+        ...state.units[RED_INFANTRY_TWO_ID],
+        position: state.controlPoints["control-point-2"].position,
+        health: DAMAGED_INFANTRY_HEALTH,
+      },
+      [RED_TANK_ID]: {
+        ...state.units[RED_TANK_ID],
+        position: { x: 8, y: 6 },
+        health: TANK_HEALTH - CONTROL_POINT_HEAL_AMOUNT,
+      },
+    },
+    controlPoints: {
+      ...state.controlPoints,
+      [CONTROL_POINT_ID]: { ...controlPoint, owner: "red" as const },
+    },
+  };
+
+  const result = applyAction(healingState, { type: "end-turn" });
+
+  expect(result.state.units[RED_INFANTRY_ID]?.health).toBe(state.units[RED_INFANTRY_ID]?.maxHealth);
+  expect(result.state.units[RED_INFANTRY_TWO_ID]?.health).toBe(DAMAGED_INFANTRY_HEALTH);
+  expect(result.state.units[RED_TANK_ID]?.health).toBe(TANK_HEALTH - CONTROL_POINT_HEAL_AMOUNT);
+  expect(result.events).toEqual([
+    expect.objectContaining({ type: "unit-healed", unitId: RED_INFANTRY_ID, healthRestored: 1 }),
+    expect.objectContaining({ type: "turn-ended" }),
+  ]);
+});
+
+it("does not heal units on neutral, enemy-owned, or empty control points", () => {
+  const state = createSkirmishGameState();
+  const firstControlPoint = state.controlPoints[CONTROL_POINT_ID];
+  const secondControlPoint = state.controlPoints["control-point-2"];
+  const healingState = {
+    ...state,
+    activeSide: "red" as const,
+    units: {
+      ...state.units,
+      [BLUE_INFANTRY_ID]: {
+        ...state.units[BLUE_INFANTRY_ID],
+        position: firstControlPoint.position,
+        health: DAMAGED_INFANTRY_HEALTH,
+      },
+      [BLUE_INFANTRY_TWO_ID]: {
+        ...state.units[BLUE_INFANTRY_TWO_ID],
+        position: secondControlPoint.position,
+        health: DAMAGED_INFANTRY_HEALTH,
+      },
+    },
+    controlPoints: {
+      ...state.controlPoints,
+      [CONTROL_POINT_ID]: { ...firstControlPoint, owner: null },
+      "control-point-2": { ...secondControlPoint, owner: "red" as const },
+    },
+  };
+
+  const result = applyAction(healingState, { type: "end-turn" });
+
+  expect(result.state.units[BLUE_INFANTRY_ID]?.health).toBe(DAMAGED_INFANTRY_HEALTH);
+  expect(result.state.units[BLUE_INFANTRY_TWO_ID]?.health).toBe(DAMAGED_INFANTRY_HEALTH);
+  expect(result.events).toEqual([
+    expect.objectContaining({ type: "turn-ended", activeSide: "blue" }),
+  ]);
+});
+
+it("does not emit healing for a full-health unit on an owned control point", () => {
+  const state = createSkirmishGameState();
+  const controlPoint = state.controlPoints[CONTROL_POINT_ID];
+  const healingState = {
+    ...state,
+    units: {
+      ...state.units,
+      [RED_INFANTRY_ID]: { ...state.units[RED_INFANTRY_ID], position: controlPoint.position },
+    },
+    controlPoints: {
+      ...state.controlPoints,
+      [CONTROL_POINT_ID]: { ...controlPoint, owner: "red" as const },
+    },
+  };
+
+  const result = applyAction(healingState, { type: "end-turn" });
+
+  expect(result.events).toEqual([expect.objectContaining({ type: "turn-ended" })]);
+});
+
+describe("action availability and immutability rules", () => {
   it("rejects movement after a main action", () => {
     const state = createSkirmishGameState();
     const waitingResult = applyAction(state, { type: "wait", unitId: BLUE_INFANTRY_ID });

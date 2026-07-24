@@ -28,6 +28,13 @@ export interface UnitDamagedEvent {
   readonly remainingHealth: number;
 }
 
+export interface UnitHealedEvent {
+  readonly type: "unit-healed";
+  readonly unitId: string;
+  readonly healthRestored: number;
+  readonly remainingHealth: number;
+}
+
 export interface UnitDestroyedEvent {
   readonly type: "unit-destroyed";
   readonly unitId: string;
@@ -67,6 +74,7 @@ export type GameEvent =
   | UnitAttackedEvent
   | UnitCounterattackedEvent
   | UnitDamagedEvent
+  | UnitHealedEvent
   | UnitDestroyedEvent
   | ControlPointCapturedEvent
   | TeamScoredEvent

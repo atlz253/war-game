@@ -2,7 +2,7 @@ import type { GameAction } from "../actions/game-actions";
 import { calculateDamage } from "../combat/calculate-damage";
 import type { GameEvent } from "../model/game-events";
 import type { GameState, SideId, UnitState } from "../model/game-state";
-import { findPath } from "../pathfinding/find-path";
+import { findPath, positionsEqual } from "../pathfinding/find-path";
 import { addTeamScore, CAPTURE_SCORE, calculateAttackScore } from "../scoring/team-scores";
 import { canUnitAttackTarget } from "./attack-range";
 import { validateAction } from "./validate-action";
@@ -16,6 +16,7 @@ export interface ApplyActionResult {
 const ACTION_REJECTED: Omit<ApplyActionResult, "state"> = { accepted: false, events: [] };
 const NO_MOVEMENT_COST = 0;
 const INITIAL_TURN_INCREMENT = 1;
+export const CONTROL_POINT_HEAL_AMOUNT = 2;
 
 export function applyAction(state: GameState, action: GameAction): ApplyActionResult {
   const validation = validateAction(state, action);
@@ -171,13 +172,18 @@ function applyWait(state: GameState, unitId: string): ApplyActionResult {
 
 function applyEndTurn(state: GameState): ApplyActionResult {
   const activeSide = oppositeSide(state.activeSide);
-  const units = refreshSideUnits(state.units, activeSide);
+  const refreshedUnits = refreshSideUnits(state.units, activeSide);
+  const { units, events } = healUnitsOnOwnedControlPoints(
+    refreshedUnits,
+    state.controlPoints,
+    activeSide,
+  );
   const nextState = { ...state, turn: state.turn + INITIAL_TURN_INCREMENT, activeSide, units };
 
   return {
     accepted: true,
     state: nextState,
-    events: [{ type: "turn-ended", turn: nextState.turn, activeSide }],
+    events: [...events, { type: "turn-ended", turn: nextState.turn, activeSide }],
   };
 }
 
@@ -229,6 +235,43 @@ function refreshSideUnits(
           }
         : unit,
     ]),
+  );
+}
+
+function healUnitsOnOwnedControlPoints(
+  units: Readonly<Record<string, UnitState>>,
+  controlPoints: GameState["controlPoints"],
+  activeSide: SideId,
+): { readonly units: Record<string, UnitState>; readonly events: readonly GameEvent[] } {
+  const events: GameEvent[] = [];
+  const nextUnits = { ...units };
+  const ownedControlPoints = Object.values(controlPoints).filter(
+    (controlPoint) => controlPoint.owner === activeSide,
+  );
+
+  for (const unit of Object.values(units).sort((first, second) =>
+    first.id.localeCompare(second.id),
+  )) {
+    if (!canUnitHealOnControlPoint(unit, activeSide, ownedControlPoints)) continue;
+
+    const healthRestored = Math.min(CONTROL_POINT_HEAL_AMOUNT, unit.maxHealth - unit.health);
+    const remainingHealth = unit.health + healthRestored;
+    nextUnits[unit.id] = { ...unit, health: remainingHealth };
+    events.push({ type: "unit-healed", unitId: unit.id, healthRestored, remainingHealth });
+  }
+
+  return { units: nextUnits, events };
+}
+
+function canUnitHealOnControlPoint(
+  unit: UnitState,
+  activeSide: SideId,
+  ownedControlPoints: readonly GameState["controlPoints"][string][],
+): boolean {
+  return (
+    unit.side === activeSide &&
+    unit.health < unit.maxHealth &&
+    ownedControlPoints.some((controlPoint) => positionsEqual(unit.position, controlPoint.position))
   );
 }
 

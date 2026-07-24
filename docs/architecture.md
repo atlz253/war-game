@@ -46,6 +46,8 @@ interface ApplyActionResult {
 
 Team scores are deterministic core state. An attack awards the attacking side the HP actually removed after defence modifiers; a successful capture awards 5 points. `team-scored` follows the corresponding combat or capture event. The HUD only renders these values; it never calculates or mutates them.
 
+When `EndTurnAction` activates a side, the core first refreshes that side's units and then restores 2 HP (capped at `maxHealth`) to each damaged unit on a control point it owns. It emits deterministic `unit-healed` events in unit-ID order before `turn-ended`; this passive effect does not alter score or action availability.
+
 Agents receive a state snapshot and return an action candidate:
 
 ```ts

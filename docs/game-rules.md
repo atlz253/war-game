@@ -28,6 +28,8 @@ The built-in `skirmish-12x8` map contains two central mountains at `(4,2)` and `
 
 Every mountain reduces damage received by the occupying unit by 1. Every control point reduces damage received by the occupying unit by 1, independent of point ownership. These bonuses use the shared deterministic combat calculation and cannot reduce an attack below 1 damage. Mountains and control points cannot occupy the same cell in a valid map.
 
+At the start of a side's turn, each damaged unit standing on a control point owned by that side restores 2 HP, up to its maximum health. This automatic effect does not spend movement points or a main action.
+
 ## Events and visibility
 
-Accepted actions emit ordered domain events, such as movement, attack, damage, capture, destruction, turn end, and victory. The Canvas event log displays human-readable versions of the most recent events. The renderer may animate an event, but an animation never changes rules state.
+Accepted actions emit ordered domain events, such as movement, attack, damage, healing, capture, destruction, turn end, and victory. The Canvas event log displays human-readable versions of the most recent events. The renderer may animate an event, but an animation never changes rules state.

@@ -48,6 +48,8 @@ export function formatEvent(event: GameEvent): string {
       return `${event.counterattackerUnitId} counterattacked ${event.targetUnitId}.`;
     case "unit-damaged":
       return `${event.unitId} took ${event.damage} damage.`;
+    case "unit-healed":
+      return `${event.unitId} restored ${event.healthRestored} HP.`;
     case "unit-destroyed":
       return `${event.unitId} was destroyed.`;
     case "control-point-captured":
