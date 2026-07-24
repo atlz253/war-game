@@ -146,7 +146,7 @@ export class BattleScene extends Phaser.Scene {
   private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private attackHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private mapRenderer!: BattleMapRenderer;
-  private pauseMenu!: PauseMenu;
+  private pauseMenu?: PauseMenu;
   private escapeKey?: Phaser.Input.Keyboard.Key;
   private aiDelayEvent?: Phaser.Time.TimerEvent;
   private aiPauseController = new BattleAiPauseController<AiActionDecision>();
@@ -180,6 +180,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private resetRenderingState(): void {
+    this.pauseMenu = undefined;
     this.mapRenderer?.reset();
     this.aiDelayEvent?.remove(false);
     this.aiDelayEvent = undefined;
@@ -198,7 +199,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
-    if (this.pauseMenu.isOpen) return;
+    if (this.pauseMenu?.isOpen) return;
     this.updateKeyboardCamera(delta);
     this.updateInertialZoom(delta);
   }
@@ -411,7 +412,7 @@ export class BattleScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      if (this.pauseMenu.isOpen) return;
+      if (this.pauseMenu?.isOpen) return;
       if (this.handleHudClick(pointer)) {
         return;
       }
@@ -421,7 +422,7 @@ export class BattleScene extends Phaser.Scene {
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
       (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) => {
-        if (this.pauseMenu.isOpen) return;
+        if (this.pauseMenu?.isOpen) return;
         this.zoomWorldCamera(pointer, y);
       },
     );
@@ -449,10 +450,11 @@ export class BattleScene extends Phaser.Scene {
     this.escapeKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
   }
   private handleEscapeKey(): void {
-    if (this.pauseMenu.isOpen) this.resumeFromPause();
+    if (this.pauseMenu?.isOpen) this.resumeFromPause();
     else this.openPauseMenu();
   }
   private openPauseMenu(): void {
+    if (!this.pauseMenu) return;
     const { cancelDelay } = this.aiPauseController.pause();
     if (cancelDelay) this.aiDelayEvent?.remove(false);
     if (cancelDelay) this.aiDelayEvent = undefined;
@@ -460,7 +462,7 @@ export class BattleScene extends Phaser.Scene {
     this.pauseMenu.open();
   }
   private resumeFromPause(): void {
-    this.pauseMenu.close();
+    this.pauseMenu?.close();
     const resume = this.aiPauseController.resume();
     if (resume.kind === "apply") this.applyAiDecision(resume.decision);
     if (resume.kind === "start-delay") this.runAiAction();
@@ -980,7 +982,6 @@ export class BattleScene extends Phaser.Scene {
 
     return { x: Math.floor(pointerX / scale), y: Math.floor(pointerY / scale) };
   }
-
   private addText(x: number, y: number, text: string): Phaser.GameObjects.Text {
     return this.add.text(x, y, text, {
       color: uiTheme.colors.text,
