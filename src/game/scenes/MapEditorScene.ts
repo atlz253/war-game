@@ -18,6 +18,7 @@ import {
 } from "../config/presentation-layout";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import { getEditorPointerTool } from "../input/editor-pointer-tool";
 import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
 import { deleteBuiltInMap, isDevMapEditorAvailable, saveBuiltInMap } from "../maps/dev-map-api";
 import {
@@ -180,6 +181,7 @@ export class MapEditorScene extends Phaser.Scene {
     this.createWorld();
     this.createHud();
     this.createPauseMenu();
+    this.input.mouse?.disableContextMenu();
     this.bindInput();
     this.render();
   }
@@ -359,7 +361,8 @@ export class MapEditorScene extends Phaser.Scene {
       if (!this.isMapPointer(pointer)) return;
       const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       const position = { x: Math.floor(world.x / TILE_SIZE), y: Math.floor(world.y / TILE_SIZE) };
-      if (isPositionInMap(position, this.map)) this.applyTool(position);
+      if (isPositionInMap(position, this.map))
+        this.applyTool(position, getEditorPointerTool(this.tool, pointer.rightButtonDown()));
     });
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
@@ -575,15 +578,15 @@ export class MapEditorScene extends Phaser.Scene {
     this.cameraVelocity = { x: 0, y: 0 };
   }
 
-  private applyTool(position: Position): void {
-    const rejection = getEditorToolRejection(this.map, this.tool, position);
+  private applyTool(position: Position, tool: EditorTool = this.tool): void {
+    const rejection = getEditorToolRejection(this.map, tool, position);
 
     if (rejection) {
       this.statusText.setText(editorToolRejectionMessage(rejection));
       return;
     }
 
-    this.map = applyEditorTool(this.map, this.tool, position);
+    this.map = applyEditorTool(this.map, tool, position);
     this.render();
   }
 
