@@ -1,10 +1,9 @@
 import Phaser from "phaser";
 
-import type { MapDefinition } from "../../core/maps/map-definition";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
 import { getBrowserLmStudioSettings, isLmStudioSideReady } from "../lm-studio/lm-studio-settings";
-import { getBrowserMapLibrary } from "../maps/map-library";
+import { type CatalogMap, formatCatalogMap, getBrowserMapCatalog } from "../maps/map-catalog";
 import {
   createDefaultMatchConfiguration,
   getParticipantLabel,
@@ -64,9 +63,9 @@ export class MainMenuScene extends Phaser.Scene {
   private safeAreaBackground!: Phaser.GameObjects.Rectangle;
   private presentationContainer!: Phaser.GameObjects.Container;
   private matchConfiguration = createDefaultMatchConfiguration();
-  private readonly mapLibrary = getBrowserMapLibrary();
+  private readonly mapCatalog = getBrowserMapCatalog();
   private readonly lmStudioSettings = getBrowserLmStudioSettings();
-  private selectedMapId: string | null = null;
+  private selectedMapKey: string | null = null;
   private blueRoleButton!: Button;
   private redRoleButton!: Button;
   private blueModelText!: Phaser.GameObjects.Text;
@@ -275,8 +274,10 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private openMapEditor(): void {
+    const selectedMap = this.getSelectedMap();
     this.scene.start(MAP_EDITOR_SCENE_KEY, {
-      mapId: this.selectedMapId ?? undefined,
+      mapId: selectedMap?.map.id,
+      mapSource: selectedMap?.source,
       matchConfiguration: this.matchConfiguration,
     });
   }
@@ -290,13 +291,14 @@ export class MainMenuScene extends Phaser.Scene {
       this.matchConfiguration,
       this.lmStudioSettings.load(),
     );
-    if (this.isLmStudioConfigurationMissing()) {
+    const selectedMap = this.getSelectedMap();
+    if (this.isLmStudioConfigurationMissing() || !selectedMap) {
       this.refreshLaunchAvailability();
       return;
     }
     this.scene.start(BATTLE_SCENE_KEY, {
       matchConfiguration: this.matchConfiguration,
-      mapDefinition: this.getSelectedCustomMap() ?? undefined,
+      mapDefinition: selectedMap.map,
     });
   }
 
@@ -335,33 +337,41 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private changeSelectedMap(direction: number): void {
-    const maps = this.mapLibrary.list();
-    const selectedIndex = this.selectedMapId
-      ? maps.findIndex((map) => map.id === this.selectedMapId) + 1
+    const maps = this.mapCatalog.list();
+    if (maps.length === 0) return;
+    const selectedIndex = this.selectedMapKey
+      ? maps.findIndex((entry) => catalogMapKey(entry) === this.selectedMapKey)
       : 0;
-    const nextIndex = (selectedIndex + direction + maps.length + 1) % (maps.length + 1);
-    this.selectedMapId = nextIndex === 0 ? null : (maps[nextIndex - 1]?.id ?? null);
+    const nextIndex = (selectedIndex + direction + maps.length) % maps.length;
+    this.selectedMapKey = catalogMapKey(maps[nextIndex] as CatalogMap);
     this.refreshSelectedMapText();
   }
 
-  private getSelectedCustomMap(): MapDefinition | undefined {
-    return this.selectedMapId
-      ? this.mapLibrary.list().find((map) => map.id === this.selectedMapId)
+  private getSelectedMap(): CatalogMap | null {
+    const maps = this.mapCatalog.list();
+    const selected = this.selectedMapKey
+      ? maps.find((entry) => catalogMapKey(entry) === this.selectedMapKey)
       : undefined;
+    return selected ?? maps[0] ?? null;
   }
 
   private refreshSelectedMapText(): void {
-    const map = this.getSelectedCustomMap();
-    this.selectedMapText.setText(map ? `MAP: ${map.name}` : "MAP: Skirmish 12×8");
+    const selectedMap = this.getSelectedMap();
+    this.selectedMapText.setText(
+      selectedMap ? `MAP: ${formatCatalogMap(selectedMap)}` : "MAP: no maps available",
+    );
   }
 
   private refreshLaunchAvailability(): void {
-    const isReady = !this.isLmStudioConfigurationMissing();
+    const selectedMap = this.getSelectedMap();
+    const isReady = !this.isLmStudioConfigurationMissing() && selectedMap !== null;
     this.startButton.setEnabled(isReady);
     this.instructionsText.setText(
       isReady
         ? "Choose commanders and a map, then start the match."
-        : "Open LM Studio Settings and select a model before starting.",
+        : selectedMap
+          ? "Open LM Studio Settings and select a model before starting."
+          : "No maps available. Add a local map or restore a built-in map file.",
     );
   }
 
@@ -377,4 +387,8 @@ export class MainMenuScene extends Phaser.Scene {
   private unbindPresentationResize(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
   }
+}
+
+function catalogMapKey(entry: CatalogMap): string {
+  return `${entry.source}:${entry.map.id}`;
 }

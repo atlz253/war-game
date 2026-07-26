@@ -1,11 +1,9 @@
 import Phaser from "phaser";
 
-import { createMapDefinitionFromState } from "../../core/maps/create-map-definition-from-state";
-import { createGameStateFromMap, type MapDefinition } from "../../core/maps/map-definition";
-import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
+import { createGameStateFromMap } from "../../core/maps/map-definition";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
-import { getBrowserMapLibrary } from "../maps/map-library";
+import { type CatalogMap, formatCatalogMap, getBrowserMapCatalog } from "../maps/map-catalog";
 import { MultiplayerSession } from "../multiplayer/multiplayer-session";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -27,8 +25,8 @@ const CENTER = 0.5;
 
 export class MultiplayerHostScene extends Phaser.Scene {
   private readonly session = new MultiplayerSession("host");
-  private readonly maps = getBrowserMapLibrary();
-  private selectedMapId: string | null = null;
+  private readonly mapCatalog = getBrowserMapCatalog();
+  private selectedMapKey: string | null = null;
   private codeText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private mapText!: Phaser.GameObjects.Text;
@@ -134,30 +132,32 @@ export class MultiplayerHostScene extends Phaser.Scene {
     this.presentationContainer.setPosition(contentX, contentY).setScale(scale);
   }
   private changeMap(direction: number): void {
-    const maps = this.maps.list();
-    const index = this.selectedMapId
-      ? maps.findIndex((map) => map.id === this.selectedMapId) + 1
+    const maps = this.mapCatalog.list();
+    if (maps.length === 0) return;
+    const index = this.selectedMapKey
+      ? maps.findIndex((entry) => catalogMapKey(entry) === this.selectedMapKey)
       : 0;
-    const next = (index + direction + maps.length + 1) % (maps.length + 1);
-    this.selectedMapId = next === 0 ? null : (maps[next - 1]?.id ?? null);
+    const next = (index + direction + maps.length) % maps.length;
+    this.selectedMapKey = catalogMapKey(maps[next] as CatalogMap);
     this.refreshMap();
   }
   private refreshMap(): void {
-    this.mapText.setText(
-      this.getMap()?.name ? `MAP: ${this.getMap()?.name}` : "MAP: Skirmish 12×8",
-    );
+    const map = this.getMap();
+    this.mapText.setText(map ? `MAP: ${formatCatalogMap(map)}` : "MAP: no maps available");
   }
-  private getMap(): MapDefinition | null {
-    return this.selectedMapId
-      ? (this.maps.list().find((map) => map.id === this.selectedMapId) ?? null)
-      : null;
+  private getMap(): CatalogMap | null {
+    const maps = this.mapCatalog.list();
+    const selected = this.selectedMapKey
+      ? maps.find((entry) => catalogMapKey(entry) === this.selectedMapKey)
+      : undefined;
+    return selected ?? maps[0] ?? null;
   }
   private startMatch(): void {
     if (!this.session.isConnected) return;
-    const state = this.getMap()
-      ? createGameStateFromMap(this.getMap() as MapDefinition)
-      : createSkirmishGameState();
-    const map = this.getMap() ?? createMapDefinitionFromState(state, "Skirmish 12×8");
+    const selectedMap = this.getMap();
+    if (!selectedMap) return;
+    const map = selectedMap.map;
+    const state = createGameStateFromMap(map);
     this.session.startMatch(map, state);
     this.transferringToBattle = true;
     this.scene.start(BATTLE_SCENE_KEY, {
@@ -170,6 +170,9 @@ export class MultiplayerHostScene extends Phaser.Scene {
     this.session.close();
     this.scene.start(MAIN_MENU_SCENE_KEY);
   }
+}
+function catalogMapKey(entry: CatalogMap): string {
+  return `${entry.source}:${entry.map.id}`;
 }
 function textStyle(fontSize: number): Phaser.Types.GameObjects.Text.TextStyle {
   return { color: uiTheme.colors.text, fontFamily: uiTheme.font.family, fontSize: `${fontSize}px` };

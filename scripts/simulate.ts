@@ -15,10 +15,9 @@ import {
   deserializeMapDefinition,
   isMapReadyForMatch,
 } from "../src/core/maps/map-definition";
-import { createSkirmishGameState, SKIRMISH_SCENARIO_ID } from "../src/core/scenarios/skirmish-12x8";
 
 const BUILT_IN_MAP_SELECTION = "skirmish";
-const BUILT_IN_MAP_NAME = "Skirmish 12×8";
+const SKIRMISH_MAP_FILE = "src/core/scenarios/maps/skirmish-12x8.json";
 const ENV_DEFAULTS_FILE = ".env";
 const ENV_LOCAL_FILE = ".env.local";
 const UTF8_ENCODING = "utf8";
@@ -64,15 +63,14 @@ console.log(JSON.stringify(result.summary));
 
 function loadSimulationMap(selection: string): SimulationMap {
   if (selection === BUILT_IN_MAP_SELECTION) {
-    return {
-      id: SKIRMISH_SCENARIO_ID,
-      name: BUILT_IN_MAP_NAME,
-      createInitialState: createSkirmishGameState,
-    };
+    return createSimulationMapFromFile(SKIRMISH_MAP_FILE);
   }
 
-  const mapPath = resolve(selection);
-  const map = deserializeMapDefinition(readFileSync(mapPath, UTF8_ENCODING));
+  return createSimulationMapFromFile(selection);
+}
+
+function createSimulationMapFromFile(filePath: string): SimulationMap {
+  const map = deserializeMapDefinition(readFileSync(resolve(filePath), UTF8_ENCODING));
 
   if (!isMapReadyForMatch(map)) {
     throw new Error("The selected map must contain at least one unit for each side.");

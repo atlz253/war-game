@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "id": "skirmish-12x8",
+  "name": "Skirmish 12×8",
+  "width": 12,
+  "height": 8,
+  "units": [
+    { "side": "blue", "type": "infantry", "position": { "x": 1, "y": 1 } },
+    { "side": "blue", "type": "infantry", "position": { "x": 1, "y": 3 } },
+    { "side": "blue", "type": "infantry", "position": { "x": 1, "y": 5 } },
+    { "side": "blue", "type": "tank", "position": { "x": 2, "y": 6 } },
+    { "side": "blue", "type": "artillery", "position": { "x": 2, "y": 0 } },
+    { "side": "red", "type": "infantry", "position": { "x": 10, "y": 1 } },
+    { "side": "red", "type": "infantry", "position": { "x": 10, "y": 3 } },
+    { "side": "red", "type": "infantry", "position": { "x": 10, "y": 5 } },
+    { "side": "red", "type": "tank", "position": { "x": 9, "y": 6 } },
+    { "side": "red", "type": "artillery", "position": { "x": 9, "y": 7 } }
+  ],
+  "controlPoints": [
+    { "owner": null, "position": { "x": 5, "y": 3 } },
+    { "owner": "red", "position": { "x": 11, "y": 3 } },
+    { "owner": "blue", "position": { "x": 0, "y": 4 } },
+    { "owner": null, "position": { "x": 6, "y": 4 } }
+  ],
+  "terrain": [
+    { "type": "mountain", "position": { "x": 4, "y": 2 } },
+    { "type": "mountain", "position": { "x": 7, "y": 5 } },
+    { "type": "forest", "position": { "x": 3, "y": 3 } },
+    { "type": "forest", "position": { "x": 4, "y": 4 } },
+    { "type": "forest", "position": { "x": 7, "y": 3 } },
+    { "type": "forest", "position": { "x": 8, "y": 4 } }
+  ]
+}

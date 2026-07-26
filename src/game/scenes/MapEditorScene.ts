@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-
+import { createBuiltInMapId } from "../../core/maps/built-in-map-file";
 import {
   createMapDefinition,
   isMapReadyForMatch,
@@ -7,6 +7,7 @@ import {
   resizeMapDefinition,
 } from "../../core/maps/map-definition";
 import type { Position, SideId, TerrainType, UnitType } from "../../core/model/game-state";
+import { getBuiltInMaps } from "../../core/scenarios/built-in-maps";
 import { assetManifest } from "../assets/asset-manifest";
 import { WorldBackground } from "../board/world-background";
 import { calculateEditorWorldViewport } from "../config/editor-presentation";
@@ -17,6 +18,7 @@ import {
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
+import { deleteBuiltInMap, isDevMapEditorAvailable, saveBuiltInMap } from "../maps/dev-map-api";
 import {
   applyEditorTool,
   type EditorTool,
@@ -24,6 +26,7 @@ import {
   isPositionInMap,
   wouldTrimPlacements,
 } from "../maps/editor-map-operations";
+import type { MapSource } from "../maps/map-catalog";
 import { getBrowserMapLibrary } from "../maps/map-library";
 import { confirmMapNameEdit } from "../maps/map-name-editor";
 import {
@@ -57,7 +60,7 @@ const BUTTON_HEIGHT = 64;
 const BUTTON_GAP = 80;
 const FIRST_BUTTON_Y = 332;
 const TOOL_TITLE_Y = 148;
-const STATUS_Y = 2212;
+const STATUS_Y = 2612;
 const PANEL_CONTENT_BOTTOM_Y = STATUS_Y + uiTheme.font.smallSize;
 const PANEL_CONTENT_HEIGHT = PANEL_CONTENT_BOTTOM_Y - PANEL_CONTENT_TOP;
 const MASK_COLOR = 0xffffff;
@@ -98,6 +101,10 @@ const BUTTON_ROW = {
   export: 22,
   delete: 23,
   back: 24,
+  devMode: 25,
+  previousBuiltIn: 26,
+  nextBuiltIn: 27,
+  newBuiltIn: 28,
 } as const;
 
 const SINGLE_CHARACTER_KEY_LENGTH = 1;
@@ -107,6 +114,7 @@ const BACKSPACE_KEY = "Backspace";
 
 interface MapEditorSceneData {
   readonly mapId?: string;
+  readonly mapSource?: MapSource;
   readonly matchConfiguration?: MatchConfiguration;
 }
 
@@ -125,6 +133,7 @@ interface CameraDrag {
 export class MapEditorScene extends Phaser.Scene {
   private readonly library = getBrowserMapLibrary();
   private map!: MapDefinition;
+  private mapSource: MapSource = "local";
   private matchConfiguration = createDefaultMatchConfiguration();
   private worldContainer!: Phaser.GameObjects.Container;
   private worldBackground!: WorldBackground;
@@ -147,15 +156,21 @@ export class MapEditorScene extends Phaser.Scene {
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
   private cameraDrag: CameraDrag | null = null;
   private renameDialog: MapRenameDialog | null = null;
-  private pauseMenu!: PauseMenu;
+  private pauseMenu: PauseMenu | null = null;
   private escapeKey?: Phaser.Input.Keyboard.Key;
+  private devModeButton?: Button;
 
   public constructor() {
     super("map-editor");
   }
 
   public create(data: MapEditorSceneData = {}): void {
+    this.pauseMenu = null;
     this.matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
+    this.mapSource =
+      data.mapSource === "built-in" && isDevMapEditorAvailable && getBuiltInMaps().length > 0
+        ? "built-in"
+        : "local";
     this.map = this.loadMap(data.mapId);
     this.mapZoom = INITIAL_MAP_ZOOM;
     this.targetMapZoom = INITIAL_MAP_ZOOM;
@@ -173,7 +188,7 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
-    if (this.pauseMenu.isOpen) return;
+    if (this.pauseMenu?.isOpen) return;
     if (this.renameDialog) {
       this.stopCameraMotion();
       return;
@@ -184,6 +199,9 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   private loadMap(mapId: string | undefined): MapDefinition {
+    if (this.mapSource === "built-in") {
+      return getBuiltInMaps().find((map) => map.id === mapId) ?? getFirstBuiltInMap();
+    }
     const storedMap = mapId ? this.library.list().find((map) => map.id === mapId) : undefined;
     return storedMap ?? createNewMap(this.library.list().length + INITIAL_MAP_NUMBER);
   }
@@ -226,12 +244,23 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   private createWorld(): void {
+    const boardWidth = this.map.width * TILE_SIZE;
+    const boardHeight = this.map.height * TILE_SIZE;
     this.worldBackground = new WorldBackground(this, this.worldContainer, {
       boardLeft: 0,
       boardTop: 0,
-      boardWidth: this.map.width * TILE_SIZE,
-      boardHeight: this.map.height * TILE_SIZE,
+      boardWidth,
+      boardHeight,
     });
+    this.worldContainer.add(
+      this.add.tileSprite(
+        boardWidth / HALF,
+        boardHeight / HALF,
+        boardWidth,
+        boardHeight,
+        assetManifest.terrain.plain.textureKey,
+      ),
+    );
   }
 
   private createHud(): void {
@@ -303,6 +332,8 @@ export class MapEditorScene extends Phaser.Scene {
       ),
     ];
 
+    buttons.push(...this.createDevButtons());
+
     this.editorContentContainer.add([
       this.mapInfoText,
       this.statusText,
@@ -310,6 +341,22 @@ export class MapEditorScene extends Phaser.Scene {
     ]);
     this.createEditorContentMask();
     this.hudContainer.add([panel.container, this.editorContentContainer]);
+  }
+
+  private createDevButtons(): Button[] {
+    if (!isDevMapEditorAvailable) return [];
+    this.devModeButton = this.createButton("", BUTTON_ROW.devMode, () => this.toggleDevMode());
+    this.refreshDevModeButton();
+    return [
+      this.devModeButton,
+      this.createButton("PREV BUILT-IN MAP", BUTTON_ROW.previousBuiltIn, () =>
+        this.changeBuiltInMap(-1),
+      ),
+      this.createButton("NEXT BUILT-IN MAP", BUTTON_ROW.nextBuiltIn, () =>
+        this.changeBuiltInMap(1),
+      ),
+      this.createButton("NEW BUILT-IN MAP", BUTTON_ROW.newBuiltIn, () => this.createNewMap()),
+    ];
   }
 
   private createButton(label: string, row: number, onClick: () => void): Button {
@@ -325,7 +372,7 @@ export class MapEditorScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      if (this.pauseMenu.isOpen) return;
+      if (this.pauseMenu?.isOpen) return;
       if (this.renameDialog) return;
       if (pointer.middleButtonDown() && this.isMapPointer(pointer)) {
         this.startCameraDrag(pointer);
@@ -339,38 +386,40 @@ export class MapEditorScene extends Phaser.Scene {
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
       (pointer: Phaser.Input.Pointer, _objects: unknown[], _x: number, y: number) => {
-        if (this.pauseMenu.isOpen) return;
+        if (this.pauseMenu?.isOpen) return;
         if (!this.scrollEditorPanel(pointer, y)) this.zoom(pointer, y);
       },
     );
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
-      if (this.pauseMenu.isOpen) return;
+      if (this.pauseMenu?.isOpen) return;
       this.updateCameraDrag(pointer);
     });
     this.input.on(Phaser.Input.Events.POINTER_UP, () => {
-      if (this.pauseMenu.isOpen) return;
+      if (this.pauseMenu?.isOpen) return;
       this.cameraDrag = null;
     });
     this.bindPauseKey();
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new PauseMenu(this, {
-      onResume: () => this.pauseMenu.close(),
+    const pauseMenu = new PauseMenu(this, {
+      onResume: () => this.pauseMenu?.close(),
       onExit: () =>
         this.scene.start(MAIN_MENU_SCENE_KEY, { matchConfiguration: this.matchConfiguration }),
     });
-    this.cameras.main.ignore([this.pauseMenu.overlay, this.pauseMenu.container]);
+    this.pauseMenu = pauseMenu;
+    this.cameras.main.ignore([pauseMenu.overlay, pauseMenu.container]);
     this.updatePauseMenuPresentation();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownPauseMenu, this);
   }
 
   private updatePauseMenuPresentation(): void {
-    if (!this.pauseMenu) return;
-    this.pauseMenu.container
+    const pauseMenu = this.pauseMenu;
+    if (!pauseMenu) return;
+    pauseMenu.container
       .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
       .setScale(this.presentationViewport.scale);
-    this.pauseMenu.setOverlaySize(this.scale.width, this.scale.height);
+    pauseMenu.setOverlaySize(this.scale.width, this.scale.height);
   }
 
   private bindPauseKey(): void {
@@ -380,15 +429,16 @@ export class MapEditorScene extends Phaser.Scene {
 
   private handleEscapeKey(): void {
     if (this.renameDialog) return;
-    if (this.pauseMenu.isOpen) this.pauseMenu.close();
+    if (this.pauseMenu?.isOpen) this.pauseMenu.close();
     else {
       this.stopCameraMotion();
-      this.pauseMenu.open();
+      this.pauseMenu?.open();
     }
   }
 
   private shutdownPauseMenu(): void {
     this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
+    this.pauseMenu = null;
   }
 
   private startCameraDrag(pointer: Phaser.Input.Pointer): void {
@@ -592,22 +642,40 @@ export class MapEditorScene extends Phaser.Scene {
     this.render();
   }
 
-  private save(): void {
+  private async save(): Promise<void> {
     if (this.pendingResize) {
       this.commitResize(this.pendingResize.width, this.pendingResize.height);
     }
-    this.library.save(this.map);
-    this.statusText.setText("Map saved locally.");
+    if (this.mapSource === "local") {
+      this.library.save(this.map);
+      this.statusText.setText("Map saved locally.");
+      return;
+    }
+    try {
+      await saveBuiltInMap(this.map);
+      this.statusText.setText("Built-in map saved to source files.");
+    } catch {
+      this.statusText.setText("Built-in map save failed. Run npm run dev and try again.");
+    }
   }
 
   private saveCopy(): void {
+    if (this.mapSource === "built-in") {
+      this.map = this.library.import(JSON.stringify(this.map));
+      this.mapSource = "local";
+      this.refreshDevModeButton();
+      this.statusText.setText("Built-in map copied to local library.");
+      this.render();
+      return;
+    }
     this.library.save(this.map);
     this.map = this.library.copy(this.map.id);
     this.render();
   }
 
   private createNewMap(): void {
-    this.map = createNewMap(this.nextMapNumber());
+    this.map =
+      this.mapSource === "built-in" ? createNewBuiltInMap() : createNewMap(this.nextMapNumber());
     this.pendingResize = null;
     this.updatePresentationViewport();
     this.render();
@@ -634,8 +702,8 @@ export class MapEditorScene extends Phaser.Scene {
       dialog.setError("Enter a map name.");
       return;
     }
-    if (!this.library.isNameAvailable(this.map.id, name)) {
-      dialog.setError("Another local map already uses this name.");
+    if (!this.isNameAvailable(name)) {
+      dialog.setError(`Another ${this.mapSource} map already uses this name.`);
       return;
     }
 
@@ -700,6 +768,8 @@ export class MapEditorScene extends Phaser.Scene {
     if (!serialized) return;
     try {
       this.map = this.library.import(serialized);
+      this.mapSource = "local";
+      this.refreshDevModeButton();
       this.updatePresentationViewport();
       this.statusText.setText("Map imported.");
       this.render();
@@ -711,7 +781,21 @@ export class MapEditorScene extends Phaser.Scene {
     downloadMapFile(this.map.name, JSON.stringify(this.map, null, 2));
     this.statusText.setText("Map export started.");
   }
-  private deleteMap(): void {
+  private async deleteMap(): Promise<void> {
+    if (this.mapSource === "built-in") {
+      try {
+        await deleteBuiltInMap(this.map.id);
+        this.statusText.setText("Built-in map deleted from source files.");
+        this.mapSource = "local";
+        this.map = createNewMap(this.nextMapNumber());
+        this.refreshDevModeButton();
+        this.updatePresentationViewport();
+        this.render();
+      } catch {
+        this.statusText.setText("Built-in map deletion failed. Run npm run dev and try again.");
+      }
+      return;
+    }
     this.library.delete(this.map.id);
     this.scene.start(MAIN_MENU_SCENE_KEY);
   }
@@ -744,7 +828,7 @@ export class MapEditorScene extends Phaser.Scene {
         ),
       );
     this.mapInfoText.setText(
-      `${this.map.name}\n${this.map.width} × ${this.map.height}\nTool: ${toolLabel(this.tool)}`,
+      `${this.map.name} [${this.mapSource.toUpperCase()}]\n${this.map.width} × ${this.map.height}\nTool: ${toolLabel(this.tool)}`,
     );
     if (!this.pendingResize)
       this.statusText.setText(
@@ -782,6 +866,57 @@ export class MapEditorScene extends Phaser.Scene {
 
     return number;
   }
+
+  private toggleDevMode(): void {
+    if (this.mapSource === "built-in") {
+      this.mapSource = "local";
+      this.map = createNewMap(this.nextMapNumber());
+    } else {
+      if (getBuiltInMaps().length === 0) {
+        this.statusText.setText("No built-in maps remain. Create a new built-in map first.");
+        return;
+      }
+      this.mapSource = "built-in";
+      this.map = getFirstBuiltInMap();
+    }
+    this.pendingResize = null;
+    this.refreshDevModeButton();
+    this.updatePresentationViewport();
+    this.render();
+  }
+
+  private changeBuiltInMap(direction: number): void {
+    if (this.mapSource !== "built-in") {
+      this.statusText.setText("Enable dev mode to edit built-in maps.");
+      return;
+    }
+    const maps = getBuiltInMaps();
+    if (maps.length === 0) {
+      this.statusText.setText("No built-in maps remain. Create a new built-in map first.");
+      return;
+    }
+    const currentIndex = maps.findIndex((map) => map.id === this.map.id);
+    const nextIndex = (currentIndex + direction + maps.length) % maps.length;
+    this.map = maps[nextIndex] ?? getFirstBuiltInMap();
+    this.pendingResize = null;
+    this.updatePresentationViewport();
+    this.render();
+  }
+
+  private refreshDevModeButton(): void {
+    this.devModeButton?.setLabel(
+      this.mapSource === "built-in" ? "DEV MODE: BUILT-IN" : "DEV MODE: LOCAL",
+    );
+  }
+
+  private isNameAvailable(name: string): boolean {
+    const normalizedName = name.trim();
+    const maps = this.mapSource === "built-in" ? getBuiltInMaps() : this.library.list();
+    return (
+      normalizedName.length > 0 &&
+      !maps.some((map) => map.id !== this.map.id && map.name === normalizedName)
+    );
+  }
 }
 
 function createNewMap(number: number): MapDefinition {
@@ -791,6 +926,15 @@ function createNewMap(number: number): MapDefinition {
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
   );
+}
+function createNewBuiltInMap(): MapDefinition {
+  const name = "New Built-in Map";
+  return createMapDefinition(createBuiltInMapId(), name, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+}
+function getFirstBuiltInMap(): MapDefinition {
+  const map = getBuiltInMaps()[0];
+  if (!map) throw new Error("No built-in maps are available.");
+  return map;
 }
 function tileCenter(coordinate: number): number {
   return coordinate * TILE_SIZE + TILE_SIZE / HALF;

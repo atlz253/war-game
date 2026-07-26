@@ -1,217 +1,42 @@
-import type {
-  ControlPointState,
-  GameState,
-  Position,
-  SideId,
-  UnitState,
-  UnitType,
-} from "../model/game-state";
-import { createInitialTeamScores } from "../scoring/team-scores";
+import { createGameStateFromMap, type MapDefinition } from "../maps/map-definition";
+import type { UnitState } from "../model/game-state";
+import { getBuiltInMap } from "./built-in-maps";
 
 export const SKIRMISH_SCENARIO_ID = "skirmish-12x8";
 export const BOARD_WIDTH = 12;
 export const BOARD_HEIGHT = 8;
-export const INITIAL_TURN = 1;
-export const INFANTRY_HEALTH = 10;
-export const INFANTRY_MOVEMENT_POINTS = 4;
-export const INFANTRY_MIN_ATTACK_RANGE = 1;
-export const INFANTRY_ATTACK_RANGE = 1;
-export const INFANTRY_BASE_DAMAGE = 3;
-export const INFANTRY_BASE_DEFENCE = 0;
-export const INFANTRY_MAX_AMMO = 6;
-export const TANK_HEALTH = 16;
-export const TANK_MOVEMENT_POINTS = 5;
-export const TANK_MIN_ATTACK_RANGE = 1;
-export const TANK_ATTACK_RANGE = 1;
-export const TANK_BASE_DAMAGE = 5;
-export const TANK_BASE_DEFENCE = 2;
-export const TANK_MAX_AMMO = 5;
-export const ARTILLERY_HEALTH = 8;
-export const ARTILLERY_MOVEMENT_POINTS = 3;
-export const ARTILLERY_MIN_ATTACK_RANGE = 2;
-export const ARTILLERY_ATTACK_RANGE = 4;
-export const ARTILLERY_BASE_DAMAGE = 4;
-export const ARTILLERY_BASE_DEFENCE = 0;
-export const ARTILLERY_MAX_AMMO = 4;
 
-const BLUE_SIDE: SideId = "blue";
-const RED_SIDE: SideId = "red";
-const INFANTRY_TYPE: UnitType = "infantry";
-const TANK_TYPE: UnitType = "tank";
-const ARTILLERY_TYPE: UnitType = "artillery";
-const BLUE_INFANTRY_ONE_POSITION: Position = { x: 1, y: 1 };
-const BLUE_INFANTRY_TWO_POSITION: Position = { x: 1, y: 3 };
-const BLUE_INFANTRY_THREE_POSITION: Position = { x: 1, y: 5 };
-const BLUE_TANK_POSITION: Position = { x: 2, y: 6 };
-const BLUE_ARTILLERY_POSITION: Position = { x: 2, y: 0 };
-const RED_INFANTRY_ONE_POSITION: Position = { x: 10, y: 1 };
-const RED_INFANTRY_TWO_POSITION: Position = { x: 10, y: 3 };
-const RED_INFANTRY_THREE_POSITION: Position = { x: 10, y: 5 };
-const RED_TANK_POSITION: Position = { x: 9, y: 6 };
-const RED_ARTILLERY_POSITION: Position = { x: 9, y: 7 };
-const CONTROL_POINT_ONE_POSITION: Position = { x: 5, y: 3 };
-const CONTROL_POINT_TWO_POSITION: Position = { x: 6, y: 4 };
-const BLUE_SUPPLY_POINT_POSITION: Position = { x: 0, y: 4 };
-const RED_SUPPLY_POINT_POSITION: Position = { x: 11, y: 3 };
-const MOUNTAIN_ONE_POSITION: Position = { x: 4, y: 2 };
-const MOUNTAIN_TWO_POSITION: Position = { x: 7, y: 5 };
-const FOREST_ONE_POSITION: Position = { x: 3, y: 3 };
-const FOREST_TWO_POSITION: Position = { x: 4, y: 4 };
-const FOREST_THREE_POSITION: Position = { x: 7, y: 3 };
-const FOREST_FOUR_POSITION: Position = { x: 8, y: 4 };
+export function getSkirmishMapDefinition(): MapDefinition {
+  const map = getBuiltInMap(SKIRMISH_SCENARIO_ID);
 
-export function createSkirmishGameState(): GameState {
-  return {
-    scenarioId: SKIRMISH_SCENARIO_ID,
-    board: {
-      width: BOARD_WIDTH,
-      height: BOARD_HEIGHT,
-      blockedCells: [],
-      terrain: [
-        { type: "mountain", position: MOUNTAIN_ONE_POSITION },
-        { type: "mountain", position: MOUNTAIN_TWO_POSITION },
-        { type: "forest", position: FOREST_ONE_POSITION },
-        { type: "forest", position: FOREST_TWO_POSITION },
-        { type: "forest", position: FOREST_THREE_POSITION },
-        { type: "forest", position: FOREST_FOUR_POSITION },
-      ],
-    },
-    turn: INITIAL_TURN,
-    activeSide: BLUE_SIDE,
-    units: createSkirmishUnits(),
-    controlPoints: createSkirmishControlPoints(),
-    scores: createInitialTeamScores(),
-    winner: null,
-  };
+  if (!map) throw new Error("Built-in Skirmish 12×8 map is missing.");
+  return map;
 }
 
-function createSkirmishUnits(): Record<string, UnitState> {
-  return {
-    "blue-infantry-1": createUnit(
-      "blue-infantry-1",
-      BLUE_SIDE,
-      INFANTRY_TYPE,
-      BLUE_INFANTRY_ONE_POSITION,
-    ),
-    "blue-infantry-2": createUnit(
-      "blue-infantry-2",
-      BLUE_SIDE,
-      INFANTRY_TYPE,
-      BLUE_INFANTRY_TWO_POSITION,
-    ),
-    "blue-infantry-3": createUnit(
-      "blue-infantry-3",
-      BLUE_SIDE,
-      INFANTRY_TYPE,
-      BLUE_INFANTRY_THREE_POSITION,
-    ),
-    "blue-tank-1": createUnit("blue-tank-1", BLUE_SIDE, TANK_TYPE, BLUE_TANK_POSITION),
-    "blue-artillery-1": createUnit(
-      "blue-artillery-1",
-      BLUE_SIDE,
-      ARTILLERY_TYPE,
-      BLUE_ARTILLERY_POSITION,
-    ),
-    "red-infantry-1": createUnit(
-      "red-infantry-1",
-      RED_SIDE,
-      INFANTRY_TYPE,
-      RED_INFANTRY_ONE_POSITION,
-    ),
-    "red-infantry-2": createUnit(
-      "red-infantry-2",
-      RED_SIDE,
-      INFANTRY_TYPE,
-      RED_INFANTRY_TWO_POSITION,
-    ),
-    "red-infantry-3": createUnit(
-      "red-infantry-3",
-      RED_SIDE,
-      INFANTRY_TYPE,
-      RED_INFANTRY_THREE_POSITION,
-    ),
-    "red-tank-1": createUnit("red-tank-1", RED_SIDE, TANK_TYPE, RED_TANK_POSITION),
-    "red-artillery-1": createUnit(
-      "red-artillery-1",
-      RED_SIDE,
-      ARTILLERY_TYPE,
-      RED_ARTILLERY_POSITION,
-    ),
-  };
+export function createSkirmishGameState() {
+  const map = getSkirmishMapDefinition();
+  const state = createGameStateFromMap(map);
+  return { ...state, units: orderUnitsAsDefined(state.units, map) };
 }
 
-function createSkirmishControlPoints(): Record<string, ControlPointState> {
-  return {
-    "control-point-1": createControlPoint("control-point-1", CONTROL_POINT_ONE_POSITION),
-    "control-point-2": createControlPoint("control-point-2", RED_SUPPLY_POINT_POSITION, RED_SIDE),
-    "control-point-3": createControlPoint("control-point-3", BLUE_SUPPLY_POINT_POSITION, BLUE_SIDE),
-    "control-point-4": createControlPoint("control-point-4", CONTROL_POINT_TWO_POSITION),
-  };
-}
+function orderUnitsAsDefined(
+  units: Record<string, UnitState>,
+  map: MapDefinition,
+): Record<string, UnitState> {
+  const orderedUnits = map.units.map((placement) =>
+    Object.values(units).find(
+      (unit) =>
+        unit.side === placement.side &&
+        unit.type === placement.type &&
+        unit.position.x === placement.position.x &&
+        unit.position.y === placement.position.y,
+    ),
+  );
 
-function createUnit(id: string, side: SideId, type: UnitType, position: Position): UnitState {
-  const stats = getUnitStats(type);
-
-  return {
-    id,
-    side,
-    type,
-    position,
-    health: stats.health,
-    maxHealth: stats.health,
-    movementPoints: stats.movementPoints,
-    maxMovementPoints: stats.movementPoints,
-    minAttackRange: stats.minAttackRange,
-    attackRange: stats.attackRange,
-    baseDamage: stats.baseDamage,
-    baseDefence: stats.baseDefence,
-    ammo: stats.maxAmmo,
-    maxAmmo: stats.maxAmmo,
-    hasMovedThisTurn: false,
-    hasTakenMainAction: false,
-  };
-}
-
-function getUnitStats(type: UnitType) {
-  if (type === INFANTRY_TYPE) {
-    return {
-      health: INFANTRY_HEALTH,
-      movementPoints: INFANTRY_MOVEMENT_POINTS,
-      minAttackRange: INFANTRY_MIN_ATTACK_RANGE,
-      attackRange: INFANTRY_ATTACK_RANGE,
-      baseDamage: INFANTRY_BASE_DAMAGE,
-      baseDefence: INFANTRY_BASE_DEFENCE,
-      maxAmmo: INFANTRY_MAX_AMMO,
-    };
+  const completeUnits = orderedUnits.filter((unit): unit is UnitState => unit !== undefined);
+  if (completeUnits.length !== orderedUnits.length) {
+    throw new Error("Built-in Skirmish map could not be converted to units.");
   }
 
-  if (type === TANK_TYPE) {
-    return {
-      health: TANK_HEALTH,
-      movementPoints: TANK_MOVEMENT_POINTS,
-      minAttackRange: TANK_MIN_ATTACK_RANGE,
-      attackRange: TANK_ATTACK_RANGE,
-      baseDamage: TANK_BASE_DAMAGE,
-      baseDefence: TANK_BASE_DEFENCE,
-      maxAmmo: TANK_MAX_AMMO,
-    };
-  }
-
-  return {
-    health: ARTILLERY_HEALTH,
-    movementPoints: ARTILLERY_MOVEMENT_POINTS,
-    minAttackRange: ARTILLERY_MIN_ATTACK_RANGE,
-    attackRange: ARTILLERY_ATTACK_RANGE,
-    baseDamage: ARTILLERY_BASE_DAMAGE,
-    baseDefence: ARTILLERY_BASE_DEFENCE,
-    maxAmmo: ARTILLERY_MAX_AMMO,
-  };
-}
-
-function createControlPoint(
-  id: string,
-  position: Position,
-  owner: SideId | null = null,
-): ControlPointState {
-  return { id, position, owner };
+  return Object.fromEntries(completeUnits.map((unit) => [unit.id, unit]));
 }
