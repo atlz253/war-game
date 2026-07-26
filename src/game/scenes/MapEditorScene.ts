@@ -6,11 +6,12 @@ import {
   type MapDefinition,
   resizeMapDefinition,
 } from "../../core/maps/map-definition";
-import type { Position, SideId, TerrainType, UnitType } from "../../core/model/game-state";
+import type { Position, SideId, TerrainType } from "../../core/model/game-state";
 import { getBuiltInMaps } from "../../core/scenarios/built-in-maps";
 import { assetManifest } from "../assets/asset-manifest";
 import { WorldBackground } from "../board/world-background";
 import { calculateEditorWorldViewport } from "../config/editor-presentation";
+import { GAME_CANVAS_HEIGHT } from "../config/game-config";
 import {
   calculatePresentationViewport,
   type PresentationViewport,
@@ -34,9 +35,15 @@ import {
   type MatchConfiguration,
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
+import { MapEditorPalette } from "../ui/components/MapEditorPalette";
 import { MapRenameDialog } from "../ui/components/MapRenameDialog";
 import { Panel } from "../ui/components/Panel";
 import { PauseMenu } from "../ui/components/PauseMenu";
+import {
+  calculateMapEditorPaletteWidth,
+  MAP_EDITOR_PALETTE_RESERVED_HEIGHT,
+  MAP_EDITOR_PALETTE_Y,
+} from "../ui/map-editor-palette";
 import { uiTheme } from "../ui/theme/ui-theme";
 import { calculateCameraCenterLimits } from "./camera-presentation";
 import { calculateEditorPanelScroll } from "./editor-panel-scroll";
@@ -44,11 +51,11 @@ import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY } from "./scene-keys";
 
 const TILE_SIZE = 512;
 const HALF = 2;
-const HUD_X = 56;
-const HUD_WIDTH = 864;
+const HUD_X = 0;
+const HUD_WIDTH = 920;
 const EDITOR_PANEL_RESERVED_WIDTH = HUD_X + HUD_WIDTH;
-const TOP_PANEL_Y = 56;
-const TOP_PANEL_HEIGHT = 2048;
+const TOP_PANEL_Y = 0;
+const TOP_PANEL_HEIGHT = GAME_CANVAS_HEIGHT;
 const EDITOR_CONTENT_OFFSET = 64;
 const CONTENT_X = HUD_X + EDITOR_CONTENT_OFFSET;
 const PANEL_CONTENT_TOP = TOP_PANEL_Y + uiTheme.spacing.md;
@@ -81,30 +88,19 @@ const BUTTON_ROW = {
   heightDecrease: 2,
   heightIncrease: 3,
   newMap: 4,
-  blueInfantry: 5,
-  blueTank: 6,
-  blueArtillery: 7,
-  redInfantry: 8,
-  redTank: 9,
-  redArtillery: 10,
-  forest: 11,
-  mountain: 12,
-  neutralPoint: 13,
-  bluePoint: 14,
-  redPoint: 15,
-  erase: 16,
-  rename: 17,
-  save: 18,
-  saveCopy: 19,
-  testMatch: 20,
-  import: 21,
-  export: 22,
-  delete: 23,
-  back: 24,
-  devMode: 25,
-  previousBuiltIn: 26,
-  nextBuiltIn: 27,
-  newBuiltIn: 28,
+  erase: 5,
+  rename: 6,
+  save: 7,
+  saveCopy: 8,
+  testMatch: 9,
+  import: 10,
+  export: 11,
+  delete: 12,
+  back: 13,
+  devMode: 14,
+  previousBuiltIn: 15,
+  nextBuiltIn: 16,
+  newBuiltIn: 17,
 } as const;
 
 const SINGLE_CHARACTER_KEY_LENGTH = 1;
@@ -138,6 +134,7 @@ export class MapEditorScene extends Phaser.Scene {
   private worldContainer!: Phaser.GameObjects.Container;
   private worldBackground!: WorldBackground;
   private hudContainer!: Phaser.GameObjects.Container;
+  private palette?: MapEditorPalette;
   private editorContentContainer!: Phaser.GameObjects.Container;
   private editorContentMask?: Phaser.GameObjects.Graphics;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
@@ -229,6 +226,7 @@ export class MapEditorScene extends Phaser.Scene {
     const worldViewport = calculateEditorWorldViewport(
       this.presentationViewport,
       EDITOR_PANEL_RESERVED_WIDTH,
+      MAP_EDITOR_PALETTE_RESERVED_HEIGHT,
     );
     this.cameras.main
       .setViewport(worldViewport.x, worldViewport.y, worldViewport.width, worldViewport.height)
@@ -239,6 +237,7 @@ export class MapEditorScene extends Phaser.Scene {
     this.stopCameraMotion();
     this.uiCamera.setViewport(0, 0, this.scale.width, this.scale.height).setScroll(0, 0).setZoom(1);
     this.hudContainer.setPosition(x, y).setScale(scale);
+    this.palette?.setWidth(calculateMapEditorPaletteWidth(this.presentationViewport.width, scale));
     this.updateEditorContentMask();
     this.updatePauseMenuPresentation();
   }
@@ -288,37 +287,6 @@ export class MapEditorScene extends Phaser.Scene {
         this.requestResize(this.map.width, this.map.height + 1),
       ),
       this.createButton("NEW MAP", BUTTON_ROW.newMap, () => this.createNewMap()),
-      this.createButton("BLUE INFANTRY", BUTTON_ROW.blueInfantry, () =>
-        this.selectUnitTool("blue", "infantry"),
-      ),
-      this.createButton("BLUE TANK", BUTTON_ROW.blueTank, () =>
-        this.selectUnitTool("blue", "tank"),
-      ),
-      this.createButton("BLUE ARTILLERY", BUTTON_ROW.blueArtillery, () =>
-        this.selectUnitTool("blue", "artillery"),
-      ),
-      this.createButton("RED INFANTRY", BUTTON_ROW.redInfantry, () =>
-        this.selectUnitTool("red", "infantry"),
-      ),
-      this.createButton("RED TANK", BUTTON_ROW.redTank, () => this.selectUnitTool("red", "tank")),
-      this.createButton("RED ARTILLERY", BUTTON_ROW.redArtillery, () =>
-        this.selectUnitTool("red", "artillery"),
-      ),
-      this.createButton("FOREST", BUTTON_ROW.forest, () =>
-        this.setTool({ kind: "terrain", terrainType: "forest" }),
-      ),
-      this.createButton("MOUNTAIN", BUTTON_ROW.mountain, () =>
-        this.setTool({ kind: "terrain", terrainType: "mountain" }),
-      ),
-      this.createButton("POINT: NEUTRAL", BUTTON_ROW.neutralPoint, () =>
-        this.selectControlPointTool(null),
-      ),
-      this.createButton("POINT: BLUE", BUTTON_ROW.bluePoint, () =>
-        this.selectControlPointTool("blue"),
-      ),
-      this.createButton("POINT: RED", BUTTON_ROW.redPoint, () =>
-        this.selectControlPointTool("red"),
-      ),
       this.createButton("ERASE CELL", BUTTON_ROW.erase, () => this.setTool({ kind: "erase" })),
       this.createButton("RENAME MAP", BUTTON_ROW.rename, () => this.openRenameDialog()),
       this.createButton("SAVE", BUTTON_ROW.save, () => this.save()),
@@ -340,7 +308,17 @@ export class MapEditorScene extends Phaser.Scene {
       ...buttons.map((button) => button.container),
     ]);
     this.createEditorContentMask();
-    this.hudContainer.add([panel.container, this.editorContentContainer]);
+    this.palette = new MapEditorPalette(this, {
+      selectedTool: this.tool,
+      onToolSelected: (tool) => this.setTool(tool),
+    });
+    this.palette.setWidth(
+      calculateMapEditorPaletteWidth(
+        this.presentationViewport.width,
+        this.presentationViewport.scale,
+      ),
+    );
+    this.hudContainer.add([panel.container, this.editorContentContainer, this.palette.container]);
   }
 
   private createDevButtons(): Button[] {
@@ -463,7 +441,11 @@ export class MapEditorScene extends Phaser.Scene {
   private isMapPointer(pointer: Phaser.Input.Pointer): boolean {
     if (this.renameDialog) return false;
     const logical = this.toLogicalPointer(pointer);
-    return logical !== null && logical.x >= EDITOR_PANEL_RESERVED_WIDTH;
+    return (
+      logical !== null &&
+      logical.x >= EDITOR_PANEL_RESERVED_WIDTH &&
+      logical.y < MAP_EDITOR_PALETTE_Y
+    );
   }
 
   private scrollEditorPanel(pointer: Phaser.Input.Pointer, wheelDeltaY: number): boolean {
@@ -605,14 +587,9 @@ export class MapEditorScene extends Phaser.Scene {
     this.render();
   }
 
-  private selectUnitTool(side: SideId, unitType: UnitType): void {
-    this.setTool({ kind: "unit", side, unitType });
-  }
-  private selectControlPointTool(owner: SideId | null): void {
-    this.setTool({ kind: "control-point", owner });
-  }
   private setTool(tool: EditorTool): void {
     this.tool = tool;
+    this.palette?.setSelectedTool(tool);
     this.render();
   }
 

@@ -46,6 +46,10 @@ export class Panel {
     this.container.setVisible(visible);
   }
 
+  public setSize(width: number, height: number): void {
+    this.background.setSize(width, height);
+  }
+
   public destroy(): void {
     this.container.destroy(true);
   }

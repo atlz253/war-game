@@ -10,6 +10,7 @@ export interface ButtonOptions {
   readonly label: string;
   readonly onClick: () => void;
   readonly enabled?: boolean;
+  readonly selected?: boolean;
 }
 
 const CENTER_ORIGIN = 0.5;
@@ -17,6 +18,7 @@ const BORDER_WIDTH = 8;
 const PRESSED_OFFSET = 4;
 const ENABLED_ALPHA = 1;
 const DISABLED_ALPHA = 0.55;
+const SELECTED_BORDER_COLOR = 0xffffff;
 
 export class Button {
   public readonly container: Phaser.GameObjects.Container;
@@ -24,6 +26,7 @@ export class Button {
   private readonly labelText: Phaser.GameObjects.Text;
   private readonly onClick: () => void;
   private enabled: boolean;
+  private selected: boolean;
 
   public constructor(scene: Phaser.Scene, options: ButtonOptions) {
     this.container = scene.add
@@ -43,6 +46,7 @@ export class Button {
       .setOrigin(CENTER_ORIGIN);
     this.onClick = options.onClick;
     this.enabled = options.enabled ?? true;
+    this.selected = options.selected ?? false;
     this.container.add([this.background, this.labelText]);
     this.bindPointerEvents();
     this.refreshAppearance();
@@ -55,6 +59,11 @@ export class Button {
 
   public setLabel(label: string): void {
     this.labelText.setText(label);
+  }
+
+  public setSelected(selected: boolean): void {
+    this.selected = selected;
+    this.refreshAppearance();
   }
 
   public destroy(): void {
@@ -77,16 +86,28 @@ export class Button {
   }
 
   private refreshAppearance(): void {
-    const color = this.enabled ? uiTheme.colors.primary : uiTheme.colors.panelBorder;
+    const color = this.enabled
+      ? this.selected
+        ? uiTheme.colors.panelBorder
+        : uiTheme.colors.primary
+      : uiTheme.colors.panelBorder;
 
-    this.background.setFillStyle(color).setAlpha(this.enabled ? ENABLED_ALPHA : DISABLED_ALPHA);
+    this.background
+      .setFillStyle(color)
+      .setStrokeStyle(
+        BORDER_WIDTH,
+        this.selected ? SELECTED_BORDER_COLOR : uiTheme.colors.panelBorder,
+      )
+      .setAlpha(this.enabled ? ENABLED_ALPHA : DISABLED_ALPHA);
     this.labelText.setColor(this.enabled ? uiTheme.colors.text : uiTheme.colors.mutedText);
     this.labelText.setPosition(0, 0);
   }
 
   private setHoverAppearance(): void {
     if (this.enabled) {
-      this.background.setFillStyle(uiTheme.colors.panelBorder);
+      this.background.setFillStyle(
+        this.selected ? uiTheme.colors.primary : uiTheme.colors.panelBorder,
+      );
     }
   }
 
