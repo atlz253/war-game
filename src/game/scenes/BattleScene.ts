@@ -32,10 +32,11 @@ import type { MultiplayerSession } from "../multiplayer/multiplayer-session";
 import { createRecordedMatch } from "../replays/recorded-match";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
 import { Button } from "../ui/components/Button";
+import { EventLogDialog } from "../ui/components/EventLogDialog";
+import { EVENT_LOG_VISIBLE_ENTRY_COUNT, EventLogModel } from "../ui/components/EventLogModel";
 import { Panel } from "../ui/components/Panel";
 import { PauseMenu } from "../ui/components/PauseMenu";
 import { ProgressBar } from "../ui/components/ProgressBar";
-import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
 import { BattleAiPauseController } from "./battle-ai-pause-controller";
 import { calculateWorldViewportWidth } from "./battle-presentation";
@@ -60,8 +61,6 @@ const TOP_PANEL_Y = 56;
 const TOP_PANEL_HEIGHT = 300;
 const SELECTED_PANEL_Y = 388;
 const SELECTED_PANEL_HEIGHT = 480;
-const LOG_PANEL_Y = 900;
-const LOG_PANEL_HEIGHT = 1204;
 const PANEL_CONTENT_X = HUD_X + uiTheme.spacing.md;
 const TOP_TEXT_OFFSET = 128;
 const TOP_TEXT_Y = TOP_PANEL_Y + TOP_TEXT_OFFSET;
@@ -74,8 +73,6 @@ const SELECTED_HEALTH_BAR_OFFSET = 264;
 const SELECTED_HEALTH_BAR_Y = SELECTED_PANEL_Y + SELECTED_HEALTH_BAR_OFFSET;
 const SELECTED_HEALTH_BAR_WIDTH = 256;
 const SELECTED_HEALTH_BAR_HEIGHT = 32;
-const LOG_TEXT_OFFSET = 128;
-const LOG_TEXT_Y = LOG_PANEL_Y + LOG_TEXT_OFFSET;
 const END_BUTTON_X = 3652;
 const END_BUTTON_Y = 292;
 const WAIT_BUTTON_X = 3392;
@@ -86,7 +83,6 @@ const CAPTURE_BUTTON_WIDTH = 448;
 const CAPTURE_BUTTON_OFFSET_Y = 388;
 const CAPTURE_BUTTON_X = HUD_X + HUD_WIDTH / 2;
 const CAPTURE_BUTTON_Y = SELECTED_PANEL_Y + CAPTURE_BUTTON_OFFSET_Y;
-const EVENT_LOG_ENTRIES = 10;
 const AI_ACTION_DELAY = 500;
 const MULTIPLAYER_RECONNECT_TIMEOUT_MS = 60_000;
 const CAMERA_SCROLL_SPEED = 2400;
@@ -145,7 +141,7 @@ export class BattleScene extends Phaser.Scene {
   private activeTurnText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private healthBar!: ProgressBar;
-  private eventLog!: ScrollableList;
+  private eventLog = new EventLogModel(EVENT_LOG_VISIBLE_ENTRY_COUNT);
   private waitButton!: Button;
   private endTurnButton!: Button;
   private captureButton!: Button;
@@ -155,6 +151,7 @@ export class BattleScene extends Phaser.Scene {
   private attackHighlightLayer: Phaser.GameObjects.Graphics | null = null;
   private mapRenderer!: BattleMapRenderer;
   private pauseMenu?: PauseMenu;
+  private eventLogDialog?: EventLogDialog;
   private escapeKey?: Phaser.Input.Keyboard.Key;
   private aiDelayEvent?: Phaser.Time.TimerEvent;
   private aiPauseController = new BattleAiPauseController<AiActionDecision>();
@@ -193,6 +190,8 @@ export class BattleScene extends Phaser.Scene {
 
   private resetRenderingState(): void {
     this.pauseMenu = undefined;
+    this.eventLogDialog = undefined;
+    this.eventLog = new EventLogModel(EVENT_LOG_VISIBLE_ENTRY_COUNT);
     this.mapRenderer?.reset();
     this.aiDelayEvent?.remove(false);
     this.aiDelayEvent = undefined;
@@ -361,13 +360,6 @@ export class BattleScene extends Phaser.Scene {
       height: SELECTED_PANEL_HEIGHT,
       title: "SELECTED UNIT",
     });
-    const logPanel = new Panel(this, {
-      x: HUD_X,
-      y: LOG_PANEL_Y,
-      width: HUD_WIDTH,
-      height: LOG_PANEL_HEIGHT,
-      title: "EVENT LOG",
-    });
     this.activeTurnText = this.addText(PANEL_CONTENT_X, TOP_TEXT_Y, "");
     this.scoreText = this.addScoreText(SCORE_TEXT_X, SCORE_TEXT_Y, "");
     this.selectedUnitText = this.addText(PANEL_CONTENT_X, SELECTED_TEXT_Y, "Select a Blue unit.");
@@ -377,12 +369,6 @@ export class BattleScene extends Phaser.Scene {
       width: SELECTED_HEALTH_BAR_WIDTH,
       height: SELECTED_HEALTH_BAR_HEIGHT,
       color: uiTheme.colors.primary,
-    });
-    this.eventLog = new ScrollableList(this, {
-      x: PANEL_CONTENT_X,
-      y: LOG_TEXT_Y,
-      width: HUD_WIDTH - uiTheme.spacing.lg,
-      maxEntries: EVENT_LOG_ENTRIES,
     });
     this.waitButton = new Button(this, {
       x: WAIT_BUTTON_X,
@@ -411,12 +397,10 @@ export class BattleScene extends Phaser.Scene {
     this.hudContainer.add([
       turnPanel.container,
       selectedPanel.container,
-      logPanel.container,
       this.activeTurnText,
       this.scoreText,
       this.selectedUnitText,
       this.healthBar.container,
-      this.eventLog.container,
       this.waitButton.container,
       this.endTurnButton.container,
       this.captureButton.container,
@@ -446,14 +430,20 @@ export class BattleScene extends Phaser.Scene {
     this.pauseMenu = new PauseMenu(this, {
       onResume: () => this.resumeFromPause(),
       onExit: () => this.exitToMainMenu(),
+      onShowEventLog: () => this.openEventLog(),
     });
+    this.eventLogDialog = new EventLogDialog(this, this.eventLog);
     this.cameras.main.ignore([this.pauseMenu.overlay, this.pauseMenu.container]);
+    this.cameras.main.ignore(this.eventLogDialog.container);
     this.updatePauseMenuPresentation();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownPauseMenu, this);
   }
   private updatePauseMenuPresentation(): void {
     if (!this.pauseMenu) return;
     this.pauseMenu.container
+      .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
+      .setScale(this.presentationViewport.scale);
+    this.eventLogDialog?.container
       .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
       .setScale(this.presentationViewport.scale);
     this.pauseMenu.setOverlaySize(this.scale.width, this.scale.height);
@@ -463,6 +453,10 @@ export class BattleScene extends Phaser.Scene {
     this.escapeKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
   }
   private handleEscapeKey(): void {
+    if (this.eventLogDialog?.isOpen) {
+      this.eventLogDialog.close();
+      return;
+    }
     if (this.pauseMenu?.isOpen) this.resumeFromPause();
     else this.openPauseMenu();
   }
@@ -475,6 +469,7 @@ export class BattleScene extends Phaser.Scene {
     this.pauseMenu.open();
   }
   private resumeFromPause(): void {
+    this.eventLogDialog?.close();
     this.pauseMenu?.close();
     const resume = this.aiPauseController.resume();
     if (resume.kind === "apply") this.applyAiDecision(resume.decision);
@@ -491,6 +486,12 @@ export class BattleScene extends Phaser.Scene {
     this.aiDelayEvent?.remove(false);
     this.aiDelayEvent = undefined;
     this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
+    this.eventLogDialog?.destroy(this);
+    this.eventLogDialog = undefined;
+  }
+
+  private openEventLog(): void {
+    this.eventLogDialog?.open();
   }
 
   private zoomWorldCamera(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
@@ -617,7 +618,7 @@ export class BattleScene extends Phaser.Scene {
 
   private isPointerInsideHud(pointer: Phaser.Input.Pointer): boolean {
     const hudPointer = this.toHudPosition(pointer);
-    const hudBottom = LOG_PANEL_Y + LOG_PANEL_HEIGHT;
+    const hudBottom = SELECTED_PANEL_Y + SELECTED_PANEL_HEIGHT;
 
     return (
       hudPointer.x >= HUD_X &&

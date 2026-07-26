@@ -7,6 +7,7 @@ import { Panel } from "./Panel";
 export interface PauseMenuOptions {
   readonly onResume: () => void;
   readonly onExit: () => void;
+  readonly onShowEventLog?: () => void;
 }
 
 const TOP_LEFT_ORIGIN = 0;
@@ -15,18 +16,29 @@ const OVERLAY_ALPHA = 0.8;
 const LOGICAL_WIDTH = 3840;
 const LOGICAL_HEIGHT = 2160;
 const DIALOG_WIDTH = 1280;
-const DIALOG_HEIGHT = 720;
+const DIALOG_HEIGHT = 944;
 const DIALOG_X = (LOGICAL_WIDTH - DIALOG_WIDTH) / 2;
 const DIALOG_Y = (LOGICAL_HEIGHT - DIALOG_HEIGHT) / 2;
 const TITLE_TOP_OFFSET = 176;
-const RESUME_BUTTON_TOP_OFFSET = 352;
-const EXIT_BUTTON_TOP_OFFSET = 512;
+const FIRST_BUTTON_TOP_OFFSET = 352;
+const BUTTON_VERTICAL_GAP = 144;
 const TITLE_Y = DIALOG_Y + TITLE_TOP_OFFSET;
-const RESUME_Y = DIALOG_Y + RESUME_BUTTON_TOP_OFFSET;
-const EXIT_Y = DIALOG_Y + EXIT_BUTTON_TOP_OFFSET;
 const BUTTON_WIDTH = 896;
 const BUTTON_HEIGHT = 96;
 const DIALOG_CENTER_X = DIALOG_X + DIALOG_WIDTH / 2;
+
+interface PauseMenuAction {
+  readonly label: string;
+  readonly onClick: () => void;
+}
+
+export function getPauseMenuActions(options: PauseMenuOptions): readonly PauseMenuAction[] {
+  return [
+    { label: "RETURN TO GAME", onClick: options.onResume },
+    ...(options.onShowEventLog ? [{ label: "EVENT LOG", onClick: options.onShowEventLog }] : []),
+    { label: "MAIN MENU", onClick: options.onExit },
+  ];
+}
 
 export class PauseMenu {
   public readonly container: Phaser.GameObjects.Container;
@@ -53,24 +65,19 @@ export class PauseMenu {
         fontSize: `${uiTheme.font.titleSize}px`,
       })
       .setOrigin(CENTER_ORIGIN);
-    const resumeButton = new Button(scene, {
-      x: DIALOG_CENTER_X,
-      y: RESUME_Y,
-      width: BUTTON_WIDTH,
-      height: BUTTON_HEIGHT,
-      label: "RETURN TO GAME",
-      onClick: options.onResume,
-    });
-    const exitButton = new Button(scene, {
-      x: DIALOG_CENTER_X,
-      y: EXIT_Y,
-      width: BUTTON_WIDTH,
-      height: BUTTON_HEIGHT,
-      label: "MAIN MENU",
-      onClick: options.onExit,
-    });
+    const buttons = getPauseMenuActions(options).map(
+      (action, index) =>
+        new Button(scene, {
+          x: DIALOG_CENTER_X,
+          y: DIALOG_Y + FIRST_BUTTON_TOP_OFFSET + BUTTON_VERTICAL_GAP * index,
+          width: BUTTON_WIDTH,
+          height: BUTTON_HEIGHT,
+          label: action.label,
+          onClick: action.onClick,
+        }),
+    );
 
-    this.container.add([panel.container, title, resumeButton.container, exitButton.container]);
+    this.container.add([panel.container, title, ...buttons.map((button) => button.container)]);
   }
 
   public get isOpen(): boolean {

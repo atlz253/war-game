@@ -19,9 +19,10 @@ import {
   getReplayDelay,
 } from "../replays/replay-playback";
 import { Button } from "../ui/components/Button";
+import { EventLogDialog } from "../ui/components/EventLogDialog";
+import { EVENT_LOG_VISIBLE_ENTRY_COUNT, EventLogModel } from "../ui/components/EventLogModel";
 import { Panel } from "../ui/components/Panel";
 import { PauseMenu } from "../ui/components/PauseMenu";
-import { ScrollableList } from "../ui/components/ScrollableList";
 import { uiTheme } from "../ui/theme/ui-theme";
 import { calculateWorldViewportWidth } from "./battle-presentation";
 import { formatEvent } from "./battle-view-helpers";
@@ -34,19 +35,15 @@ const HUD_X = 3104;
 const HUD_WIDTH = 704;
 const TOP_PANEL_Y = 56;
 const TOP_PANEL_HEIGHT = 584;
-const LOG_PANEL_Y = 672;
-const LOG_PANEL_HEIGHT = 1432;
 const HUD_TEXT_X = HUD_X + uiTheme.spacing.md;
 const TITLE_OFFSET_Y = 128;
 const STATUS_OFFSET_Y = 240;
 const CONTROL_ROW_ONE_OFFSET_Y = 376;
 const CONTROL_ROW_TWO_OFFSET_Y = 488;
-const LOG_TEXT_OFFSET_Y = 112;
 const TITLE_Y = TOP_PANEL_Y + TITLE_OFFSET_Y;
 const STATUS_Y = TOP_PANEL_Y + STATUS_OFFSET_Y;
 const CONTROL_ROW_ONE_Y = TOP_PANEL_Y + CONTROL_ROW_ONE_OFFSET_Y;
 const CONTROL_ROW_TWO_Y = TOP_PANEL_Y + CONTROL_ROW_TWO_OFFSET_Y;
-const LOG_TEXT_Y = LOG_PANEL_Y + LOG_TEXT_OFFSET_Y;
 const CONTROL_WIDTH = 176;
 const CONTROL_HEIGHT = 96;
 const FIRST_CONTROL_OFFSET_X = 96;
@@ -96,8 +93,9 @@ export class ReplayScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
   private playButton!: Button;
   private speedButton!: Button;
-  private eventLog!: ScrollableList;
+  private eventLog = new EventLogModel(EVENT_LOG_VISIBLE_ENTRY_COUNT);
   private pauseMenu!: PauseMenu;
+  private eventLogDialog?: EventLogDialog;
   private escapeKey?: Phaser.Input.Keyboard.Key;
   private resumePlaybackAfterPause = false;
 
@@ -139,6 +137,8 @@ export class ReplayScene extends Phaser.Scene {
     this.cameraVelocity = { x: 0, y: 0 };
     this.cameraCenter = { x: 0, y: 0 };
     this.dragState = null;
+    this.eventLog = new EventLogModel(EVENT_LOG_VISIBLE_ENTRY_COUNT);
+    this.eventLogDialog = undefined;
   }
 
   public update(_time: number, delta: number): void {
@@ -172,25 +172,12 @@ export class ReplayScene extends Phaser.Scene {
       height: TOP_PANEL_HEIGHT,
       title: "REPLAY",
     });
-    const logPanel = new Panel(this, {
-      x: HUD_X,
-      y: LOG_PANEL_Y,
-      width: HUD_WIDTH,
-      height: LOG_PANEL_HEIGHT,
-      title: "EVENT LOG",
-    });
     const title = this.add
       .text(HUD_TEXT_X, TITLE_Y, name, this.textStyle(uiTheme.font.smallSize))
       .setOrigin(TOP_LEFT_ORIGIN);
     this.statusText = this.add
       .text(HUD_TEXT_X, STATUS_Y, "", this.textStyle(uiTheme.font.smallSize))
       .setOrigin(TOP_LEFT_ORIGIN);
-    this.eventLog = new ScrollableList(this, {
-      x: HUD_TEXT_X,
-      y: LOG_TEXT_Y,
-      width: HUD_WIDTH - uiTheme.spacing.lg,
-      maxEntries: 8,
-    });
     const start = this.createControl(START_X, CONTROL_ROW_ONE_Y, "START", () => this.showFrame(0));
     const previous = this.createControl(PREVIOUS_X, CONTROL_ROW_ONE_Y, "<", () =>
       this.showFrame(getPreviousReplayFrameIndex(this.frameIndex)),
@@ -209,10 +196,8 @@ export class ReplayScene extends Phaser.Scene {
     );
     this.hudContainer.add([
       turnPanel.container,
-      logPanel.container,
       title,
       this.statusText,
-      this.eventLog.container,
       start.container,
       previous.container,
       next.container,
@@ -278,8 +263,11 @@ export class ReplayScene extends Phaser.Scene {
     this.pauseMenu = new PauseMenu(this, {
       onResume: () => this.resumeFromPause(),
       onExit: () => this.scene.start(MAIN_MENU_SCENE_KEY),
+      onShowEventLog: () => this.openEventLog(),
     });
+    this.eventLogDialog = new EventLogDialog(this, this.eventLog);
     this.cameras.main.ignore([this.pauseMenu.overlay, this.pauseMenu.container]);
+    this.cameras.main.ignore(this.eventLogDialog.container);
     this.updatePauseMenuPresentation();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownPauseMenu, this);
   }
@@ -287,6 +275,9 @@ export class ReplayScene extends Phaser.Scene {
   private updatePauseMenuPresentation(): void {
     if (!this.pauseMenu) return;
     this.pauseMenu.container
+      .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
+      .setScale(this.presentationViewport.scale);
+    this.eventLogDialog?.container
       .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
       .setScale(this.presentationViewport.scale);
     this.pauseMenu.setOverlaySize(this.scale.width, this.scale.height);
@@ -298,6 +289,10 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private handleEscapeKey(): void {
+    if (this.eventLogDialog?.isOpen) {
+      this.eventLogDialog.close();
+      return;
+    }
     if (this.pauseMenu.isOpen) this.resumeFromPause();
     else this.openPauseMenu();
   }
@@ -310,6 +305,7 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private resumeFromPause(): void {
+    this.eventLogDialog?.close();
     this.pauseMenu.close();
     if (this.resumePlaybackAfterPause) this.togglePlayback();
     this.resumePlaybackAfterPause = false;
@@ -317,6 +313,12 @@ export class ReplayScene extends Phaser.Scene {
 
   private shutdownPauseMenu(): void {
     this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
+    this.eventLogDialog?.destroy(this);
+    this.eventLogDialog = undefined;
+  }
+
+  private openEventLog(): void {
+    this.eventLogDialog?.open();
   }
 
   private handleWheel(pointer: Phaser.Input.Pointer, deltaY: number): void {
