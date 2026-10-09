@@ -6,6 +6,7 @@ import { BootScene } from "./game/scenes/BootScene";
 import { LmStudioSettingsScene } from "./game/scenes/LmStudioSettingsScene";
 import { MainMenuScene } from "./game/scenes/MainMenuScene";
 import { MapEditorScene } from "./game/scenes/MapEditorScene";
+import { MovementSettingsScene } from "./game/scenes/MovementSettingsScene";
 import { MultiplayerHostScene } from "./game/scenes/MultiplayerHostScene";
 import { MultiplayerJoinScene } from "./game/scenes/MultiplayerJoinScene";
 import { ReplayLibraryScene } from "./game/scenes/ReplayLibraryScene";
@@ -33,6 +34,7 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
     MultiplayerJoinScene,
     MapEditorScene,
     LmStudioSettingsScene,
+    MovementSettingsScene,
     BattleScene,
     ResultScene,
     ReplayLibraryScene,

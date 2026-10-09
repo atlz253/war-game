@@ -1,0 +1,128 @@
+import type Phaser from "phaser";
+import { Button } from "../ui/components/Button";
+import { Panel } from "../ui/components/Panel";
+import { ProgressBar } from "../ui/components/ProgressBar";
+import { uiTheme } from "../ui/theme/ui-theme";
+
+export const HUD_X = 3104;
+export const HUD_WIDTH = 704;
+export const TOP_PANEL_Y = 56;
+const TOP_PANEL_HEIGHT = 300;
+export const SELECTED_PANEL_Y = 388;
+export const SELECTED_PANEL_HEIGHT = 480;
+const PANEL_CONTENT_X = HUD_X + uiTheme.spacing.md;
+const TOP_TEXT_OFFSET = 128;
+const TOP_TEXT_Y = TOP_PANEL_Y + TOP_TEXT_OFFSET;
+const SCORE_TEXT_OFFSET_X = 384;
+const SCORE_TEXT_X = HUD_X + SCORE_TEXT_OFFSET_X;
+const SCORE_TEXT_Y = TOP_PANEL_Y + uiTheme.spacing.sm;
+const SELECTED_TEXT_OFFSET = 128;
+const SELECTED_TEXT_Y = SELECTED_PANEL_Y + SELECTED_TEXT_OFFSET;
+const SELECTED_HEALTH_BAR_OFFSET = 264;
+const SELECTED_HEALTH_BAR_Y = SELECTED_PANEL_Y + SELECTED_HEALTH_BAR_OFFSET;
+const SELECTED_HEALTH_BAR_WIDTH = 256;
+const SELECTED_HEALTH_BAR_HEIGHT = 32;
+const END_BUTTON_X = 3652;
+const END_BUTTON_Y = 292;
+const WAIT_BUTTON_X = 3392;
+const WAIT_BUTTON_Y = 292;
+const BUTTON_WIDTH = 224;
+const BUTTON_HEIGHT = 96;
+const CAPTURE_BUTTON_WIDTH = 448;
+const CAPTURE_BUTTON_OFFSET_Y = 388;
+const CAPTURE_BUTTON_X = HUD_X + HUD_WIDTH / 2;
+const CAPTURE_BUTTON_Y = SELECTED_PANEL_Y + CAPTURE_BUTTON_OFFSET_Y;
+export function createBattleHud(
+  scene: Phaser.Scene,
+  hudContainer: Phaser.GameObjects.Container,
+  orders: { wait: () => void; end: () => void; capture: () => void },
+) {
+  const turnPanel = new Panel(scene, {
+    x: HUD_X,
+    y: TOP_PANEL_Y,
+    width: HUD_WIDTH,
+    height: TOP_PANEL_HEIGHT,
+    title: "TURN",
+  });
+  const selectedPanel = new Panel(scene, {
+    x: HUD_X,
+    y: SELECTED_PANEL_Y,
+    width: HUD_WIDTH,
+    height: SELECTED_PANEL_HEIGHT,
+    title: "SELECTED UNIT",
+  });
+  const activeTurnText = addText(scene, PANEL_CONTENT_X, TOP_TEXT_Y, "");
+  const scoreText = addScoreText(scene, SCORE_TEXT_X, SCORE_TEXT_Y, "");
+  const selectedUnitText = addText(scene, PANEL_CONTENT_X, SELECTED_TEXT_Y, "Select a Blue unit.");
+  const healthBar = new ProgressBar(scene, {
+    x: PANEL_CONTENT_X,
+    y: SELECTED_HEALTH_BAR_Y,
+    width: SELECTED_HEALTH_BAR_WIDTH,
+    height: SELECTED_HEALTH_BAR_HEIGHT,
+    color: uiTheme.colors.primary,
+  });
+  const waitButton = new Button(scene, {
+    x: WAIT_BUTTON_X,
+    y: WAIT_BUTTON_Y,
+    width: BUTTON_WIDTH,
+    height: BUTTON_HEIGHT,
+    label: "WAIT",
+    onClick: orders.wait,
+  });
+  const endTurnButton = new Button(scene, {
+    x: END_BUTTON_X,
+    y: END_BUTTON_Y,
+    width: BUTTON_WIDTH,
+    height: BUTTON_HEIGHT,
+    label: "END TURN",
+    onClick: orders.end,
+  });
+  const captureButton = new Button(scene, {
+    x: CAPTURE_BUTTON_X,
+    y: CAPTURE_BUTTON_Y,
+    width: CAPTURE_BUTTON_WIDTH,
+    height: BUTTON_HEIGHT,
+    label: "CAPTURE POINT",
+    onClick: orders.capture,
+  });
+  hudContainer.add([
+    turnPanel.container,
+    selectedPanel.container,
+    activeTurnText,
+    scoreText,
+    selectedUnitText,
+    healthBar.container,
+    waitButton.container,
+    endTurnButton.container,
+    captureButton.container,
+  ]);
+  return {
+    activeTurnText,
+    scoreText,
+    selectedUnitText,
+    healthBar,
+    waitButton,
+    endTurnButton,
+    captureButton,
+  };
+}
+function addText(scene: Phaser.Scene, x: number, y: number, text: string): Phaser.GameObjects.Text {
+  return scene.add.text(x, y, text, {
+    color: uiTheme.colors.text,
+    fontFamily: uiTheme.font.family,
+    fontSize: `${uiTheme.font.normalSize}px`,
+  });
+}
+
+function addScoreText(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  text: string,
+): Phaser.GameObjects.Text {
+  return scene.add.text(x, y, text, {
+    color: uiTheme.colors.mutedText,
+    fontFamily: uiTheme.font.family,
+    fontSize: `${uiTheme.font.smallSize}px`,
+  });
+}

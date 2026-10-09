@@ -12,6 +12,9 @@ import {
 } from "../config/presentation-layout";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import { MovementPresenter } from "../presentation/MovementPresenter";
+import { getMovementSettings, movementDuration } from "../presentation/movement-settings";
+import { movementRoute } from "../presentation/movement-transition";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
 import {
   getNextReplayFrameIndex,
@@ -88,6 +91,7 @@ export class ReplayScene extends Phaser.Scene {
   private cameraCenter = { x: 0, y: 0 };
   private dragState: DragState | null = null;
   private mapRenderer!: BattleMapRenderer;
+  private presenter?: MovementPresenter;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys?: Record<"up" | "down" | "left" | "right", Phaser.Input.Keyboard.Key>;
   private statusText!: Phaser.GameObjects.Text;
@@ -118,6 +122,7 @@ export class ReplayScene extends Phaser.Scene {
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
     this.createWorld(this.timeline.frames[0]?.state);
+    this.createPresenter();
     this.createHud(replay.name);
     this.configureCameras();
     this.createPauseMenu();
@@ -126,6 +131,9 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private resetRenderingState(): void {
+    this.presenter?.reset();
+    this.presenter = undefined;
+    this.resumePlaybackAfterPause = false;
     this.mapRenderer?.reset();
     this.frameIndex = 0;
     this.isPlaying = false;
@@ -145,6 +153,9 @@ export class ReplayScene extends Phaser.Scene {
     if (this.pauseMenu.isOpen) return;
     this.updateKeyboardCamera(delta);
     this.updateInertialZoom(delta);
+    const wasMoving = this.presenter?.busy;
+    this.presenter?.update(delta);
+    if (wasMoving || this.presenter?.busy) return;
     if (!this.isPlaying) return;
     this.elapsedPlaybackMs += delta;
     if (this.elapsedPlaybackMs >= getReplayDelay(this.speed)) {
@@ -300,6 +311,7 @@ export class ReplayScene extends Phaser.Scene {
   private openPauseMenu(): void {
     this.resumePlaybackAfterPause = this.isPlaying;
     this.pausePlayback();
+    this.presenter?.pause();
     this.stopCameraMotion();
     this.pauseMenu.open();
   }
@@ -307,11 +319,13 @@ export class ReplayScene extends Phaser.Scene {
   private resumeFromPause(): void {
     this.eventLogDialog?.close();
     this.pauseMenu.close();
+    this.presenter?.resume();
     if (this.resumePlaybackAfterPause) this.togglePlayback();
     this.resumePlaybackAfterPause = false;
   }
 
   private shutdownPauseMenu(): void {
+    this.presenter?.reset();
     this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
     this.eventLogDialog?.destroy(this);
     this.eventLogDialog = undefined;
@@ -439,17 +453,51 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private showFrame(index: number): void {
-    this.frameIndex = index;
     const frame = this.timeline.frames[index];
     if (!frame) return;
-    this.renderState(frame.state);
+    const previous = this.timeline.frames[this.frameIndex];
+    const forward = index === this.frameIndex + 1 && previous && frame.action;
+    if (forward && this.presenter?.busy) return;
+    this.frameIndex = index;
+    if (forward) {
+      this.presenter?.resume();
+      this.presenter?.enqueue({
+        before: previous.state,
+        after: frame.state,
+        route: movementRoute(previous.state, frame.action, true),
+        complete: () => this.updateFrameDetails(index),
+      });
+    } else {
+      this.presenter?.reset(frame.state);
+      this.elapsedPlaybackMs = 0;
+      this.updateFrameDetails(index);
+    }
+  }
+
+  private updateFrameDetails(index: number): void {
+    const frame = this.timeline.frames[index];
+    if (!frame) return;
     this.eventLog.setEntries(
       this.timeline.frames.slice(1, index + 1).flatMap((item) => item.events.map(formatEvent)),
     );
     this.statusText.setText(
       `Frame ${index}/${this.timeline.frames.length - 1} · Turn ${frame.state.turn} — ${frame.state.activeSide.toUpperCase()}`,
     );
-    if (index >= this.timeline.frames.length - 1) this.pausePlayback();
+    if (index >= this.timeline.frames.length - 1) this.stopPlayback();
+  }
+
+  private createPresenter(): void {
+    this.presenter = new MovementPresenter(
+      {
+        render: (state) => this.renderState(state),
+        position: (id, position) => this.mapRenderer.setMovementPosition(id, position),
+        clear: () => this.mapRenderer.clearMovementPositions(),
+        settled: () => {
+          this.elapsedPlaybackMs = 0;
+        },
+      },
+      () => movementDuration(getMovementSettings().load()) / this.speed,
+    );
   }
 
   private renderState(state: GameState): void {
@@ -459,12 +507,18 @@ export class ReplayScene extends Phaser.Scene {
   private togglePlayback(): void {
     if (this.isPlaying) this.pausePlayback();
     else {
+      this.presenter?.resume();
       this.isPlaying = true;
       this.playButton.setLabel("PAUSE");
     }
   }
 
   private pausePlayback(): void {
+    this.presenter?.pause();
+    this.stopPlayback();
+  }
+
+  private stopPlayback(): void {
     this.isPlaying = false;
     this.playButton.setLabel("PLAY");
   }

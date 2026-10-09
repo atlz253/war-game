@@ -41,6 +41,7 @@ interface UnitHealthView {
 }
 
 export class BattleMapRenderer {
+  private readonly movementPositions = new Map<string, Position>();
   private readonly unitViews = new Map<string, Phaser.GameObjects.Image>();
   private readonly unitHealthViews = new Map<string, UnitHealthView>();
   private readonly controlPointViews = new Map<string, Phaser.GameObjects.Image>();
@@ -101,10 +102,28 @@ export class BattleMapRenderer {
   }
 
   public reset(): void {
+    this.clearMovementPositions();
     this.worldBackground = undefined;
     this.unitViews.clear();
     this.unitHealthViews.clear();
     this.controlPointViews.clear();
+  }
+
+  /** Presentation controller owns these cell-space overrides until completion or cancellation. */
+  public setMovementPosition(unitId: string, position: Position): void {
+    this.movementPositions.set(unitId, position);
+    const point = this.toScreenPosition(position);
+    this.unitViews.get(unitId)?.setPosition(point.x, point.y);
+    this.unitHealthViews
+      .get(unitId)
+      ?.container.setPosition(
+        point.x,
+        calculateUnitHealthLabelY(point.y, this.options.tileSize, UNIT_HEALTH_LABEL_GAP),
+      );
+  }
+
+  public clearMovementPositions(): void {
+    this.movementPositions.clear();
   }
 
   private updateUnitViews(
@@ -129,7 +148,7 @@ export class BattleMapRenderer {
     activeSide: GameState["activeSide"],
     unitsWithAvailableMainActions: ReadonlySet<string>,
   ): void {
-    const point = this.toScreenPosition(unit.position);
+    const point = this.toScreenPosition(this.movementPositions.get(unit.id) ?? unit.position);
     const view =
       this.unitViews.get(unit.id) ??
       this.scene.add.image(point.x, point.y, getUnitTextureKey(unit));
@@ -219,8 +238,8 @@ export class BattleMapRenderer {
   private toScreenPosition(position: Position): Position {
     const tileCenter = this.options.tileSize / DOUBLE_SIZE_MULTIPLIER;
     return {
-      x: this.options.boardOriginX + position.x * this.options.tileSize + tileCenter,
-      y: this.options.boardOriginY + position.y * this.options.tileSize + tileCenter,
+      x: Math.round(this.options.boardOriginX + position.x * this.options.tileSize + tileCenter),
+      y: Math.round(this.options.boardOriginY + position.y * this.options.tileSize + tileCenter),
     };
   }
 }

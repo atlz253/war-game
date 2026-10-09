@@ -11,11 +11,13 @@ import {
   withLmStudioSettings,
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
+import { movementUi } from "../ui/theme/movement-ui";
 import { uiTheme } from "../ui/theme/ui-theme";
 import {
   BATTLE_SCENE_KEY,
   LM_STUDIO_SETTINGS_SCENE_KEY,
   MAP_EDITOR_SCENE_KEY,
+  MOVEMENT_SETTINGS_SCENE_KEY,
   MULTIPLAYER_HOST_SCENE_KEY,
   MULTIPLAYER_JOIN_SCENE_KEY,
   REPLAY_LIBRARY_SCENE_KEY,
@@ -122,9 +124,22 @@ export class MainMenuScene extends Phaser.Scene {
       })
       .setOrigin(CENTER_ORIGIN);
 
+    const movementSettings = new Button(this, {
+      x: MENU_CENTER_X,
+      y: movementUi.menuButtonY,
+      width: LM_STUDIO_SETTINGS_WIDTH,
+      height: MAP_BUTTON_HEIGHT,
+      label: "MOVEMENT SETTINGS",
+      onClick: () =>
+        this.scene.start(MOVEMENT_SETTINGS_SCENE_KEY, {
+          matchConfiguration: this.matchConfiguration,
+        }),
+    });
+
     return [
       panel,
       title,
+      movementSettings.container,
       this.createSideLabel("BLUE COMMANDER", BLUE_SIDE_Y),
       this.createSideLabel("RED COMMANDER", RED_SIDE_Y),
     ];

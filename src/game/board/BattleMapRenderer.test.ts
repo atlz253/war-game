@@ -4,6 +4,10 @@ import type { GameState } from "../../core/model/game-state";
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
 import { BattleMapRenderer } from "./BattleMapRenderer";
 
+const FRACTIONAL_CELL_X = 0.123;
+const NEXT_CELL_CENTER = 96;
+const ORIGINAL_CELL_CENTER = 160;
+
 const BOARD_ORIGIN = 0;
 const TILE_SIZE = 64;
 const INITIAL_ZOOM = 1;
@@ -15,6 +19,8 @@ const MUTED_UNIT_TINT = 0x8d8d8d;
 const ARTILLERY_UNIT_INDEX = 4;
 
 interface FakeDisplayObject {
+  x?: number;
+  y?: number;
   readonly kind: "image" | "health-label" | "selection";
   parentContainer?: FakeContainer;
   tint?: number;
@@ -39,7 +45,11 @@ function createDisplayObject(kind: FakeDisplayObject["kind"]): FakeDisplayObject
       displayObject.tint = undefined;
       return displayObject;
     },
-    setPosition: () => displayObject,
+    setPosition: (x, y) => {
+      displayObject.x = x;
+      displayObject.y = y;
+      return displayObject;
+    },
     setTexture: () => displayObject,
     setTint: (color: number) => {
       displayObject.tint = color;
@@ -69,7 +79,11 @@ function createWorldContainer(): FakeContainer & { readonly list: FakeDisplayObj
     },
     destroy: () => undefined,
     clearTint: () => container,
-    setPosition: () => container,
+    setPosition: (x, y) => {
+      container.x = x;
+      container.y = y;
+      return container;
+    },
     setScale: () => container,
     setTexture: () => container,
     setTint: () => container,
@@ -124,6 +138,40 @@ const STATE = {
   },
   controlPoints: {},
 } as unknown as GameState;
+
+describe("BattleMapRenderer movement", () => {
+  it("moves image and label together, preserves overrides through refresh and clears on reset", () => {
+    const world = createWorldContainer();
+    const renderer = new BattleMapRenderer(createScene(), world as never, {
+      boardOriginX: 0,
+      boardOriginY: 0,
+      tileSize: TILE_SIZE,
+      initialZoom: INITIAL_ZOOM,
+    });
+    renderer.renderState(STATE);
+    renderer.setMovementPosition(TANK_ID, { x: 0.123, y: 0.456 });
+    renderer.renderState(STATE);
+    renderer.updateHealthLabelScales(2);
+    const image = world.list.find((object) => object.kind === "image");
+    const label = world.list.find((object) => object.kind === "health-label");
+    expect(image?.x).toBe(Math.round(FRACTIONAL_CELL_X * TILE_SIZE + TILE_SIZE / 2));
+    expect(label?.x).toBe(image?.x);
+    const offset = (label?.y ?? 0) - (image?.y ?? 0);
+    renderer.setMovementPosition(TANK_ID, { x: 1, y: 1 });
+    expect(image?.x).toBe(NEXT_CELL_CENTER);
+    expect(image?.y).toBe(NEXT_CELL_CENTER);
+    expect((label?.y ?? 0) - (image?.y ?? 0)).toBe(offset);
+    renderer.clearMovementPositions();
+    renderer.renderState(STATE);
+    expect(image?.x).toBe(ORIGINAL_CELL_CENTER);
+    renderer.setMovementPosition(TANK_ID, { x: 0, y: 0 });
+    renderer.reset();
+    renderer.renderState(STATE);
+    expect(world.list.filter((object) => object.kind === "image").at(-2)?.x).toBe(
+      ORIGINAL_CELL_CENTER,
+    );
+  });
+});
 
 describe("BattleMapRenderer", () => {
   it("renders every health label above all unit sprites", () => {

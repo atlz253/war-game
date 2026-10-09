@@ -1,7 +1,8 @@
 import type Phaser from "phaser";
-
+import { movementUi } from "../theme/movement-ui";
 import { uiTheme } from "../theme/ui-theme";
 import { Button } from "./Button";
+import { MovementSlider } from "./MovementSlider";
 import { Panel } from "./Panel";
 
 export interface PauseMenuOptions {
@@ -41,6 +42,7 @@ export function getPauseMenuActions(options: PauseMenuOptions): readonly PauseMe
 }
 
 export class PauseMenu {
+  private readonly movementSlider: MovementSlider;
   public readonly container: Phaser.GameObjects.Container;
   public readonly overlay: Phaser.GameObjects.Rectangle;
 
@@ -77,7 +79,17 @@ export class PauseMenu {
         }),
     );
 
-    this.container.add([panel.container, title, ...buttons.map((button) => button.container)]);
+    this.movementSlider = new MovementSlider(
+      scene,
+      DIALOG_CENTER_X,
+      DIALOG_Y + movementUi.pauseSliderY,
+    );
+    this.container.add([
+      panel.container,
+      title,
+      ...buttons.map((button) => button.container),
+      this.movementSlider.container,
+    ]);
   }
 
   public get isOpen(): boolean {
@@ -85,11 +97,13 @@ export class PauseMenu {
   }
 
   public open(): void {
+    this.movementSlider.refresh();
     this.overlay.setVisible(true);
     this.container.setVisible(true);
   }
 
   public close(): void {
+    this.movementSlider.blur();
     this.overlay.setVisible(false);
     this.container.setVisible(false);
   }
