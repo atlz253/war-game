@@ -44,15 +44,66 @@ The editor SHALL allow configuring an exact target cell and either any Blue unit
 - **THEN** the target and unit binding require explicit confirmation or correction before play
 
 ### Requirement: Built-in tutorial campaign availability
-The system SHALL include a playable tutorial campaign with its first mission and map available without authoring or importing content. The built-in campaign SHALL remain available independently of local storage contents and failures. Authors SHALL be able to open its definition in the editor and save an editable local copy without modifying the built-in original.
+The system SHALL include a playable tutorial campaign with its first mission and map available without authoring or importing content. The built-in campaign SHALL remain available independently of local storage contents and failures. In DEV, authors SHALL be able to open its definition in the editor and use SAVE AS COPY to save an editable local campaign without modifying the built-in original. Direct built-in source editing SHALL follow the DEV-only requirement below.
 
 #### Scenario: Fresh installation
 - **WHEN** the player opens the campaign library with no saved campaigns
 - **THEN** the tutorial campaign is listed and can be started immediately
 
 #### Scenario: Edit tutorial copy
-- **WHEN** the author saves changes to an opened built-in tutorial
+- **WHEN** the author opens the built-in tutorial in DEV and chooses SAVE AS COPY
 - **THEN** a local copy is saved and the original tutorial remains unchanged
+
+### Requirement: Built-in campaign JSON catalog
+The system SHALL store each built-in campaign as a separate `CampaignDefinition` v1 JSON file under `src/core/campaigns/definitions`, including `tutorial.json`. The catalog SHALL discover these files automatically, validate supported structure and unique campaign IDs, return independent definitions in deterministic ID order, and remain independent of browser storage. Built-in content SHALL NOT be duplicated as hardcoded TypeScript campaign payloads. Launch readiness SHALL still validate map references and mission fields separately from structural validity.
+
+#### Scenario: Discover source definition
+- **WHEN** a supported campaign JSON file is added to the definitions directory and the catalog is rebuilt or refreshed
+- **THEN** the campaign appears without adding a hardcoded registry entry
+
+#### Scenario: Invalid source data
+- **WHEN** a source definition has an unsupported version, invalid structure, or a duplicate campaign ID
+- **THEN** catalog validation reports the source error rather than silently accepting or overwriting the definition
+
+#### Scenario: Independent catalog results
+- **WHEN** a caller changes a returned campaign draft
+- **THEN** later catalog reads retain the source JSON content
+
+### Requirement: DEV-only built-in campaign editing
+The system SHALL permit opening and editing built-in campaign definitions only when `import.meta.env.DEV` is true. In DEV, SAVE SHALL persist the definition to its source JSON through a development-server API, preserving campaign identity; SAVE AS COPY SHALL instead create a local campaign. Production SHALL retain built-in play/export and local campaign editing, but SHALL reject direct editor entry for a built-in campaign and SHALL NOT provide a source-writing endpoint. Source writes SHALL validate structure, use a filename-safe ID, stay within the definitions directory, and report failures without clearing the draft or reporting success. Successful writes SHALL be reflected by the refreshed catalog.
+
+#### Scenario: Save built-in source in DEV
+- **WHEN** an author edits a built-in campaign in DEV and chooses SAVE
+- **THEN** its source JSON is updated and the refreshed catalog contains the saved content with the same campaign ID
+
+#### Scenario: Production editing guard
+- **WHEN** a production user attempts to open a built-in campaign editor, including direct scene entry
+- **THEN** editing is rejected while playing and exporting that campaign remain available
+
+#### Scenario: Source write failure
+- **WHEN** a DEV save is rejected or the development server cannot write the file
+- **THEN** the editor reports failure, keeps the unsaved draft editable, and does not mark it saved
+
+### Requirement: Campaign JSON import and export
+The system SHALL provide Canvas import/export controls in DEV and production. Each exported `.ai-war-campaign.json` file SHALL contain one `CampaignDefinition` v1, without a library envelope, run progress or replay data. Export SHALL preserve mission/event identities, order, policies, bindings, and complete Unicode dialogue content; the library SHALL export selected built-in or local definitions, and the editor SHALL support exporting its current draft. Import SHALL create a local campaign, including when the file originated from a built-in campaign, and resolve campaign ID collisions against both built-in and local entries without overwriting either. Mission/event IDs and references SHALL be preserved. Structurally valid incomplete drafts or missing-map references SHALL remain editable but SHALL fail Play readiness. Malformed or unsupported files SHALL be rejected with a visible error and without changing stored campaigns or the current draft.
+
+#### Scenario: Export and reimport
+- **WHEN** an author exports a campaign with ordered missions and multiline dialogue and imports the file
+- **THEN** a local campaign retains its content and references, with only its campaign ID changed if needed to avoid a collision
+
+#### Scenario: Import built-in export in production
+- **WHEN** a production user imports a file exported from a built-in campaign
+- **THEN** a separate editable local campaign is created and the built-in source remains unchanged
+
+#### Scenario: Import incomplete or invalid data
+- **WHEN** a structurally valid draft references a missing map or contains empty mission/dialogue lists
+- **THEN** it can be imported and edited while Play is disabled with readiness errors
+- **AND** malformed JSON or an unsupported schema is rejected without overwriting existing data
+
+#### Scenario: Native file interaction lifecycle
+- **WHEN** a Canvas button starts import or export
+- **THEN** only a temporary native file picker or download link is created, remains outside visible game UI, and is cleaned up on completion, cancellation or failure
+- **AND** canceling file selection leaves the library and current draft unchanged
 
 ### Requirement: Validated campaign drafts
 The system SHALL permit saving incomplete drafts but SHALL block play unless the campaign has at least one mission and all mission maps, event fields and references are valid. Validation SHALL identify the affected mission or event. Changing a map SHALL revalidate unit and cell references without silently rebinding them.
