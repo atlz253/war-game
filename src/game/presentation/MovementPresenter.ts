@@ -105,6 +105,8 @@ export class MovementPresenter {
     } finally {
       this.draining = false;
     }
+    if (this.queue.length && !this.active && !this.paused && generation === this.generation)
+      this.drain();
   }
 
   private finish(transition: PresentationTransition): void {

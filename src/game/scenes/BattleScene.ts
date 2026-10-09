@@ -2,6 +2,7 @@ import Phaser from "phaser";
 
 import { HeuristicAgent } from "../../ai/agents/HeuristicAgent";
 import type { GameAction } from "../../core/actions/game-actions";
+import { actionSignals, selectionSignal } from "../../core/campaigns/signals";
 import { createMapDefinitionFromState } from "../../core/maps/create-map-definition-from-state";
 import { createGameStateFromMap, type MapDefinition } from "../../core/maps/map-definition";
 import type { GameEvent } from "../../core/model/game-events";
@@ -9,6 +10,9 @@ import type { GameState, Position } from "../../core/model/game-state";
 import { applyAction } from "../../core/rules/apply-action";
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
 import { BattleMapRenderer } from "../board/BattleMapRenderer";
+import { createBattleNarrative, narrativeSnapshot } from "../campaigns/battle-narrative";
+import type { MissionDialogueController } from "../campaigns/dialogue-controller";
+import { type CampaignRun, launchMission } from "../campaigns/playthrough";
 import {
   calculatePresentationViewport,
   calculateRightAlignedContentX,
@@ -33,13 +37,13 @@ import { getMovementSettings, movementDuration } from "../presentation/movement-
 import { movementRoute } from "../presentation/movement-transition";
 import { createRecordedMatch } from "../replays/recorded-match";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
-import type { Button } from "../ui/components/Button";
+import type { CampaignModal } from "../ui/components/CampaignModal";
 import { EventLogDialog } from "../ui/components/EventLogDialog";
 import { EVENT_LOG_VISIBLE_ENTRY_COUNT, EventLogModel } from "../ui/components/EventLogModel";
 import { PauseMenu } from "../ui/components/PauseMenu";
-import type { ProgressBar } from "../ui/components/ProgressBar";
 import { BattleAiPauseController } from "./battle-ai-pause-controller";
 import { createDiagnosticBoard, drawDiagnosticUnits } from "./battle-diagnostics";
+import { drawHighlights } from "./battle-highlights";
 import {
   createBattleHud,
   HUD_WIDTH,
@@ -47,13 +51,13 @@ import {
   SELECTED_PANEL_HEIGHT,
   SELECTED_PANEL_Y,
   TOP_PANEL_Y,
+  updateBattleHud,
 } from "./battle-hud";
 import { calculateWorldViewportWidth } from "./battle-presentation";
 import {
   findUnitAt,
   formatActionRejection,
   formatEvent,
-  formatSelectedUnit,
   toContainerPosition,
 } from "./battle-view-helpers";
 import { calculateCameraCenterLimits } from "./camera-presentation";
@@ -70,14 +74,7 @@ const CAMERA_SCROLL_SPEED = 2400;
 const CAMERA_DECELERATION = 8;
 const ZOOM_RESPONSE_PER_SECOND = 8;
 const MILLISECONDS_PER_SECOND = 1000;
-const NO_UNIT_COUNT = 0;
 const DIAGNOSTIC_SELECTION_COLOR = 0xf2f5f7;
-const MOVEMENT_HIGHLIGHT_COLOR = 0x3dd6b1;
-const MOVEMENT_HIGHLIGHT_FILL_ALPHA = 0.28;
-const MOVEMENT_HIGHLIGHT_BORDER_ALPHA = 0.85;
-const MOVEMENT_HIGHLIGHT_BORDER_WIDTH = 8;
-const ATTACK_HIGHLIGHT_COLOR = 0xd94b4b;
-const ATTACK_HIGHLIGHT_FILL_ALPHA = 0.32;
 const DIAGNOSTIC_MODE = import.meta.env.DEV;
 
 interface ZoomAnchor {
@@ -86,6 +83,7 @@ interface ZoomAnchor {
 }
 
 export interface BattleSceneData {
+  readonly campaignRun?: CampaignRun;
   readonly matchConfiguration?: MatchConfiguration;
   readonly mapDefinition?: MapDefinition;
   readonly initialState?: GameState;
@@ -93,6 +91,12 @@ export interface BattleSceneData {
 }
 
 export class BattleScene extends Phaser.Scene {
+  private campaignRun?: CampaignRun;
+  private narrative?: MissionDialogueController;
+  private dialogueModal?: CampaignModal;
+  private resultOpened = false;
+  private exited = false;
+  private hud!: ReturnType<typeof createBattleHud>;
   private worldContainer!: Phaser.GameObjects.Container;
   private hudContainer!: Phaser.GameObjects.Container;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
@@ -117,14 +121,7 @@ export class BattleScene extends Phaser.Scene {
   private inputLocked = false;
   private aiTurnActions: GameAction[] = [];
   private replayActions: GameAction[] = [];
-  private selectedUnitText!: Phaser.GameObjects.Text;
-  private activeTurnText!: Phaser.GameObjects.Text;
-  private scoreText!: Phaser.GameObjects.Text;
-  private healthBar!: ProgressBar;
   private eventLog = new EventLogModel(EVENT_LOG_VISIBLE_ENTRY_COUNT);
-  private waitButton!: Button;
-  private endTurnButton!: Button;
-  private captureButton!: Button;
   private selectionView: Phaser.GameObjects.Rectangle | null = null;
   private diagnosticUnitLayer: Phaser.GameObjects.Graphics | null = null;
   private movementHighlightLayer: Phaser.GameObjects.Graphics | null = null;
@@ -144,6 +141,8 @@ export class BattleScene extends Phaser.Scene {
 
   public create(data: BattleSceneData = {}): void {
     this.resetRenderingState();
+    this.campaignRun = data.campaignRun;
+    if (this.campaignRun) data = launchMission(this.campaignRun);
     this.mapDefinition = data.mapDefinition ?? null;
     this.gameState =
       data.initialState ??
@@ -166,10 +165,17 @@ export class BattleScene extends Phaser.Scene {
     this.createPauseMenu();
     this.bindInput();
     this.renderGameState(null, this.gameState);
+    this.createNarrative();
     this.startAiTurnIfNeeded();
   }
 
   private resetRenderingState(): void {
+    this.narrative?.dispose();
+    this.dialogueModal?.destroy();
+    this.narrative = undefined;
+    this.dialogueModal = undefined;
+    this.resultOpened = false;
+    this.exited = false;
     this.presenter?.reset();
     this.presenter = undefined;
     this.aiInFlight = false;
@@ -197,7 +203,9 @@ export class BattleScene extends Phaser.Scene {
 
   public update(_time: number, delta: number): void {
     if (this.pauseMenu?.isOpen) return;
+    this.dialogueModal?.refresh();
     this.presenter?.update(delta);
+    if (this.narrative?.blocked) return;
     this.updateKeyboardCamera(delta);
     this.updateInertialZoom(delta);
   }
@@ -302,16 +310,12 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createHud(): void {
-    Object.assign(
-      this,
-      createBattleHud(this, this.hudContainer, {
-        wait: () => this.waitSelectedUnit(),
-        end: () => this.endPlayerTurn(),
-        capture: () => this.captureSelectedControlPoint(),
-      }),
-    );
+    this.hud = createBattleHud(this, this.hudContainer, {
+      wait: () => this.waitSelectedUnit(),
+      end: () => this.endPlayerTurn(),
+      capture: () => this.captureSelectedControlPoint(),
+    });
   }
-
   private bindInput(): void {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
       if (this.pauseMenu?.isOpen) return;
@@ -344,6 +348,9 @@ export class BattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownPauseMenu, this);
   }
   private updatePauseMenuPresentation(): void {
+    this.dialogueModal?.container
+      .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
+      .setScale(this.presentationViewport.scale);
     if (!this.pauseMenu) return;
     this.pauseMenu.container
       .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
@@ -368,6 +375,8 @@ export class BattleScene extends Phaser.Scene {
   private openPauseMenu(): void {
     if (!this.pauseMenu) return;
     this.presenter?.pause();
+    this.narrative?.pause(true);
+    this.dialogueModal?.container.setVisible(false);
     const { cancelDelay } = this.aiPauseController.pause();
     if (cancelDelay) this.aiDelayEvent?.remove(false);
     if (cancelDelay) this.aiDelayEvent = undefined;
@@ -377,12 +386,17 @@ export class BattleScene extends Phaser.Scene {
   private resumeFromPause(): void {
     this.eventLogDialog?.close();
     this.pauseMenu?.close();
-    const resume = this.aiPauseController.resume();
+    this.narrative?.pause(false);
+    this.dialogueModal?.refresh();
     this.presenter?.resume();
+    if (this.narrative?.blocked) return;
+    const resume = this.aiPauseController.resume();
     if (resume.kind === "apply") this.applyAiDecision(resume.decision);
     if (resume.kind === "start-delay") this.runAiAction();
   }
   private exitToMainMenu(): void {
+    this.exited = true;
+    this.narrative?.dispose();
     this.presenter?.reset();
     this.aiPauseController.exit();
     this.aiDelayEvent?.remove(false);
@@ -390,6 +404,8 @@ export class BattleScene extends Phaser.Scene {
     this.scene.start(MAIN_MENU_SCENE_KEY, { matchConfiguration: this.matchConfiguration });
   }
   private shutdownPauseMenu(): void {
+    this.exited = true;
+    this.narrative?.dispose();
     this.presenter?.reset();
     this.aiPauseController.exit();
     this.aiDelayEvent?.remove(false);
@@ -552,7 +568,10 @@ export class BattleScene extends Phaser.Scene {
     const clickedUnit = findUnitAt(this.gameState, position);
 
     if (clickedUnit?.side === this.gameState.activeSide) {
+      const signal = selectionSignal(this.gameState, this.selectedUnitId, clickedUnit.id, false);
       this.selectedUnitId = clickedUnit.id;
+      if (signal) this.narrative?.signal(signal, this.replayActions.length);
+      this.presentDialogue();
       this.renderGameState(this.gameState, this.gameState);
       return;
     }
@@ -616,7 +635,7 @@ export class BattleScene extends Phaser.Scene {
     const previousState = this.gameState;
     this.gameState = result.state;
     this.recordTurnAction(action);
-    this.recordReplayAction(action);
+    this.replayActions = [...this.replayActions, action];
     if (publishToPeer && this.multiplayerSession?.role === "host") {
       this.actionSequence += 1;
       this.multiplayerSession.publishAcceptedAction(this.actionSequence, action);
@@ -625,6 +644,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private runAiAction(): void {
+    if (this.narrative?.blocked || this.exited) return;
     if (this.aiDelayEvent || this.aiInFlight || this.presenter?.busy || this.pauseMenu?.isOpen)
       return;
     this.aiPauseController.beginDelay();
@@ -666,7 +686,7 @@ export class BattleScene extends Phaser.Scene {
     const previousState = this.gameState;
     this.gameState = result.state;
     this.recordTurnAction(decision.action);
-    this.recordReplayAction(decision.action);
+    this.replayActions = [...this.replayActions, decision.action];
     if (decision.usedFallback && participant === "lm-studio-ai") {
       this.eventLog.push(
         `${this.gameState.activeSide.toUpperCase()} LM Studio unavailable — Heuristic AI order used.`,
@@ -676,6 +696,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private startAiTurnIfNeeded(): void {
+    if (this.narrative?.blocked || this.exited) return;
     if (this.presenter?.busy || this.pauseMenu?.isOpen) return;
     if (this.multiplayerSession) {
       this.inputLocked =
@@ -689,6 +710,13 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.inputLocked = true;
+    if (
+      this.campaignRun &&
+      !Object.values(this.gameState.units).some((unit) => unit.side === "red")
+    ) {
+      this.applyAcceptedAction({ type: "end-turn" }, false);
+      return;
+    }
     this.renderGameState(this.displayedState, this.displayedState);
     this.runAiAction();
   }
@@ -717,22 +745,23 @@ export class BattleScene extends Phaser.Scene {
     action: GameAction,
     events: readonly GameEvent[],
   ): void {
+    for (const signal of actionSignals({ accepted: true, state: this.gameState, events }))
+      this.narrative?.signal(signal, this.replayActions.length);
     this.presenter?.enqueue({
       before,
       after: this.gameState,
       route: movementRoute(before, action, true),
       complete: () => {
+        this.presentDialogue();
         this.clearSelectionAfterTurnEnd(action);
-        this.addEventMessages(events);
+        events.forEach((event) => {
+          this.eventLog.push(formatEvent(event));
+        });
         if (action.type === "end-turn") {
           this.renderGameState(this.displayedState, this.displayedState);
         }
       },
     });
-  }
-
-  private recordReplayAction(action: GameAction): void {
-    this.replayActions = [...this.replayActions, action];
   }
 
   private clearSelectionAfterTurnEnd(action: GameAction): void {
@@ -743,6 +772,8 @@ export class BattleScene extends Phaser.Scene {
 
   private canHumanIssueOrders(): boolean {
     return (
+      !this.narrative?.blocked &&
+      !this.exited &&
       !this.inputLocked &&
       !this.disconnected &&
       !this.presenter?.busy &&
@@ -797,11 +828,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private checkForResult(): boolean {
+    if (this.narrative?.blocked || this.exited || this.resultOpened) return false;
     if (!this.gameState.winner) {
       return false;
     }
 
     const replay = createRecordedMatch({
+      ...narrativeSnapshot(this.narrative, this.campaignRun),
       id: `replay-${Date.now()}`,
       name: `${this.gameState.winner.toUpperCase()} victory — ${this.replayMapDefinition.name}`,
       savedAt: new Date().toISOString(),
@@ -810,8 +843,10 @@ export class BattleScene extends Phaser.Scene {
       actions: this.replayActions,
     });
     getBrowserReplayLibrary().save(replay);
+    this.resultOpened = true;
 
     this.scene.start(RESULT_SCENE_KEY, {
+      campaignRun: this.campaignRun,
       winner: this.gameState.winner,
       turn: this.gameState.turn,
       matchConfiguration: this.matchConfiguration,
@@ -830,59 +865,52 @@ export class BattleScene extends Phaser.Scene {
     this.updateHud(nextState);
   }
 
+  private createNarrative(): void {
+    const mission = this.campaignRun?.campaign.missions[this.campaignRun.index];
+    if (!mission) return;
+    const created = createBattleNarrative(this, mission, this.gameState, () => {
+      if (this.exited || this.pauseMenu?.isOpen) return;
+      this.resumeFromPause();
+      if (!this.checkForResult()) this.startAiTurnIfNeeded();
+    });
+    this.narrative = created.narrative;
+    this.dialogueModal = created.modal;
+    this.updatePauseMenuPresentation();
+    this.pauseMenu?.container.setDepth(this.dialogueModal.container.depth + 1);
+    this.pauseMenu?.overlay.setDepth(this.dialogueModal.container.depth + 1);
+    this.presentDialogue();
+  }
+  private presentDialogue(): void {
+    if (!this.narrative?.blocked) return;
+    this.aiPauseController.pause();
+    this.aiDelayEvent?.remove(false);
+    this.aiDelayEvent = undefined;
+    this.narrative.present();
+    this.dialogueModal?.refresh();
+  }
+
   private updateMovementHighlights(state: GameState): void {
-    if (!this.movementHighlightLayer) {
-      return;
-    }
-
-    this.movementHighlightLayer.clear();
-
-    for (const position of getMovementHighlightPositions(
+    const cells = getMovementHighlightPositions(
       state,
       this.selectedUnitId,
       !this.canHumanIssueOrders(),
-    )) {
-      const point = this.toScreenPosition(position);
-      const tileX = point.x - TILE_CENTER;
-      const tileY = point.y - TILE_CENTER;
-
-      this.movementHighlightLayer.fillStyle(
-        MOVEMENT_HIGHLIGHT_COLOR,
-        MOVEMENT_HIGHLIGHT_FILL_ALPHA,
-      );
-      this.movementHighlightLayer.fillRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
-      this.movementHighlightLayer.lineStyle(
-        MOVEMENT_HIGHLIGHT_BORDER_WIDTH,
-        MOVEMENT_HIGHLIGHT_COLOR,
-        MOVEMENT_HIGHLIGHT_BORDER_ALPHA,
-      );
-      this.movementHighlightLayer.strokeRect(tileX, tileY, TILE_SIZE, TILE_SIZE);
-    }
+    );
+    const policy = state.victoryPolicy;
+    drawHighlights(
+      this.movementHighlightLayer,
+      policy?.type === "standard-match-or-reach-cell" ? [...cells, policy.cell] : cells,
+      (cell) => this.toScreenPosition(cell),
+    );
   }
 
   private updateAttackHighlights(state: GameState): void {
-    if (!this.attackHighlightLayer) {
-      return;
-    }
-
-    this.attackHighlightLayer.clear();
-    this.attackHighlightLayer.fillStyle(ATTACK_HIGHLIGHT_COLOR, ATTACK_HIGHLIGHT_FILL_ALPHA);
-
-    for (const position of getAttackHighlightPositions(
-      state,
-      this.selectedUnitId,
-      !this.canHumanIssueOrders(),
-    )) {
-      const point = this.toScreenPosition(position);
-      this.attackHighlightLayer.fillRect(
-        point.x - TILE_CENTER,
-        point.y - TILE_CENTER,
-        TILE_SIZE,
-        TILE_SIZE,
-      );
-    }
+    drawHighlights(
+      this.attackHighlightLayer,
+      getAttackHighlightPositions(state, this.selectedUnitId, !this.canHumanIssueOrders()),
+      (cell) => this.toScreenPosition(cell),
+      true,
+    );
   }
-
   private updateUnitViews(_previousState: GameState | null, nextState: GameState): void {
     if (this.mapRenderer.hasLoadedAssets()) {
       this.mapRenderer.renderState(nextState);
@@ -923,28 +951,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateHud(state: GameState): void {
-    const selectedUnit = this.selectedUnitId ? state.units[this.selectedUnitId] : undefined;
-    this.activeTurnText.setText(
-      `Turn ${state.turn} — ${state.activeSide.toUpperCase()}${this.getAiThinkingSuffix()}`,
-    );
-    this.scoreText.setText(`B ${state.scores.blue}  R ${state.scores.red}`);
-    this.selectedUnitText.setText(
-      formatSelectedUnit(state, selectedUnit, state.activeSide, this.isActiveSideHuman()),
-    );
-
-    if (selectedUnit) {
-      this.healthBar.setValue(selectedUnit.health, selectedUnit.maxHealth);
-    } else {
-      this.healthBar.setValue(NO_UNIT_COUNT, NO_UNIT_COUNT);
-    }
-
-    const canIssueOrders = this.canHumanIssueOrders();
-    this.waitButton.setEnabled(
-      canIssueOrders && selectedUnit !== undefined && !selectedUnit.hasTakenMainAction,
-    );
-    this.endTurnButton.setEnabled(canIssueOrders);
-    this.captureButton.setEnabled(
-      canIssueOrders && getCapturableControlPointId(state, this.selectedUnitId, false) !== null,
+    updateBattleHud(
+      this.hud,
+      state,
+      this.selectedUnitId,
+      this.isActiveSideHuman(),
+      this.canHumanIssueOrders(),
+      this.getAiThinkingSuffix(),
     );
   }
 
@@ -953,12 +966,6 @@ export class BattleScene extends Phaser.Scene {
     return this.matchConfiguration[this.gameState.activeSide] === "lm-studio-ai"
       ? " — LM STUDIO THINKING..."
       : " — AI THINKING";
-  }
-
-  private addEventMessages(events: readonly GameEvent[]): void {
-    for (const event of events) {
-      this.eventLog.push(formatEvent(event));
-    }
   }
 
   private toScreenPosition(position: Position): Position {

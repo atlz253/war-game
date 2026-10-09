@@ -6,6 +6,7 @@ import { createDefaultMatchConfiguration } from "../match/match-configuration";
 import {
   createRecordedMatch,
   deserializeRecordedMatch,
+  RECORDED_MATCH_SCHEMA_VERSION,
   serializeRecordedMatch,
 } from "../replays/recorded-match";
 import { MovementPresenter } from "./MovementPresenter";
@@ -91,7 +92,11 @@ describe("presentation-independent match outcomes and old replay format", () => 
       expect(displayed).toEqual(timeline.finalState);
       expect(displayed?.winner).toBe("blue");
       expect(displayed?.scores.blue).toBeGreaterThan(0);
-      expect(restored.schemaVersion).toBe(1);
+      expect(restored.schemaVersion).toBe(RECORDED_MATCH_SCHEMA_VERSION);
+      const { victoryPolicy: _policy, ...legacy } = record;
+      expect(deserializeRecordedMatch(JSON.stringify({ ...legacy, schemaVersion: 1 })).winner).toBe(
+        "blue",
+      );
     },
   );
 });

@@ -1,9 +1,8 @@
 import Phaser from "phaser";
-
-import { createGameStateFromMap } from "../../core/maps/map-definition";
 import type { GameState } from "../../core/model/game-state";
 import { createReplayTimeline, type ReplayTimeline } from "../../core/replay/replay-timeline";
 import { BattleMapRenderer } from "../board/BattleMapRenderer";
+import { ReplayDialogue } from "../campaigns/replay-dialogue";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import {
   calculatePresentationViewport,
@@ -15,6 +14,7 @@ import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../i
 import { MovementPresenter } from "../presentation/MovementPresenter";
 import { getMovementSettings, movementDuration } from "../presentation/movement-settings";
 import { movementRoute } from "../presentation/movement-transition";
+import { recordedInitialState } from "../replays/recorded-match";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
 import {
   getNextReplayFrameIndex,
@@ -22,6 +22,7 @@ import {
   getReplayDelay,
 } from "../replays/replay-playback";
 import { Button } from "../ui/components/Button";
+import { CampaignModal } from "../ui/components/CampaignModal";
 import { EventLogDialog } from "../ui/components/EventLogDialog";
 import { EVENT_LOG_VISIBLE_ENTRY_COUNT, EventLogModel } from "../ui/components/EventLogModel";
 import { Panel } from "../ui/components/Panel";
@@ -75,6 +76,8 @@ interface DragState {
 }
 
 export class ReplayScene extends Phaser.Scene {
+  private dialogue?: ReplayDialogue;
+  private dialogueModal?: CampaignModal;
   private worldContainer!: Phaser.GameObjects.Container;
   private hudContainer!: Phaser.GameObjects.Container;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
@@ -115,10 +118,7 @@ export class ReplayScene extends Phaser.Scene {
       return;
     }
 
-    this.timeline = createReplayTimeline(
-      () => createGameStateFromMap(replay.mapDefinition),
-      replay.replay.actions,
-    );
+    this.timeline = createReplayTimeline(() => recordedInitialState(replay), replay.replay.actions);
     this.worldContainer = this.add.container();
     this.hudContainer = this.add.container().setScrollFactor(0);
     this.createWorld(this.timeline.frames[0]?.state);
@@ -128,9 +128,26 @@ export class ReplayScene extends Phaser.Scene {
     this.createPauseMenu();
     this.bindInput();
     this.showFrame(0);
+    if (replay.narrative) {
+      this.dialogue = new ReplayDialogue(replay.narrative);
+      this.dialogueModal = new CampaignModal(this, this.dialogue.controller, {
+        start: () => this.showFrame(0),
+        previous: () => this.showFrame(getPreviousReplayFrameIndex(this.frameIndex)),
+      });
+      this.cameras.main.ignore(this.dialogueModal.container);
+      this.updatePauseMenuPresentation();
+      this.pauseMenu.container.setDepth(this.dialogueModal.container.depth + 1);
+      this.pauseMenu.overlay.setDepth(this.dialogueModal.container.depth + 1);
+      this.dialogue.forward(0);
+      this.dialogueModal.refresh();
+    }
   }
 
   private resetRenderingState(): void {
+    this.dialogue?.dispose();
+    this.dialogueModal?.destroy();
+    this.dialogue = undefined;
+    this.dialogueModal = undefined;
     this.presenter?.reset();
     this.presenter = undefined;
     this.resumePlaybackAfterPause = false;
@@ -151,6 +168,8 @@ export class ReplayScene extends Phaser.Scene {
 
   public update(_time: number, delta: number): void {
     if (this.pauseMenu.isOpen) return;
+    this.dialogueModal?.refresh();
+    if (this.dialogue?.controller.blocked) return;
     this.updateKeyboardCamera(delta);
     this.updateInertialZoom(delta);
     const wasMoving = this.presenter?.busy;
@@ -284,6 +303,9 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private updatePauseMenuPresentation(): void {
+    this.dialogueModal?.container
+      .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
+      .setScale(this.presentationViewport.scale);
     if (!this.pauseMenu) return;
     this.pauseMenu.container
       .setPosition(this.presentationViewport.contentX, this.presentationViewport.contentY)
@@ -309,6 +331,8 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private openPauseMenu(): void {
+    this.dialogue?.controller.pause(true);
+    this.dialogueModal?.container.setVisible(false);
     this.resumePlaybackAfterPause = this.isPlaying;
     this.pausePlayback();
     this.presenter?.pause();
@@ -317,6 +341,8 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private resumeFromPause(): void {
+    this.dialogue?.controller.pause(false);
+    this.dialogueModal?.refresh();
     this.eventLogDialog?.close();
     this.pauseMenu.close();
     this.presenter?.resume();
@@ -325,6 +351,7 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private shutdownPauseMenu(): void {
+    this.dialogue?.dispose();
     this.presenter?.reset();
     this.escapeKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleEscapeKey, this);
     this.eventLogDialog?.destroy(this);
@@ -457,7 +484,7 @@ export class ReplayScene extends Phaser.Scene {
     if (!frame) return;
     const previous = this.timeline.frames[this.frameIndex];
     const forward = index === this.frameIndex + 1 && previous && frame.action;
-    if (forward && this.presenter?.busy) return;
+    if (forward && (this.presenter?.busy || this.dialogue?.controller.blocked)) return;
     this.frameIndex = index;
     if (forward) {
       this.presenter?.resume();
@@ -465,9 +492,15 @@ export class ReplayScene extends Phaser.Scene {
         before: previous.state,
         after: frame.state,
         route: movementRoute(previous.state, frame.action, true),
-        complete: () => this.updateFrameDetails(index),
+        complete: () => {
+          this.updateFrameDetails(index);
+          this.dialogue?.forward(index);
+          this.dialogueModal?.refresh();
+        },
       });
     } else {
+      this.dialogue?.seek(index);
+      this.dialogueModal?.refresh();
       this.presenter?.reset(frame.state);
       this.elapsedPlaybackMs = 0;
       this.updateFrameDetails(index);

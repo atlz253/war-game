@@ -33,3 +33,9 @@ At the start of a side's turn, each damaged unit standing on a control point own
 ## Events and visibility
 
 Accepted actions emit ordered domain events, such as movement, attack, damage, healing, capture, destruction, turn end, and victory. The Canvas event log displays human-readable versions of the most recent events. The renderer may animate an event, but an animation never changes rules state.
+
+## Campaign mission outcomes
+
+Campaign attempts always initialize fresh: Blue is human, Red uses Heuristic where units exist, and no health, resources, scores, or units carry between missions. Progression is session-only. Standard combat victory and defeat still apply. A mission can additionally declare Blue victory when an eligible Blue unit ends an accepted move on an exact target cell. Crossing it, initial occupancy, rejected movement, or selection cannot win; core emits unit-moved then victory-achieved and rejects every subsequent action.
+
+Reach-cell missions can have an empty Red roster. This does not win at initialization. After Blue ends its turn and all presentation/dialogue barriers clear, an ordinary accepted Red end-turn returns control to Blue and restores movement. The displayed counter increments on each side change; both actions are recorded. Standalone map readiness still requires both sides. Dialogues never consume a turn or affect scores. Victory enables the next mission, defeat retries the same mission, and exiting an unfinished mission does neither.

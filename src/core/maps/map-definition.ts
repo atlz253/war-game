@@ -151,6 +151,7 @@ export function createGameStateFromMap(map: MapDefinition): GameState {
 
   return {
     scenarioId: map.id,
+    victoryPolicy: { type: "standard-match" },
     board: { width: map.width, height: map.height, blockedCells: [], terrain: map.terrain },
     turn: INITIAL_TURN,
     activeSide: BLUE_SIDE,

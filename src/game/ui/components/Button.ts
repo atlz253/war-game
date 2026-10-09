@@ -73,7 +73,13 @@ export class Button {
   private bindPointerEvents(): void {
     this.container.on(Phaser.Input.Events.POINTER_OVER, () => this.setHoverAppearance());
     this.container.on(Phaser.Input.Events.POINTER_OUT, () => this.refreshAppearance());
-    this.container.on(Phaser.Input.Events.POINTER_DOWN, () => this.handleClick());
+    this.container.on(
+      Phaser.Input.Events.POINTER_DOWN,
+      (_pointer: unknown, _x: number, _y: number, event?: Phaser.Types.Input.EventData) => {
+        event?.stopPropagation();
+        this.handleClick();
+      },
+    );
   }
 
   private handleClick(): void {
@@ -82,7 +88,7 @@ export class Button {
       this.onClick();
     }
 
-    this.refreshAppearance();
+    if (this.container.scene) this.refreshAppearance();
   }
 
   private refreshAppearance(): void {

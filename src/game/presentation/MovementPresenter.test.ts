@@ -110,3 +110,14 @@ describe("movement presenter", () => {
     expect(done).toHaveBeenCalledTimes(1);
   });
 });
+
+it("drains an automatic non-move queued by the settled continuation", () => {
+  const { presenter, driver } = fixture();
+  const complete = vi.fn();
+  driver.settled.mockImplementationOnce(() =>
+    presenter.enqueue({ before: state, after: state, route: null, complete }),
+  );
+  presenter.enqueue({ before: state, after: state, route: null });
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect(presenter.busy).toBe(false);
+});

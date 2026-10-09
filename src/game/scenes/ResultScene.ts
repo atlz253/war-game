@@ -2,6 +2,7 @@ import Phaser from "phaser";
 
 import type { MapDefinition } from "../../core/maps/map-definition";
 import type { SideId } from "../../core/model/game-state";
+import { advanceRun, type CampaignRun, launchMission } from "../campaigns/playthrough";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
 import {
@@ -14,6 +15,7 @@ import { uiTheme } from "../ui/theme/ui-theme";
 import { BATTLE_SCENE_KEY, MAIN_MENU_SCENE_KEY, REPLAY_SCENE_KEY } from "./scene-keys";
 
 interface ResultSceneData {
+  readonly campaignRun?: CampaignRun;
   readonly winner: SideId;
   readonly turn: number;
   readonly matchConfiguration?: MatchConfiguration;
@@ -45,6 +47,7 @@ export class ResultScene extends Phaser.Scene {
   }
 
   public create(data: ResultSceneData): void {
+    const continued = data.campaignRun ? advanceRun(data.campaignRun, data.winner) : undefined;
     const matchConfiguration = data.matchConfiguration ?? createDefaultMatchConfiguration();
     const panel = new Panel(this, {
       x: CENTER_X - PANEL_WIDTH / HALF_DIMENSION,
@@ -53,11 +56,16 @@ export class ResultScene extends Phaser.Scene {
       height: PANEL_HEIGHT,
     });
     const title = this.add
-      .text(CENTER_X, TITLE_Y, `${data.winner.toUpperCase()} VICTORY`, {
-        color: uiTheme.colors.text,
-        fontFamily: uiTheme.font.family,
-        fontSize: `${uiTheme.font.titleSize}px`,
-      })
+      .text(
+        CENTER_X,
+        TITLE_Y,
+        continued?.complete ? "CAMPAIGN COMPLETE" : `${data.winner.toUpperCase()} VICTORY`,
+        {
+          color: uiTheme.colors.text,
+          fontFamily: uiTheme.font.family,
+          fontSize: `${uiTheme.font.titleSize}px`,
+        },
+      )
       .setOrigin(CENTER_ORIGIN);
     const stats = this.add
       .text(CENTER_X, STATS_Y, `Turns: ${data.turn}`, {
@@ -71,12 +79,24 @@ export class ResultScene extends Phaser.Scene {
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "PLAY AGAIN",
+      label: continued
+        ? continued.complete
+          ? "COMPLETE"
+          : data.winner === "blue"
+            ? "NEXT MISSION"
+            : "RETRY"
+        : "PLAY AGAIN",
+      enabled: !continued?.complete,
       onClick: () =>
-        this.scene.start(BATTLE_SCENE_KEY, {
-          matchConfiguration,
-          mapDefinition: data.mapDefinition,
-        }),
+        this.scene.start(
+          BATTLE_SCENE_KEY,
+          continued
+            ? launchMission(continued)
+            : {
+                matchConfiguration,
+                mapDefinition: data.mapDefinition,
+              },
+        ),
     });
     const menuButton = new Button(this, {
       x: MENU_BUTTON_X,

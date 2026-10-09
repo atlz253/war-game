@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { isMapReadyForMatch } from "../../core/maps/map-definition";
 
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
@@ -15,6 +16,7 @@ import { movementUi } from "../ui/theme/movement-ui";
 import { uiTheme } from "../ui/theme/ui-theme";
 import {
   BATTLE_SCENE_KEY,
+  CAMPAIGN_LIBRARY_SCENE_KEY,
   LM_STUDIO_SETTINGS_SCENE_KEY,
   MAP_EDITOR_SCENE_KEY,
   MOVEMENT_SETTINGS_SCENE_KEY,
@@ -211,6 +213,14 @@ export class MainMenuScene extends Phaser.Scene {
 
     return [
       this.selectedMapText,
+      new Button(this, {
+        x: MULTIPLAYER_HOST_BUTTON_X,
+        y: EDITOR_BUTTON_Y,
+        width: MENU_SECONDARY_BUTTON_WIDTH,
+        height: ROLE_BUTTON_HEIGHT,
+        label: "CAMPAIGNS",
+        onClick: () => this.scene.start(CAMPAIGN_LIBRARY_SCENE_KEY),
+      }).container,
       previousMapButton.container,
       nextMapButton.container,
       editorButton.container,
@@ -307,7 +317,11 @@ export class MainMenuScene extends Phaser.Scene {
       this.lmStudioSettings.load(),
     );
     const selectedMap = this.getSelectedMap();
-    if (this.isLmStudioConfigurationMissing() || !selectedMap) {
+    if (
+      this.isLmStudioConfigurationMissing() ||
+      !selectedMap ||
+      !isMapReadyForMatch(selectedMap.map)
+    ) {
       this.refreshLaunchAvailability();
       return;
     }
@@ -379,13 +393,18 @@ export class MainMenuScene extends Phaser.Scene {
 
   private refreshLaunchAvailability(): void {
     const selectedMap = this.getSelectedMap();
-    const isReady = !this.isLmStudioConfigurationMissing() && selectedMap !== null;
+    const isReady =
+      !this.isLmStudioConfigurationMissing() &&
+      selectedMap !== null &&
+      isMapReadyForMatch(selectedMap.map);
     this.startButton.setEnabled(isReady);
     this.instructionsText.setText(
       isReady
         ? "Choose commanders and a map, then start the match."
         : selectedMap
-          ? "Open LM Studio Settings and select a model before starting."
+          ? isMapReadyForMatch(selectedMap.map)
+            ? "Open LM Studio Settings and select a model before starting."
+            : "Standalone matches require Blue and Red units. Open CAMPAIGNS for the tutorial."
           : "No maps available. Add a local map or restore a built-in map file.",
     );
   }

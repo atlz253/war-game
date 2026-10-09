@@ -1,0 +1,168 @@
+import { changeMissionMap, rebindMission, removeAt, reorder } from "../../core/campaigns/draft";
+import type {
+  CampaignDefinition,
+  DialogueEvent,
+  DialogueLine,
+  DialogueTrigger,
+  MissionDefinition,
+  Position,
+  UnitSelector,
+} from "../../core/campaigns/editor-types";
+export const TRIGGER_TYPES = [
+  "mission-start",
+  "turn",
+  "unit-moved",
+  "unit-selected",
+  "unit-arrived",
+  "mission-end",
+] as const;
+export class CampaignEditorModel {
+  public draft: CampaignDefinition;
+  public missionIndex = 0;
+  public eventIndex = 0;
+  public lineIndex = 0;
+  private saved: string;
+  public constructor(campaign: CampaignDefinition) {
+    this.draft = structuredClone(campaign);
+    this.saved = JSON.stringify(campaign);
+  }
+  public get dirty(): boolean {
+    return this.saved !== JSON.stringify(this.draft);
+  }
+  public markSaved(): void {
+    this.saved = JSON.stringify(this.draft);
+  }
+  public get mission(): MissionDefinition | undefined {
+    return this.draft.missions[this.missionIndex];
+  }
+  public get event(): DialogueEvent | undefined {
+    return this.mission?.events[this.eventIndex];
+  }
+  public get line(): DialogueLine | undefined {
+    return this.event?.lines[this.lineIndex];
+  }
+  public updateMission(patch: Partial<MissionDefinition>): void {
+    this.draft = {
+      ...this.draft,
+      missions: this.draft.missions.map((mission, index) =>
+        index === this.missionIndex ? { ...mission, ...patch } : mission,
+      ),
+    };
+  }
+  public updateEvent(patch: Partial<DialogueEvent>): void {
+    if (this.mission)
+      this.updateMission({
+        events: this.mission.events.map((event, index) =>
+          index === this.eventIndex ? { ...event, ...patch } : event,
+        ),
+      });
+  }
+  public updateLine(patch: Partial<DialogueLine>): void {
+    if (this.event)
+      this.updateEvent({
+        lines: this.event.lines.map((line, index) =>
+          index === this.lineIndex ? { ...line, ...patch } : line,
+        ),
+      });
+  }
+  public addMission(id: string, mapId: string): void {
+    this.draft = {
+      ...this.draft,
+      missions: [
+        ...this.draft.missions,
+        {
+          id,
+          name: "New mission",
+          builtInMapId: mapId,
+          conditions: { type: "standard-match" },
+          events: [],
+        },
+      ],
+    };
+    this.missionIndex = this.draft.missions.length - 1;
+    this.eventIndex = 0;
+    this.lineIndex = 0;
+  }
+  public deleteMission(): void {
+    this.draft = { ...this.draft, missions: removeAt(this.draft.missions, this.missionIndex) };
+    this.missionIndex = Math.max(0, this.missionIndex - 1);
+  }
+  public moveMission(direction: number): void {
+    this.draft = {
+      ...this.draft,
+      missions: reorder(this.draft.missions, this.missionIndex, this.missionIndex + direction),
+    };
+    this.missionIndex = clampIndex(this.missionIndex + direction, this.draft.missions.length);
+  }
+  public setMap(id: string): void {
+    if (this.mission) this.updateMission(changeMissionMap(this.mission, id));
+  }
+  public rebind(): void {
+    if (this.mission) this.updateMission(rebindMission(this.mission));
+  }
+  public addEvent(id: string): void {
+    if (!this.mission) return;
+    this.updateMission({
+      events: [
+        ...this.mission.events,
+        { id, type: "dialogue", trigger: { type: "mission-start" }, lines: [] },
+      ],
+    });
+    this.eventIndex = this.mission.events.length - 1;
+    this.lineIndex = 0;
+  }
+  public deleteEvent(): void {
+    if (this.mission)
+      this.updateMission({ events: removeAt(this.mission.events, this.eventIndex) });
+    this.eventIndex = Math.max(0, this.eventIndex - 1);
+    this.lineIndex = 0;
+  }
+  public moveEvent(direction: number): void {
+    if (!this.mission) return;
+    this.updateMission({
+      events: reorder(this.mission.events, this.eventIndex, this.eventIndex + direction),
+    });
+    this.eventIndex = clampIndex(this.eventIndex + direction, this.mission.events.length);
+  }
+  public setTrigger(type: DialogueTrigger["type"]): void {
+    const binding = this.mission?.builtInMapId ?? "";
+    if (type === "mission-start" || type === "mission-end")
+      return void this.updateEvent({ trigger: { type } });
+    if (type === "turn") return void this.updateEvent({ trigger: { type, number: 1 } });
+    const unit = { type: "any" } as const;
+    this.updateEvent({
+      trigger:
+        type === "unit-arrived"
+          ? { type, unit, cell: { x: 0, y: 0 }, mapBinding: binding }
+          : { type, unit, mapBinding: binding },
+    });
+  }
+  public setEventUnit(unit: UnitSelector): void {
+    if (this.event && "unit" in this.event.trigger)
+      this.updateEvent({ trigger: { ...this.event.trigger, unit } });
+  }
+  public setEventCell(cell: Position): void {
+    if (this.event?.trigger.type === "unit-arrived")
+      this.updateEvent({ trigger: { ...this.event.trigger, cell } });
+  }
+  public addLine(): void {
+    if (this.event) {
+      this.updateEvent({ lines: [...this.event.lines, { speaker: "Character", text: "" }] });
+      this.lineIndex = this.event.lines.length - 1;
+    }
+  }
+  public deleteLine(): void {
+    if (this.event) this.updateEvent({ lines: removeAt(this.event.lines, this.lineIndex) });
+    this.lineIndex = Math.max(0, this.lineIndex - 1);
+  }
+  public moveLine(direction: number): void {
+    if (!this.event) return;
+    this.updateEvent({
+      lines: reorder(this.event.lines, this.lineIndex, this.lineIndex + direction),
+    });
+    this.lineIndex = clampIndex(this.lineIndex + direction, this.event.lines.length);
+  }
+}
+function clampIndex(index: number, length: number): number {
+  return Math.max(0, Math.min(index, length - 1));
+}

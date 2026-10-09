@@ -1,8 +1,11 @@
 import type Phaser from "phaser";
+import type { GameState } from "../../core/model/game-state";
+import { getCapturableControlPointId } from "../input/capture-availability";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
 import { uiTheme } from "../ui/theme/ui-theme";
+import { formatSelectedUnit } from "./battle-view-helpers";
 
 export const HUD_X = 3104;
 export const HUD_WIDTH = 704;
@@ -54,6 +57,12 @@ export function createBattleHud(
   const activeTurnText = addText(scene, PANEL_CONTENT_X, TOP_TEXT_Y, "");
   const scoreText = addScoreText(scene, SCORE_TEXT_X, SCORE_TEXT_Y, "");
   const selectedUnitText = addText(scene, PANEL_CONTENT_X, SELECTED_TEXT_Y, "Select a Blue unit.");
+  const goalText = addText(
+    scene,
+    PANEL_CONTENT_X,
+    SELECTED_PANEL_Y + SELECTED_PANEL_HEIGHT + uiTheme.spacing.md,
+    "",
+  );
   const healthBar = new ProgressBar(scene, {
     x: PANEL_CONTENT_X,
     y: SELECTED_HEALTH_BAR_Y,
@@ -91,6 +100,7 @@ export function createBattleHud(
     activeTurnText,
     scoreText,
     selectedUnitText,
+    goalText,
     healthBar.container,
     waitButton.container,
     endTurnButton.container,
@@ -100,6 +110,7 @@ export function createBattleHud(
     activeTurnText,
     scoreText,
     selectedUnitText,
+    goalText,
     healthBar,
     waitButton,
     endTurnButton,
@@ -112,6 +123,34 @@ function addText(scene: Phaser.Scene, x: number, y: number, text: string): Phase
     fontFamily: uiTheme.font.family,
     fontSize: `${uiTheme.font.normalSize}px`,
   });
+}
+
+export function updateBattleHud(
+  hud: ReturnType<typeof createBattleHud>,
+  state: GameState,
+  selectedId: string | null,
+  human: boolean,
+  canIssueOrders: boolean,
+  suffix: string,
+): void {
+  const selected = selectedId ? state.units[selectedId] : undefined;
+  const policy = state.victoryPolicy;
+  const goal =
+    policy?.type === "standard-match-or-reach-cell"
+      ? `\nGOAL (${policy.cell.x}, ${policy.cell.y})`
+      : "";
+  hud.activeTurnText.setText(`Turn ${state.turn} — ${state.activeSide.toUpperCase()}${suffix}`);
+  hud.goalText.setText(goal.trim());
+  hud.scoreText.setText(`B ${state.scores.blue}  R ${state.scores.red}`);
+  hud.selectedUnitText.setText(formatSelectedUnit(state, selected, state.activeSide, human));
+  hud.healthBar.setValue(selected?.health ?? 0, selected?.maxHealth ?? 0);
+  hud.waitButton.setEnabled(
+    canIssueOrders && selected !== undefined && !selected.hasTakenMainAction,
+  );
+  hud.endTurnButton.setEnabled(canIssueOrders);
+  hud.captureButton.setEnabled(
+    canIssueOrders && getCapturableControlPointId(state, selectedId, false) !== null,
+  );
 }
 
 function addScoreText(

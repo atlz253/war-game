@@ -133,3 +133,18 @@ All UI values come from one `UiTheme`. UI components never hold or mutate core e
 ## Testing boundary
 
 Use Vitest for unit tests and follow TDD: write a failing behavior-level test, implement the minimum code needed to pass it, then refactor with the suite green. Core and AI tests run without Phaser. Phaser tests focus on input-to-action wiring and presentation contracts, while rules correctness remains covered at the core boundary.
+
+## Campaign boundaries
+
+src/core/campaigns owns pure versioned definitions, validation with injected maps, draft transformations, mission state factories and deterministic narrative signals. Only victory policy enters GameState. Browser storage, text controls and narrative presentation stay in src/game; selection never becomes a GameAction.
+
+Both human and AI acceptance paths feed the same mission signal adapter. Core acceptance journals occurrences immediately; `MovementPresenter` completion opens the queued Canvas dialogue. Orders and AI remain blocked until dialogue completion chooses the next order or terminal result. Pause is combined with dialogue blocking, and exit/disposal invalidates pending decisions and callbacks. `ReplayDialogue` consumes snapshotted occurrences independently of live campaign matching or progression.
+
+```mermaid
+flowchart LR
+  Core[validateAction / applyAction] --> Journal[Pure mission signal journal]
+  Core --> Movement[MovementPresenter completion]
+  Journal --> Dialogue[Canvas dialogue queue]
+  Movement --> Dialogue
+  Dialogue --> Continuation[Next AI order or result]
+```

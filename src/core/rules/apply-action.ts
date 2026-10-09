@@ -55,11 +55,21 @@ function applyMove(
     hasMovedThisTurn: true,
   };
   const nextState = withUnit(state, movedUnit);
+  const policy = state.victoryPolicy;
+  const won =
+    policy?.type === "standard-match-or-reach-cell" &&
+    unit.side === "blue" &&
+    (policy.unit.type === "any" || policy.unit.unitId === unitId) &&
+    positionsEqual(policy.cell, destination);
+  const events: GameEvent[] = [
+    { type: "unit-moved", unitId, from: unit.position, to: destination, cost },
+  ];
+  if (won) events.push({ type: "victory-achieved", winner: "blue" });
 
   return {
     accepted: true,
-    state: nextState,
-    events: [{ type: "unit-moved", unitId, from: unit.position, to: destination, cost }],
+    state: won ? { ...nextState, winner: "blue" } : nextState,
+    events,
   };
 }
 

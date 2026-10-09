@@ -1,3 +1,5 @@
+import type { VictoryPolicy } from "../campaigns/definition";
+
 export type SideId = "blue" | "red";
 
 export interface TeamScores {
@@ -52,6 +54,7 @@ export interface ControlPointState {
 }
 
 export interface GameState {
+  readonly victoryPolicy?: VictoryPolicy;
   readonly scenarioId: string;
   readonly board: BoardState;
   readonly turn: number;
