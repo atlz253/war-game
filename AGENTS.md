@@ -1,5 +1,9 @@
 # AI War Game Contributor Guide
 
+## OpenSpec language
+
+- Write all OpenSpec specifications and planning artifacts in English, including `proposal.md`, `design.md`, `tasks.md`, main specs, change delta specs, and archived artifacts. Preserve requirement meaning, identifiers, and task numbering when translating existing files.
+
 ## Core rules
 
 - Keep `src/core` and `src/ai` deterministic, headless-capable, and independent of Phaser and `src/game`.
