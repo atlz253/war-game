@@ -35,7 +35,7 @@ it("keeps built-in tutorial playable on corrupt storage and disables delete", ()
   );
   expect(fixture.descendants(root).some((item) => item.text.includes("JSON"))).toBe(true);
 });
-it("saves built-ins as independent local copies and requires Save/Discard/Cancel on exit", () => {
+it("saves built-ins as independent local copies and requires Save/Discard/Cancel on exit", async () => {
   let stored: string | null = null;
   vi.stubGlobal("window", {
     localStorage: {
@@ -52,7 +52,8 @@ it("saves built-ins as independent local copies and requires Save/Discard/Cancel
   if (!campaign) throw new Error("Missing tutorial");
   scene.create({ campaign, builtIn: true });
   const root = (scene as unknown as { root: Parameters<typeof fixture.click>[0] }).root;
-  fixture.click(root, "SAVE AS COPY");
+  fixture.click(root, "SAVE");
+  await vi.waitFor(() => expect((scene as unknown as { saving: boolean }).saving).toBe(false));
   const copy = JSON.parse(stored ?? "{}").campaigns[0];
   expect(copy.id).not.toBe(campaign.id);
   fixture.click(root, "+ MISSION");
@@ -100,7 +101,7 @@ it("opens, creates and deletes local drafts while disabling unready Play", () =>
   );
 });
 
-it("applies mission settings and saves dirty drafts before leaving", () => {
+it("applies mission settings and saves dirty drafts before leaving", async () => {
   let stored: string | null = null;
   vi.stubGlobal("window", {
     localStorage: {
@@ -115,7 +116,7 @@ it("applies mission settings and saves dirty drafts before leaving", () => {
   Object.assign(scene, fixture.props);
   const campaign = getBuiltInCampaigns()[0];
   if (!campaign) throw new Error("Missing tutorial");
-  scene.create({ campaign });
+  scene.create({ campaign: { ...campaign, id: "local-tutorial" } });
   const root = (scene as unknown as { root: Parameters<typeof fixture.click>[0] }).root;
   fixture.click(root, "BLUE: ANY");
   expect(
@@ -135,5 +136,5 @@ it("applies mission settings and saves dirty drafts before leaving", () => {
     mapBinding: saved.missions[0].builtInMapId,
   });
   expect(saved.missions[0].id).toBe(campaign.missions[0]?.id);
-  expect(fixture.start).toHaveBeenLastCalledWith("campaign-library");
+  await vi.waitFor(() => expect(fixture.start).toHaveBeenLastCalledWith("campaign-library"));
 });

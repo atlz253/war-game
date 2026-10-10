@@ -86,3 +86,62 @@ Observed: each attempt recorded seven actions (three moves and four end-turns), 
 6. Open HOST P2P and JOIN P2P and return to MENU. Canvas controls and navigation work. Host displayed `SIGNALING CONNECTION FAILED`; a live peer match could not be exercised without the existing signaling service. Multiplayer sequence/snapshot behavior and absence of campaign progression are covered by the passing protocol/presentation suites.
 
 Browser replay verification observed boundary-zero ordering, post-animation dialogue, cancellation during seeking and repeat forward traversal. Pure replay integration tests cover autoplay blocking and 2× movement timing. The actual two-peer connection remains an environmental verification limitation.
+
+## JSON storage and file exchange revision (2026-10-10)
+
+This revision replaces the initial built-in Save As Copy behavior described above: DEV now also offers source SAVE; production built-ins are play/export only. No campaign combat, movement, simulation, or replay schema rules changed.
+
+### Method
+
+Used isolated Chromium contexts on `http://127.0.0.1:5174` (DEV) and a served production build on `http://127.0.0.1:5175` (`npm run preview -- --host 127.0.0.1 --port 5175 --strictPort`). Inspected screenshots at 1920×1080 and exercised Canvas button pointer handlers. DEV used the existing game hook. Production had no `window.__AI_WAR_GAME__`; the QA harness captured the existing game from a single SceneManager update and restored the prototype immediately. No production hook was added.
+
+Import checks fed synthetic native `File`/`DataTransfer` objects into the actual temporary input's change handler; the operating-system chooser was not automated. Exports invoked the real adapter while capturing its Blob for JSON comparison. Cancellation, read/permission failures, object-URL cleanup, storage failures and shutdown races are additionally verified with focused Vitest tests. One synthetic mouse-down/up on the Canvas exercised actual Phaser dispatch at the dialogue-close button.
+
+### DEV source and local round-trip
+
+1. Make a temporary copy of `tutorial.json` with ID `qa-json-acceptance` and name `QA source JSON` (or POST that definition to `/__dev-campaigns`). The eager catalog discovers it without a registry edit.
+2. Open the new built-in in CAMPAIGNS, rename it `QA source saved`, and change the first dialogue to 35 Russian/Japanese lines (2,370 characters). Click SAVE. Inspect `qa-json-acceptance.json`, then reopen after catalog reload.
+3. Observe the saved name and full multiline text. Open EDIT TEXT, exercise SCROLL UP/DOWN and SAVE TEXT; screenshot inspection confirms text and controls are readable.
+4. Click SAVE AS COPY, make an unsaved name change, then EXPORT. Confirm the Blob contains that change, the editor stays dirty, and local persistence is unchanged by export. BACK/CANCEL returns to the draft; BACK/DISCARD AND LEAVE exits without saving the name change.
+5. IMPORT that exported definition through the library. The original local ID `qa-json-acceptance-2` collides, so the new entry is `qa-json-acceptance-2-2`. It is selected; nested mission/event IDs, order, bindings and all 35 text lines match exactly.
+6. Remove only the temporary QA source file. The catalog returns to the unchanged shipped tutorial. POST malformed JSON, schemaVersion 9 and ID `../escape`: each returns 400; GET returns 405. Atomic replacement and source retention on write failure are covered by an injected filesystem failure test.
+
+Observed: source SAVE wrote disk JSON and caused catalog reload, with no local campaign entry. SAVE AS COPY created independent local content. Source discovery, local collision handling, draft export, dirty navigation, long text and cleanup passed. Inspection found zero surviving `input`, `textarea`, `select`, HTML `button` or download `a` elements. The temporary QA source was removed after verification.
+
+### Served production build
+
+1. Open CAMPAIGNS with empty local storage. Tutorial Campaign has enabled PLAY/EXPORT and disabled OPEN / RENAME/DELETE. Attempt direct editor initialization with the tutorial and `builtIn: false`: it returns to the library. `/__dev-campaigns` POST returns 404.
+2. EXPORT the tutorial, then IMPORT it. The export has exactly `schemaVersion`, `id`, `name`, `missions`; import creates local `tutorial-2`, selects it, and leaves the built-in unchanged.
+3. IMPORT malformed JSON and an unsupported version. Both display errors and leave the library byte-for-byte unchanged.
+4. Open the local copy, change its name and SAVE. It persists locally and becomes clean. Make another unsaved name change and EXPORT: the file contains the new name, storage stays unchanged, and dirty state remains. BACK/SAVE AND LEAVE saves before navigating. Local editing/import/export remain available in production.
+5. Play the original tutorial at No animation. Close introduction, select `(0,1)`, close selection, move to `(4,2)`, close movement, END TURN, wait for Blue turn three, reselect/move to `(8,2)`, END TURN, wait for Blue turn five, reselect/move to `(11,2)`.
+6. Closing the introduction with actual Canvas mouse dispatch produces zero board callbacks and zero actions. The final accepted move wins for Blue; congratulations precede CAMPAIGN COMPLETE. The replay records seven actions, turn five, goal `(11,2)` and the four original event IDs/texts.
+7. WATCH REPLAY: close boundary-zero dialogues, step with `>`, inspect movement dialogue at frame one, use REPLAY START, then step forward again. Frames are `1 → 0 → 1`; original tutorial snapshots survive local edits and file exchange.
+8. Return to the menu and START MATCH on the default Snake map. It opens a standalone battle with standard conditions, no campaign run and no narrative controller.
+
+Observed: all steps passed. Production screenshots show the source-edit controls disabled while local entries and file controls remain available. Existing full-suite tests cover Slow/No animation presentation, snapshot isolation, standalone rules and deterministic replay validation. This revision did not rerun a live two-peer match; the earlier signaling-service limitation still applies.
+
+### Automated checks
+
+`npm run test`: 82 files / 317 tests passed. The focused campaign/core/scene subset passed 19 files / 59 tests. Typecheck, Biome lint and production build passed; Vite reports the existing large Phaser bundle warning. The migrated tutorial JSON was compared deeply with the previous committed TypeScript payload and is identical. `git diff --check` and `openspec validate add-campaign-editor --strict` passed. File, function and complexity limits passed through Biome. Simulation code and action rules are unchanged, so no new simulation run was required; the initial implementation's deterministic simulation result remains above.
+
+## Explicit save destinations revision (2026-10-10)
+
+This revision supersedes the SAVE / SAVE AS COPY labels in the earlier historical acceptance records. SAVE now writes local storage; BUILT IN SAVE writes source JSON only in DEV; SAVE AND LEAVE uses local SAVE.
+
+### Reproducible browser acceptance
+
+Use isolated browser storage with `npm run dev -- --host 127.0.0.1 --port 5174 --strictPort`, and serve `npm run build` using `npm run preview -- --host 127.0.0.1 --port 5175 --strictPort`. The check invoked actual Phaser Canvas button handlers through browser evaluation. Temporary scene hooks inspected drafts and storage; production game access was captured through one SceneManager update and the hook was restored. No runtime hooks were added to production code. Inspect the DEV editor at 1920x1080 to verify both save labels are readable and do not overlap.
+
+1. DEV: open the built-in tutorial, change its name and choose SAVE. Verify one local `tutorial-2` is created with unchanged nested mission/dialogue data. Change the name and SAVE again: the same local entry is updated, without another copy or a source write. Observed names were `QA local lesson` then `QA local latest`; the editor became clean.
+2. DEV: use the disposable draft ID `qa-save-buttons` and choose BUILT IN SAVE. Verify `src/core/campaigns/definitions/qa-save-buttons.json` is created and the catalog refreshes. Reopen that built-in, edit its name and save to source again. Observed disk content changed from `QA source` to `QA updated source`; local storage remained byte-for-byte unchanged. The original tutorial source was not edited. Remove only this disposable source file after checking its resolved path remains within the definitions directory.
+3. DEV: attempt BUILT IN SAVE with an invalid `../invalid` ID. The API rejects it visibly, the draft remains dirty and local storage stays unchanged. Focused Vitest tests additionally verify new/local source saves, existing source preservation on filesystem failure, quota errors, nested identity preservation and collision allocation across both catalogs.
+4. Production: built-in OPEN / RENAME remains disabled; CREATE opens a local editor with SAVE and no BUILT IN SAVE. SAVE persists the new local draft; change its name and use BACK / SAVE AND LEAVE. The same local ID is updated before returning to the library. POST `/__dev-campaigns` returns 404 and the DEV game hook is absent.
+5. Production: place a separate local entry with the built-in `tutorial` ID in the browser library, select its local row and open it. SAVE updates that local entry. This verifies origin is independent of ID membership and does not relax direct built-in editing restrictions.
+6. Production: edit that local entry without saving, EXPORT the draft and verify the exported name differs from stored data while the draft stays dirty. Discard and IMPORT the exported file: the actual temporary picker adapter (supplied with a synthetic File for automation) creates collision-safe `tutorial-2`. No temporary input/download elements remain. The operating-system chooser itself was not automated.
+
+Observed: all listed browser checks passed. Focused scene tests also cover SAVE AND LEAVE quota failure, newer edits before save completion, scene shutdown, and pending source-save snapshot isolation. Earlier tutorial/replay walkthroughs remain above; this revision changes authoring persistence only. Core action rules, movement, tutorial source, simulation and replay processing are unchanged.
+
+### Automated checks
+
+`npm run test`: 82 files / 324 tests passed. The focused persistence/scenes/writer/API run passed 5 files / 27 tests before the additional save-and-leave cases; the final scene subset passed 2 files / 16 tests. `npm run build` (including typecheck) and `npm run lint` passed. Vite retains its existing large Phaser bundle warning. The final diff and OpenSpec validation were checked before handoff. Biome checked file/function/complexity limits. No simulation run was needed because simulation and combat rules did not change.

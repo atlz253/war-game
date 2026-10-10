@@ -1,3 +1,4 @@
+import { getBuiltInCampaigns } from "../../core/campaigns/built-in-campaigns";
 import type {
   CampaignDefinition,
   DialogueTrigger,
@@ -7,6 +8,9 @@ import { validateCampaignReadiness } from "../../core/campaigns/validation";
 import { createGameStateFromMap, type MapDefinition } from "../../core/maps/map-definition";
 import type { Position } from "../../core/model/game-state";
 import { getBuiltInMaps } from "../../core/scenarios/built-in-maps";
+import { downloadCampaignFile } from "../campaigns/browser-campaign-file";
+import { exportCampaignDefinition } from "../campaigns/campaign-file-format";
+import { isDevCampaignEditorAvailable, saveBuiltInCampaign } from "../campaigns/dev-campaign-api";
 import { CampaignEditorModel, TRIGGER_TYPES } from "../campaigns/editor-model";
 import { browserCampaignLibrary } from "../campaigns/library";
 import { createCampaignPreview } from "../campaigns/preview";
@@ -24,9 +28,12 @@ const FIELD_WIDTH = 1280;
 const NAME_DISPLAY_LENGTH = 27;
 const ERROR_ROWS = 3;
 type PickMode = "objective-cell" | "objective-unit" | "event-cell" | "event-unit";
+type SaveDestination = "local" | "built-in";
 export class CampaignEditorScene extends CampaignScene {
   private model!: CampaignEditorModel;
   private builtIn = false;
+  private saving = false;
+  private generation = 0;
   private isNew = false;
   private eventsMode = false;
   private picking = false;
@@ -38,8 +45,22 @@ export class CampaignEditorScene extends CampaignScene {
     super(CAMPAIGN_EDITOR_SCENE_KEY);
   }
   public create(data: EditorData): void {
+    this.generation++;
+    const localEntry =
+      data.builtIn === false &&
+      browserCampaignLibrary()
+        .list()
+        .value.some((c) => c.id === data.campaign.id);
+    const builtIn =
+      Boolean(data.builtIn) ||
+      (!localEntry && getBuiltInCampaigns().some((c) => c.id === data.campaign.id));
+    if (builtIn && !isDevCampaignEditorAvailable()) {
+      this.scene.start(CAMPAIGN_LIBRARY_SCENE_KEY);
+      return;
+    }
     this.model = new CampaignEditorModel(data.campaign);
-    this.builtIn = Boolean(data.builtIn);
+    this.builtIn = builtIn;
+    this.saving = false;
     this.isNew = Boolean(data.isNew);
     this.eventsMode = false;
     this.picking = false;
@@ -48,6 +69,9 @@ export class CampaignEditorScene extends CampaignScene {
     this.errorOffset = 0;
     this.message = "";
     this.initializeCanvas();
+    this.events.once("shutdown", () => {
+      this.generation++;
+    });
     this.refresh();
   }
   private refresh(): void {
@@ -571,10 +595,7 @@ export class CampaignEditorScene extends CampaignScene {
       true,
       ui.textWidth,
     );
-    this.button(ui.leftX, ui.footerY, this.builtIn ? "SAVE AS COPY" : "SAVE", () => {
-      this.save();
-      this.refresh();
-    });
+    this.button(ui.leftX, ui.footerY, "SAVE", () => void this.saveAndRefresh(), !this.saving);
     this.button(ui.leftX + ui.controlGap, ui.footerY, "BACK", () => this.leave());
     this.button(ui.rightX, ui.footerY, "ERRORS UP", () =>
       this.change(() => {
@@ -587,19 +608,75 @@ export class CampaignEditorScene extends CampaignScene {
         this.errorOffset++;
       }),
     );
+    this.button(FIELD_X, ui.footerY, "EXPORT", () => this.exportDraft());
+    if (isDevCampaignEditorAvailable())
+      this.button(
+        FIELD_X + ui.controlGap,
+        ui.footerY,
+        "BUILT IN SAVE",
+        () => void this.saveAndRefresh("built-in"),
+        !this.saving,
+      );
   }
-  private save(): boolean {
-    const saved = this.builtIn
-      ? { ...this.model.draft, id: crypto.randomUUID(), name: `${this.model.draft.name} Copy` }
-      : this.model.draft;
-    const result = browserCampaignLibrary().save(saved);
-    this.message = result.error ?? "Saved.";
-    if (!result.value) return false;
-    this.model.draft = saved;
-    this.model.markSaved();
-    this.builtIn = false;
-    this.isNew = false;
-    return true;
+  private async save(destination: SaveDestination = "local"): Promise<boolean> {
+    if (this.saving) return false;
+    this.saving = true;
+    const generation = this.generation;
+    const snapshot = structuredClone(this.model.draft);
+    try {
+      const persisted = await this.persist(snapshot, destination);
+      if (generation !== this.generation) return false;
+      if (destination === "local") {
+        this.model.draft = { ...this.model.draft, id: persisted.id };
+        this.builtIn = false;
+      }
+      this.model.markSaved(persisted);
+      this.isNew = false;
+      this.message = destination === "built-in" ? "Saved to source JSON." : "Saved locally.";
+      return true;
+    } catch (error) {
+      if (generation === this.generation)
+        this.message = error instanceof Error ? error.message : "Save failed.";
+      return false;
+    } finally {
+      if (generation === this.generation) this.saving = false;
+    }
+  }
+  private async persist(
+    snapshot: CampaignDefinition,
+    destination: SaveDestination,
+  ): Promise<CampaignDefinition> {
+    if (destination === "built-in") {
+      if (!isDevCampaignEditorAvailable()) throw new Error("Built-in saving requires DEV mode.");
+      await saveBuiltInCampaign(snapshot);
+      return snapshot;
+    }
+    const library = browserCampaignLibrary();
+    if (this.builtIn) {
+      const result = library.import(
+        exportCampaignDefinition(snapshot),
+        getBuiltInCampaigns().map((c) => c.id),
+      );
+      if (!result.value) throw new Error(result.error ?? "Local save failed.");
+      return result.value;
+    }
+    const result = library.save(snapshot);
+    if (!result.value) throw new Error(result.error ?? "Local save failed.");
+    return snapshot;
+  }
+  private async saveAndRefresh(destination: SaveDestination = "local"): Promise<void> {
+    const generation = this.generation;
+    await this.save(destination);
+    if (generation === this.generation) this.refresh();
+  }
+  private exportDraft(): void {
+    try {
+      downloadCampaignFile(this.model.draft.name, exportCampaignDefinition(this.model.draft));
+      this.message = "Draft export started.";
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Export failed.";
+    }
+    this.refresh();
   }
   private leave(): void {
     if (!this.model.dirty && !this.isNew) {
@@ -609,14 +686,18 @@ export class CampaignEditorScene extends CampaignScene {
     this.choices("Unsaved changes", [
       {
         label: "SAVE AND LEAVE",
-        action: () => {
-          if (this.save()) this.scene.start(CAMPAIGN_LIBRARY_SCENE_KEY);
-          else this.refresh();
-        },
+        action: () => void this.saveAndLeave(),
       },
       { label: "DISCARD AND LEAVE", action: () => this.scene.start(CAMPAIGN_LIBRARY_SCENE_KEY) },
       { label: "CANCEL", action: () => this.refresh() },
     ]);
+  }
+  private async saveAndLeave(): Promise<void> {
+    const generation = this.generation;
+    const saved = await this.save();
+    if (generation !== this.generation) return;
+    if (saved && !this.model.dirty) this.scene.start(CAMPAIGN_LIBRARY_SCENE_KEY);
+    else this.refresh();
   }
 }
 function short(value: string): string {

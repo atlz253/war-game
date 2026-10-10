@@ -29,8 +29,8 @@ export class CampaignEditorModel {
   public get dirty(): boolean {
     return this.saved !== JSON.stringify(this.draft);
   }
-  public markSaved(): void {
-    this.saved = JSON.stringify(this.draft);
+  public markSaved(snapshot = this.draft): void {
+    this.saved = JSON.stringify(snapshot);
   }
   public get mission(): MissionDefinition | undefined {
     return this.draft.missions[this.missionIndex];

@@ -44,14 +44,14 @@ The editor SHALL allow configuring an exact target cell and either any Blue unit
 - **THEN** the target and unit binding require explicit confirmation or correction before play
 
 ### Requirement: Built-in tutorial campaign availability
-The system SHALL include a playable tutorial campaign with its first mission and map available without authoring or importing content. The built-in campaign SHALL remain available independently of local storage contents and failures. In DEV, authors SHALL be able to open its definition in the editor and use SAVE AS COPY to save an editable local campaign without modifying the built-in original. Direct built-in source editing SHALL follow the DEV-only requirement below.
+The system SHALL include a playable tutorial campaign with its first mission and map available without authoring or importing content. The built-in campaign SHALL remain available independently of local storage contents and failures. In DEV, authors SHALL be able to open its definition in the editor and use SAVE to save an editable local campaign without modifying the built-in original. Direct built-in source editing SHALL follow the DEV-only requirement below.
 
 #### Scenario: Fresh installation
 - **WHEN** the player opens the campaign library with no saved campaigns
 - **THEN** the tutorial campaign is listed and can be started immediately
 
 #### Scenario: Edit tutorial copy
-- **WHEN** the author opens the built-in tutorial in DEV and chooses SAVE AS COPY
+- **WHEN** the author opens the built-in tutorial in DEV and chooses SAVE
 - **THEN** a local copy is saved and the original tutorial remains unchanged
 
 ### Requirement: Built-in campaign JSON catalog
@@ -70,11 +70,20 @@ The system SHALL store each built-in campaign as a separate `CampaignDefinition`
 - **THEN** later catalog reads retain the source JSON content
 
 ### Requirement: DEV-only built-in campaign editing
-The system SHALL permit opening and editing built-in campaign definitions only when `import.meta.env.DEV` is true. In DEV, SAVE SHALL persist the definition to its source JSON through a development-server API, preserving campaign identity; SAVE AS COPY SHALL instead create a local campaign. Production SHALL retain built-in play/export and local campaign editing, but SHALL reject direct editor entry for a built-in campaign and SHALL NOT provide a source-writing endpoint. Source writes SHALL validate structure, use a filename-safe ID, stay within the definitions directory, and report failures without clearing the draft or reporting success. Successful writes SHALL be reflected by the refreshed catalog.
+The system SHALL permit opening and editing built-in campaign definitions only when `import.meta.env.DEV` is true. The editor SHALL expose SAVE for local storage and BUILT IN SAVE for project JSON persistence; BUILT IN SAVE SHALL be available only in DEV, including for new and local campaigns. SAVE AS COPY SHALL be removed. BUILT IN SAVE SHALL preserve the current campaign ID and create or update its canonical `<id>.json` through a development-server API without changing local storage entries. Production SHALL retain built-in play/export and local campaign editing, but SHALL reject direct editor entry for a built-in campaign and SHALL NOT provide a source-writing endpoint. Editor origin SHALL distinguish local and built-in entries even if their IDs match after a deliberate source save. Source writes SHALL validate structure, use a filename-safe ID, stay within the definitions directory, and report failures without clearing the draft or reporting success. Successful writes SHALL be reflected by the refreshed catalog.
 
 #### Scenario: Save built-in source in DEV
-- **WHEN** an author edits a built-in campaign in DEV and chooses SAVE
+- **WHEN** an author edits a built-in campaign in DEV and chooses BUILT IN SAVE
 - **THEN** its source JSON is updated and the refreshed catalog contains the saved content with the same campaign ID
+
+#### Scenario: Save a new or local campaign as built-in
+- **WHEN** an author chooses BUILT IN SAVE for a new or local draft in DEV
+- **THEN** the project file for its current campaign ID is created or updated and becomes available in the refreshed built-in catalog
+- **AND** existing local storage entries remain unchanged
+
+#### Scenario: Separate local entry remains editable
+- **WHEN** a local campaign has been saved as a built-in with the same ID and is later opened from the local library in production
+- **THEN** local editing and SAVE remain available, while BUILT IN SAVE is unavailable and direct built-in editing remains rejected
 
 #### Scenario: Production editing guard
 - **WHEN** a production user attempts to open a built-in campaign editor, including direct scene entry
@@ -83,6 +92,21 @@ The system SHALL permit opening and editing built-in campaign definitions only w
 #### Scenario: Source write failure
 - **WHEN** a DEV save is rejected or the development server cannot write the file
 - **THEN** the editor reports failure, keeps the unsaved draft editable, and does not mark it saved
+
+### Requirement: Explicit local campaign saving
+SAVE SHALL always persist the current draft in the local campaign library in DEV and production, without writing project files. On the first SAVE of a built-in draft, the system SHALL allocate a separate local campaign ID without colliding with either catalog, preserve mission/event IDs, order, bindings and content, and continue editing that local copy. Subsequent SAVE operations SHALL update the same local entry rather than create additional copies. SAVE AND LEAVE SHALL use the same local save behavior and leave only after successful persistence with no newer unsaved edits. Both save destinations SHALL mark only the successfully persisted snapshot as saved; edits made while a save is pending SHALL remain unsaved. Storage failures SHALL preserve the draft and existing entries, report an error, and prevent save-and-leave navigation.
+
+#### Scenario: Repeated local save of a built-in copy
+- **WHEN** an author saves a built-in draft with SAVE, changes the resulting local copy and chooses SAVE again
+- **THEN** one separate local entry contains the latest changes and the original built-in source remains unchanged
+
+#### Scenario: Save and leave uses local storage
+- **WHEN** an author chooses SAVE AND LEAVE for a dirty built-in draft in DEV
+- **THEN** a separate local copy is saved before navigation and no project file is written
+
+#### Scenario: Local save failure or newer edits
+- **WHEN** local persistence fails or the draft changes after the submitted save snapshot
+- **THEN** the error or newer changes remain visible and save-and-leave does not discard the unsaved draft
 
 ### Requirement: Campaign JSON import and export
 The system SHALL provide Canvas import/export controls in DEV and production. Each exported `.ai-war-campaign.json` file SHALL contain one `CampaignDefinition` v1, without a library envelope, run progress or replay data. Export SHALL preserve mission/event identities, order, policies, bindings, and complete Unicode dialogue content; the library SHALL export selected built-in or local definitions, and the editor SHALL support exporting its current draft. Import SHALL create a local campaign, including when the file originated from a built-in campaign, and resolve campaign ID collisions against both built-in and local entries without overwriting either. Mission/event IDs and references SHALL be preserved. Structurally valid incomplete drafts or missing-map references SHALL remain editable but SHALL fail Play readiness. Malformed or unsupported files SHALL be rejected with a visible error and without changing stored campaigns or the current draft.

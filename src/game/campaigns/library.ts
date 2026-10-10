@@ -4,9 +4,11 @@ import {
   isRecord,
 } from "../../core/campaigns/definition";
 import type { StorageLike } from "../maps/map-library";
+import { exportCampaignDefinition } from "./campaign-file-format";
 
 const STORAGE_KEY = "ai-war-game.campaigns.v1";
 const LIBRARY_VERSION = 1;
+const FIRST_COLLISION_SUFFIX = 2;
 export interface LibraryResult<T> {
   readonly value: T;
   readonly error: string | null;
@@ -42,6 +44,33 @@ export class BrowserCampaignLibrary {
   }
   public delete(id: string): LibraryResult<boolean> {
     return this.update((items) => items.filter((item) => item.id !== id));
+  }
+  public import(
+    serialized: string,
+    builtInIds: readonly string[] = [],
+  ): LibraryResult<CampaignDefinition | null> {
+    const loaded = this.list();
+    if (loaded.error) return { value: null, error: loaded.error };
+    try {
+      const campaign = deserializeCampaign(serialized);
+      const ids = new Set([...builtInIds, ...loaded.value.map((item) => item.id)]);
+      let id = campaign.id;
+      let suffix = FIRST_COLLISION_SUFFIX;
+      while (ids.has(id)) id = `${campaign.id}-${suffix++}`;
+      const imported = { ...campaign, id };
+      const saved = this.save(imported);
+      return { value: saved.value ? imported : null, error: saved.error };
+    } catch (error) {
+      return { value: null, error: errorMessage(error) };
+    }
+  }
+  public export(id: string): LibraryResult<string | null> {
+    const loaded = this.list();
+    if (loaded.error) return { value: null, error: loaded.error };
+    const campaign = loaded.value.find((item) => item.id === id);
+    return campaign
+      ? { value: exportCampaignDefinition(campaign), error: null }
+      : { value: null, error: `Campaign '${id}' does not exist.` };
   }
   private update(
     transform: (items: readonly CampaignDefinition[]) => readonly CampaignDefinition[],
