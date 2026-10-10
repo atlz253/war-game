@@ -19,6 +19,8 @@ import {
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getEditorPointerTool } from "../input/editor-pointer-tool";
+import { displayToken } from "../localization/display-tokens";
+import { t } from "../localization/runtime";
 import { chooseMapFile, downloadMapFile } from "../maps/browser-map-file";
 import { deleteBuiltInMap, isDevMapEditorAvailable, saveBuiltInMap } from "../maps/dev-map-api";
 import {
@@ -75,7 +77,7 @@ const MASK_COLOR = 0xffffff;
 const DEFAULT_WIDTH = 12;
 const DEFAULT_HEIGHT = 8;
 const MAP_ID_PREFIX = "map";
-const MAP_NAME_PREFIX = "New Map";
+const MAP_NAME_PREFIX = "New map";
 const MAP_ID_SEPARATOR = "-";
 const MAP_NAME_SEPARATOR = " ";
 const INITIAL_MAP_NUMBER = 1;
@@ -270,34 +272,44 @@ export class MapEditorScene extends Phaser.Scene {
       y: TOP_PANEL_Y,
       width: HUD_WIDTH,
       height: TOP_PANEL_HEIGHT,
-      title: "MAP EDITOR",
+      title: t("main-menu.map.editor"),
     });
     this.editorContentContainer = this.add.container().setScrollFactor(0);
     this.mapInfoText = this.addText(CONTENT_X, TOOL_TITLE_Y, "");
     this.statusText = this.addText(CONTENT_X, STATUS_Y, "");
     const buttons = [
-      this.createButton("WIDTH -", BUTTON_ROW.widthDecrease, () =>
+      this.createButton(t("map-editor.width"), BUTTON_ROW.widthDecrease, () =>
         this.requestResize(this.map.width - 1, this.map.height),
       ),
-      this.createButton("WIDTH +", BUTTON_ROW.widthIncrease, () =>
+      this.createButton(t("map-editor.width.2"), BUTTON_ROW.widthIncrease, () =>
         this.requestResize(this.map.width + 1, this.map.height),
       ),
-      this.createButton("HEIGHT -", BUTTON_ROW.heightDecrease, () =>
+      this.createButton(t("map-editor.height"), BUTTON_ROW.heightDecrease, () =>
         this.requestResize(this.map.width, this.map.height - 1),
       ),
-      this.createButton("HEIGHT +", BUTTON_ROW.heightIncrease, () =>
+      this.createButton(t("map-editor.height.2"), BUTTON_ROW.heightIncrease, () =>
         this.requestResize(this.map.width, this.map.height + 1),
       ),
-      this.createButton("NEW MAP", BUTTON_ROW.newMap, () => this.createNewMap()),
-      this.createButton("ERASE CELL", BUTTON_ROW.erase, () => this.setTool({ kind: "erase" })),
-      this.createButton("RENAME MAP", BUTTON_ROW.rename, () => this.openRenameDialog()),
-      this.createButton("SAVE", BUTTON_ROW.save, () => this.save()),
-      this.createButton("SAVE AS COPY", BUTTON_ROW.saveCopy, () => this.saveCopy()),
-      this.createButton("TEST MATCH", BUTTON_ROW.testMatch, () => this.startTestMatch()),
-      this.createButton("IMPORT", BUTTON_ROW.import, () => void this.importMap()),
-      this.createButton("EXPORT", BUTTON_ROW.export, () => this.exportMap()),
-      this.createButton("DELETE MAP", BUTTON_ROW.delete, () => this.deleteMap()),
-      this.createButton("BACK TO MENU", BUTTON_ROW.back, () =>
+      this.createButton(t("map-editor.new.map.2"), BUTTON_ROW.newMap, () => this.createNewMap()),
+      this.createButton(t("map-editor.erase.cell"), BUTTON_ROW.erase, () =>
+        this.setTool({ kind: "erase" }),
+      ),
+      this.createButton(t("map-editor.rename.map"), BUTTON_ROW.rename, () =>
+        this.openRenameDialog(),
+      ),
+      this.createButton(t("common.save"), BUTTON_ROW.save, () => this.save()),
+      this.createButton(t("map-editor.save.as.copy"), BUTTON_ROW.saveCopy, () => this.saveCopy()),
+      this.createButton(t("map-editor.test.match"), BUTTON_ROW.testMatch, () =>
+        this.startTestMatch(),
+      ),
+      this.createButton(
+        t("campaign-library.import"),
+        BUTTON_ROW.import,
+        () => void this.importMap(),
+      ),
+      this.createButton(t("campaign-editor.export"), BUTTON_ROW.export, () => this.exportMap()),
+      this.createButton(t("map-editor.delete.map"), BUTTON_ROW.delete, () => this.deleteMap()),
+      this.createButton(t("map-editor.back.to.menu"), BUTTON_ROW.back, () =>
         this.scene.start(MAIN_MENU_SCENE_KEY),
       ),
     ];
@@ -329,13 +341,15 @@ export class MapEditorScene extends Phaser.Scene {
     this.refreshDevModeButton();
     return [
       this.devModeButton,
-      this.createButton("PREV BUILT-IN MAP", BUTTON_ROW.previousBuiltIn, () =>
+      this.createButton(t("map-editor.prev.built.in.map"), BUTTON_ROW.previousBuiltIn, () =>
         this.changeBuiltInMap(-1),
       ),
-      this.createButton("NEXT BUILT-IN MAP", BUTTON_ROW.nextBuiltIn, () =>
+      this.createButton(t("map-editor.next.built.in.map"), BUTTON_ROW.nextBuiltIn, () =>
         this.changeBuiltInMap(1),
       ),
-      this.createButton("NEW BUILT-IN MAP", BUTTON_ROW.newBuiltIn, () => this.createNewMap()),
+      this.createButton(t("map-editor.new.built.in.map"), BUTTON_ROW.newBuiltIn, () =>
+        this.createNewMap(),
+      ),
     ];
   }
 
@@ -598,7 +612,7 @@ export class MapEditorScene extends Phaser.Scene {
 
   private requestResize(width: number, height: number): void {
     if (width < 1 || height < 1) {
-      this.statusText.setText("Map dimensions must stay positive.");
+      this.statusText.setText(t("map-editor.map.dimensions.must.stay.positive"));
       return;
     }
     if (!wouldTrimPlacements(this.map, width, height)) {
@@ -607,7 +621,7 @@ export class MapEditorScene extends Phaser.Scene {
     }
     this.pendingResize = { width, height };
     this.statusText.setText(
-      "Resize removes out-of-bounds placements. Click SAVE to confirm resize.",
+      t("map-editor.resize.removes.out.of.bounds.placements.click.save.to.confirm.res"),
     );
   }
 
@@ -628,14 +642,16 @@ export class MapEditorScene extends Phaser.Scene {
     }
     if (this.mapSource === "local") {
       this.library.save(this.map);
-      this.statusText.setText("Map saved locally.");
+      this.statusText.setText(t("map-editor.map.saved.locally"));
       return;
     }
     try {
       await saveBuiltInMap(this.map);
-      this.statusText.setText("Built-in map saved to source files.");
+      this.statusText.setText(t("map-editor.built.in.map.saved.to.source.files"));
     } catch {
-      this.statusText.setText("Built-in map save failed. Run npm run dev and try again.");
+      this.statusText.setText(
+        t("map-editor.built.in.map.save.failed.run.npm.run.dev.and.try.again"),
+      );
     }
   }
 
@@ -644,7 +660,7 @@ export class MapEditorScene extends Phaser.Scene {
       this.map = this.library.import(JSON.stringify(this.map));
       this.mapSource = "local";
       this.refreshDevModeButton();
-      this.statusText.setText("Built-in map copied to local library.");
+      this.statusText.setText(t("map-editor.built.in.map.copied.to.local.library"));
       this.render();
       return;
     }
@@ -679,24 +695,26 @@ export class MapEditorScene extends Phaser.Scene {
     const name = confirmMapNameEdit(dialog.editState);
 
     if (!name) {
-      dialog.setError("Enter a map name.");
+      dialog.setError(t("map-editor.enter.a.map.name"));
       return;
     }
     if (!this.isNameAvailable(name)) {
-      dialog.setError(`Another ${this.mapSource} map already uses this name.`);
+      dialog.setError(
+        t("map-editor.another.map.already.uses.this.name", { value1: String(this.mapSource) }),
+      );
       return;
     }
 
     this.map = { ...this.map, name };
     this.closeRenameDialog();
     this.render();
-    this.statusText.setText("Name changed. Click SAVE to keep it.");
+    this.statusText.setText(t("map-editor.name.changed.click.save.to.keep.it"));
   }
 
   private cancelRename(): void {
     if (!this.renameDialog) return;
     this.closeRenameDialog();
-    this.statusText.setText("Rename cancelled.");
+    this.statusText.setText(t("map-editor.rename.cancelled"));
   }
 
   private handleRenameKey(event: KeyboardEvent): void {
@@ -735,7 +753,7 @@ export class MapEditorScene extends Phaser.Scene {
 
   private startTestMatch(): void {
     if (!isMapReadyForMatch(this.map)) {
-      this.statusText.setText("Add at least one Blue and Red unit to test this map.");
+      this.statusText.setText(t("map-editor.add.at.least.one.blue.and.red.unit.to.test.this.map"));
       return;
     }
     this.scene.start(BATTLE_SCENE_KEY, {
@@ -751,28 +769,30 @@ export class MapEditorScene extends Phaser.Scene {
       this.mapSource = "local";
       this.refreshDevModeButton();
       this.updatePresentationViewport();
-      this.statusText.setText("Map imported.");
+      this.statusText.setText(t("map-editor.map.imported"));
       this.render();
     } catch {
-      this.statusText.setText("Import failed: invalid map file.");
+      this.statusText.setText(t("map-editor.import.failed.invalid.map.file"));
     }
   }
   private exportMap(): void {
     downloadMapFile(this.map.name, JSON.stringify(this.map, null, 2));
-    this.statusText.setText("Map export started.");
+    this.statusText.setText(t("map-editor.map.export.started"));
   }
   private async deleteMap(): Promise<void> {
     if (this.mapSource === "built-in") {
       try {
         await deleteBuiltInMap(this.map.id);
-        this.statusText.setText("Built-in map deleted from source files.");
+        this.statusText.setText(t("map-editor.built.in.map.deleted.from.source.files"));
         this.mapSource = "local";
         this.map = createNewMap(this.nextMapNumber());
         this.refreshDevModeButton();
         this.updatePresentationViewport();
         this.render();
       } catch {
-        this.statusText.setText("Built-in map deletion failed. Run npm run dev and try again.");
+        this.statusText.setText(
+          t("map-editor.built.in.map.deletion.failed.run.npm.run.dev.and.try.again"),
+        );
       }
       return;
     }
@@ -808,11 +828,19 @@ export class MapEditorScene extends Phaser.Scene {
         ),
       );
     this.mapInfoText.setText(
-      `${this.map.name} [${this.mapSource.toUpperCase()}]\n${this.map.width} × ${this.map.height}\nTool: ${toolLabel(this.tool)}`,
+      t("map-editor.tool", {
+        value1: String(this.map.name),
+        value2: String(displayToken(this.mapSource)),
+        value3: String(this.map.width),
+        value4: String(this.map.height),
+        value5: String(toolLabel(this.tool)),
+      }),
     );
     if (!this.pendingResize)
       this.statusText.setText(
-        isMapReadyForMatch(this.map) ? "Ready for test match." : "Draft: place Blue and Red units.",
+        isMapReadyForMatch(this.map)
+          ? t("map-editor.ready.for.test.match")
+          : t("map-editor.draft.place.blue.and.red.units"),
       );
   }
 
@@ -853,7 +881,9 @@ export class MapEditorScene extends Phaser.Scene {
       this.map = createNewMap(this.nextMapNumber());
     } else {
       if (getBuiltInMaps().length === 0) {
-        this.statusText.setText("No built-in maps remain. Create a new built-in map first.");
+        this.statusText.setText(
+          t("map-editor.no.built.in.maps.remain.create.a.new.built.in.map.first"),
+        );
         return;
       }
       this.mapSource = "built-in";
@@ -867,12 +897,14 @@ export class MapEditorScene extends Phaser.Scene {
 
   private changeBuiltInMap(direction: number): void {
     if (this.mapSource !== "built-in") {
-      this.statusText.setText("Enable dev mode to edit built-in maps.");
+      this.statusText.setText(t("map-editor.enable.dev.mode.to.edit.built.in.maps"));
       return;
     }
     const maps = getBuiltInMaps();
     if (maps.length === 0) {
-      this.statusText.setText("No built-in maps remain. Create a new built-in map first.");
+      this.statusText.setText(
+        t("map-editor.no.built.in.maps.remain.create.a.new.built.in.map.first"),
+      );
       return;
     }
     const currentIndex = maps.findIndex((map) => map.id === this.map.id);
@@ -885,7 +917,9 @@ export class MapEditorScene extends Phaser.Scene {
 
   private refreshDevModeButton(): void {
     this.devModeButton?.setLabel(
-      this.mapSource === "built-in" ? "DEV MODE: BUILT-IN" : "DEV MODE: LOCAL",
+      this.mapSource === "built-in"
+        ? t("map-editor.dev.mode.built.in")
+        : t("map-editor.dev.mode.local"),
     );
   }
 
@@ -908,12 +942,12 @@ function createNewMap(number: number): MapDefinition {
   );
 }
 function createNewBuiltInMap(): MapDefinition {
-  const name = "New Built-in Map";
+  const name = t("map-editor.new.built.in.map.2");
   return createMapDefinition(createBuiltInMapId(), name, DEFAULT_WIDTH, DEFAULT_HEIGHT);
 }
 function getFirstBuiltInMap(): MapDefinition {
   const map = getBuiltInMaps()[0];
-  if (!map) throw new Error("No built-in maps are available.");
+  if (!map) throw new Error(t("map-editor.no.built.in.maps.are.available"));
   return map;
 }
 function tileCenter(coordinate: number): number {
@@ -926,25 +960,25 @@ function terrainTextureKey(terrainType: TerrainType): string {
   return assetManifest.terrain[terrainType].textureKey;
 }
 function toolLabel(tool: EditorTool): string {
-  if (tool.kind === "erase") return "ERASE";
-  if (tool.kind === "unit") return `${tool.side.toUpperCase()} ${tool.unitType.toUpperCase()}`;
-  if (tool.kind === "terrain") return tool.terrainType.toUpperCase();
-  return `POINT ${tool.owner?.toUpperCase() ?? "NEUTRAL"}`;
+  if (tool.kind === "erase") return t("map-editor.erase");
+  if (tool.kind === "unit") return `${displayToken(tool.side)} ${displayToken(tool.unitType)}`;
+  if (tool.kind === "terrain") return displayToken(tool.terrainType);
+  return t("map-editor.point", { value1: String(displayToken(tool.owner ?? "neutral")) });
 }
 function editorToolRejectionMessage(rejection: ReturnType<typeof getEditorToolRejection>): string {
   switch (rejection) {
     case "mountain-on-control-point":
-      return "Remove the control point before placing a mountain.";
+      return t("map-editor.remove.the.control.point.before.placing.a.mountain");
     case "mountain-on-tank":
-      return "Tanks cannot occupy mountain cells.";
+      return t("map-editor.tanks.cannot.occupy.mountain.cells");
     case "mountain-on-artillery":
-      return "Artillery cannot occupy mountain cells.";
+      return t("map-editor.artillery.cannot.occupy.mountain.cells");
     case "control-point-on-mountain":
-      return "Control points cannot be placed on mountains.";
+      return t("map-editor.control.points.cannot.be.placed.on.mountains");
     case "tank-on-mountain":
-      return "Tanks cannot be placed on mountains.";
+      return t("map-editor.tanks.cannot.be.placed.on.mountains");
     case "artillery-on-mountain":
-      return "Artillery cannot be placed on mountains.";
+      return t("map-editor.artillery.cannot.be.placed.on.mountains");
     case null:
       return "";
   }

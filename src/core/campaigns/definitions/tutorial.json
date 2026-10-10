@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "tutorial",
   "name": "Tutorial Campaign",
   "missions": [
@@ -28,7 +28,8 @@
           "lines": [
             {
               "speaker": "Instructor",
-              "text": "Welcome! Click either Blue infantry unit to select it. Use the mouse wheel to zoom and WASD or arrow keys to pan the map."
+              "text": "Welcome! Click either Blue infantry unit to select it. Use the mouse wheel to zoom and WASD or arrow keys to pan the map.",
+              "id": "line-1"
             }
           ]
         },
@@ -45,7 +46,8 @@
           "lines": [
             {
               "speaker": "Instructor",
-              "text": "Your unit is selected. Highlighted cells are available destinations. Close this dialogue and click an available cell to move."
+              "text": "Your unit is selected. Highlighted cells are available destinations. Close this dialogue and click an available cell to move.",
+              "id": "line-1"
             }
           ]
         },
@@ -62,7 +64,8 @@
           "lines": [
             {
               "speaker": "Instructor",
-              "text": "Moving spends movement points. You can move again while points remain. Click END TURN to restore movement; the empty Red turn ends automatically. Reach the marked goal at (11, 2) on the right edge with either Blue unit."
+              "text": "Moving spends movement points. You can move again while points remain. Click END TURN to restore movement; the empty Red turn ends automatically. Reach the marked goal at (11, 2) on the right edge with either Blue unit.",
+              "id": "line-1"
             }
           ]
         },
@@ -75,7 +78,8 @@
           "lines": [
             {
               "speaker": "Instructor",
-              "text": "Well done! You have learned to select units, move them, and end the turn. You reached the far edge and completed this lesson."
+              "text": "Well done! You have learned to select units, move them, and end the turn. You reached the far edge and completed this lesson.",
+              "id": "line-1"
             }
           ]
         }

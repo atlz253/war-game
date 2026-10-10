@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { t } from "../../localization/runtime";
 import { movementUi } from "../theme/movement-ui";
 import { uiTheme } from "../theme/ui-theme";
 import { Button } from "./Button";
@@ -35,9 +36,11 @@ interface PauseMenuAction {
 
 export function getPauseMenuActions(options: PauseMenuOptions): readonly PauseMenuAction[] {
   return [
-    { label: "RETURN TO GAME", onClick: options.onResume },
-    ...(options.onShowEventLog ? [{ label: "EVENT LOG", onClick: options.onShowEventLog }] : []),
-    { label: "MAIN MENU", onClick: options.onExit },
+    { label: t("pause-menu.return.to.game"), onClick: options.onResume },
+    ...(options.onShowEventLog
+      ? [{ label: t("event-log-dialog.event.log"), onClick: options.onShowEventLog }]
+      : []),
+    { label: t("pause-menu.main.menu"), onClick: options.onExit },
   ];
 }
 
@@ -61,7 +64,7 @@ export class PauseMenu {
       height: DIALOG_HEIGHT,
     });
     const title = scene.add
-      .text(DIALOG_CENTER_X, TITLE_Y, "PAUSED", {
+      .text(DIALOG_CENTER_X, TITLE_Y, t("pause-menu.paused"), {
         color: uiTheme.colors.text,
         fontFamily: uiTheme.font.family,
         fontSize: `${uiTheme.font.titleSize}px`,

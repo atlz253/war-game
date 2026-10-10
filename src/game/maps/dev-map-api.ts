@@ -3,6 +3,8 @@ import {
   serializeMapDefinition,
   validateMapDefinition,
 } from "../../core/maps/map-definition";
+import { translateCoreReason } from "../localization/core-reasons";
+import { t } from "../localization/runtime";
 
 const DEV_MAP_ENDPOINT = "/__dev-maps";
 
@@ -10,7 +12,12 @@ export const isDevMapEditorAvailable = import.meta.env.DEV;
 
 export async function saveBuiltInMap(map: MapDefinition): Promise<void> {
   const validation = validateMapDefinition(map);
-  if (!validation.isValid) throw new Error(`Invalid map: ${validation.errors.join(", ")}`);
+  if (!validation.isValid)
+    throw new Error(
+      t("dev-map-api.invalid.map", {
+        value1: String(validation.errors.map(translateCoreReason).join(", ")),
+      }),
+    );
 
   const response = await fetch(DEV_MAP_ENDPOINT, {
     method: "POST",
@@ -18,7 +25,8 @@ export async function saveBuiltInMap(map: MapDefinition): Promise<void> {
     body: serializeMapDefinition(map),
   });
 
-  if (!response.ok) throw new Error("The development server rejected the built-in map.");
+  if (!response.ok)
+    throw new Error(t("dev-map-api.the.development.server.rejected.the.built.in.map"));
 }
 
 export async function deleteBuiltInMap(mapId: string): Promise<void> {
@@ -26,5 +34,6 @@ export async function deleteBuiltInMap(mapId: string): Promise<void> {
     method: "DELETE",
   });
 
-  if (!response.ok) throw new Error("The development server rejected the built-in map deletion.");
+  if (!response.ok)
+    throw new Error(t("dev-map-api.the.development.server.rejected.the.built.in.map.deletion"));
 }

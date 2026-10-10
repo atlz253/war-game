@@ -1,8 +1,8 @@
 import Phaser from "phaser";
-
 import { createGameStateFromMap } from "../../core/maps/map-definition";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import { t } from "../localization/runtime";
 import { type CatalogMap, formatCatalogMap, getBrowserMapCatalog } from "../maps/map-catalog";
 import { MultiplayerSession } from "../multiplayer/multiplayer-session";
 import { Button } from "../ui/components/Button";
@@ -45,13 +45,23 @@ export class MultiplayerHostScene extends Phaser.Scene {
       .rectangle(0, 0, 0, 0, uiTheme.colors.background)
       .setOrigin(0);
     const title = this.add
-      .text(CENTER_X, TITLE_Y, "HOST MULTIPLAYER — BLUE", textStyle(uiTheme.font.titleSize))
+      .text(
+        CENTER_X,
+        TITLE_Y,
+        t("multiplayer-host.host.multiplayer.blue"),
+        textStyle(uiTheme.font.titleSize),
+      )
       .setOrigin(CENTER);
     this.codeText = this.add
-      .text(CENTER_X, CODE_Y, "CREATING ROOM…", textStyle(uiTheme.font.titleSize))
+      .text(
+        CENTER_X,
+        CODE_Y,
+        t("multiplayer-host.creating.room"),
+        textStyle(uiTheme.font.titleSize),
+      )
       .setOrigin(CENTER);
     this.statusText = this.add
-      .text(CENTER_X, STATUS_Y, "CONNECTING…", textStyle(uiTheme.font.normalSize))
+      .text(CENTER_X, STATUS_Y, t("common.connecting"), textStyle(uiTheme.font.normalSize))
       .setOrigin(CENTER);
     this.mapText = this.add
       .text(CENTER_X, MAP_Y, "", textStyle(uiTheme.font.normalSize))
@@ -61,7 +71,7 @@ export class MultiplayerHostScene extends Phaser.Scene {
       y: MAP_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "< MAP",
+      label: t("campaign-editor.map"),
       onClick: () => this.changeMap(-1),
     });
     const next = new Button(this, {
@@ -69,7 +79,7 @@ export class MultiplayerHostScene extends Phaser.Scene {
       y: MAP_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "MAP >",
+      label: t("campaign-editor.map.2"),
       onClick: () => this.changeMap(1),
     });
     this.startButton = new Button(this, {
@@ -77,7 +87,7 @@ export class MultiplayerHostScene extends Phaser.Scene {
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "START MATCH",
+      label: t("main-menu.start.match"),
       enabled: false,
       onClick: () => this.startMatch(),
     });
@@ -86,7 +96,7 @@ export class MultiplayerHostScene extends Phaser.Scene {
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "MENU",
+      label: t("campaign-library.menu"),
       onClick: () => this.exit(),
     });
     this.presentationContainer = this.add.container(0, 0, [
@@ -100,26 +110,30 @@ export class MultiplayerHostScene extends Phaser.Scene {
       back.container,
     ]);
     this.refreshMap();
-    this.session.setEvents({
-      onRoomCreated: (roomCode) => this.codeText.setText(`ROOM CODE: ${roomCode}`),
-      onStatus: (status) => this.statusText.setText(status),
-      onPeerConnected: () => {
-        this.peerConnected = this.session.isConnected;
-        this.statusText.setText("CLIENT CONNECTED — CHOOSE MAP AND START");
-        this.startButton.setEnabled(this.peerConnected);
-      },
-      onDisconnect: () => {
-        this.peerConnected = false;
-        this.statusText.setText("CLIENT DISCONNECTED");
-        this.startButton.setEnabled(false);
-      },
-    });
+    this.bindSessionEvents();
     this.session.host();
     this.updatePresentationViewport();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
       if (!this.transferringToBattle) this.session.close();
+    });
+  }
+  private bindSessionEvents(): void {
+    this.session.setEvents({
+      onRoomCreated: (roomCode) =>
+        this.codeText.setText(t("multiplayer-host.room.code", { value1: String(roomCode) })),
+      onStatus: (status) => this.statusText.setText(status),
+      onPeerConnected: () => {
+        this.peerConnected = this.session.isConnected;
+        this.statusText.setText(t("multiplayer-host.client.connected.choose.map.and.start"));
+        this.startButton.setEnabled(this.peerConnected);
+      },
+      onDisconnect: () => {
+        this.peerConnected = false;
+        this.statusText.setText(t("multiplayer-host.client.disconnected"));
+        this.startButton.setEnabled(false);
+      },
     });
   }
   private updatePresentationViewport(): void {
@@ -143,7 +157,11 @@ export class MultiplayerHostScene extends Phaser.Scene {
   }
   private refreshMap(): void {
     const map = this.getMap();
-    this.mapText.setText(map ? `MAP: ${formatCatalogMap(map)}` : "MAP: no maps available");
+    this.mapText.setText(
+      map
+        ? t("main-menu.map", { value1: String(formatCatalogMap(map)) })
+        : t("main-menu.map.no.maps.available"),
+    );
   }
   private getMap(): CatalogMap | null {
     const maps = this.mapCatalog.list();

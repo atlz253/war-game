@@ -2,6 +2,8 @@ import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { createDevCampaignWriter } from "./scripts/dev-campaign-writer";
+import { createDevLocaleWriter } from "./scripts/dev-locale-writer";
+import { createLocalizationCheck } from "./scripts/localization-check";
 import { getBuiltInMapFileName } from "./src/core/maps/built-in-map-file";
 import { deserializeMapDefinition, serializeMapDefinition } from "./src/core/maps/map-definition";
 
@@ -22,7 +24,12 @@ const BAD_REQUEST_STATUS = 400;
 const NOT_FOUND_STATUS = 404;
 
 export default defineConfig(({ command }) => ({
-  plugins: command === "serve" ? [createDevMapWriter(), createDevCampaignWriter()] : [],
+  plugins: [
+    createLocalizationCheck(),
+    ...(command === "serve"
+      ? [createDevMapWriter(), createDevCampaignWriter(), createDevLocaleWriter()]
+      : []),
+  ],
   server: {
     proxy: {
       [LM_STUDIO_PROXY_PATH]: {

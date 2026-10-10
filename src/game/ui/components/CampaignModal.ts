@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import type { MissionDialogueController } from "../../campaigns/dialogue-controller";
+import { t } from "../../localization/runtime";
 import { campaignUi as ui } from "../theme/campaign-ui";
 import { uiTheme } from "../theme/ui-theme";
 import { Button } from "./Button";
@@ -37,17 +38,17 @@ export class CampaignModal {
       fontSize: uiTheme.font.normalSize,
       wordWrap: { width: ui.modalTextWidth, useAdvancedWrap: true },
     });
-    this.next = this.button(ui.modalTextX + ui.controlGap, "NEXT / CLOSE", () => {
+    this.next = this.button(ui.modalTextX + ui.controlGap, t("campaign-modal.next.close"), () => {
       controller.next();
       this.refresh();
     });
-    const up = this.button(ui.modalTextX + ui.controlGap * 2, "SCROLL UP", () => {
+    const up = this.button(ui.modalTextX + ui.controlGap * 2, t("campaign-modal.scroll.up"), () => {
       this.offset = Math.max(0, this.offset - 1);
       this.refresh();
     });
     const down = this.button(
       ui.modalTextX + ui.controlGap * ui.downButtonColumn,
-      "SCROLL DOWN",
+      t("campaign-modal.scroll.down"),
       () => {
         this.offset++;
         this.refresh();
@@ -62,10 +63,14 @@ export class CampaignModal {
       down.container,
     ]);
     if (seek) {
-      const start = this.button(ui.modalTextX + ui.controlGap, "REPLAY START", seek.start);
+      const start = this.button(
+        ui.modalTextX + ui.controlGap,
+        t("campaign-modal.replay.start"),
+        seek.start,
+      );
       const previous = this.button(
         ui.modalTextX + ui.controlGap * 2,
-        "PREVIOUS FRAME",
+        t("campaign-modal.previous.frame"),
         seek.previous,
       );
       start.container.setY(ui.modalY - ui.rowHeight);

@@ -1,5 +1,7 @@
 import type { DialogueLine, MissionDefinition } from "../../core/campaigns/definition";
 import { emptyJournal, type MissionSignal, matchSignal } from "../../core/campaigns/signals";
+import { t } from "../localization/runtime";
+import { localizedDialogueLine } from "./localized-dialogue";
 export class MissionDialogueController {
   public journal = emptyJournal();
   private queue: DialogueLine[] = [];
@@ -8,11 +10,15 @@ export class MissionDialogueController {
   private disposed = false;
   private completedLines = 0;
   public get position(): string {
-    return `Line ${this.completedLines + 1}/${this.completedLines + this.queue.length}`;
+    return t("dialogue-controller.line", {
+      value1: String(this.completedLines + 1),
+      value2: String(this.completedLines + this.queue.length),
+    });
   }
   public constructor(
     public readonly mission: MissionDefinition,
     private readonly continuation: () => void,
+    private readonly localeId = "en",
   ) {}
   public get blocked(): boolean {
     return this.queue.length > 0;
@@ -29,8 +35,13 @@ export class MissionDialogueController {
   public enqueue(ids: readonly string[]): void {
     if (this.disposed) return;
     if (!this.queue.length) this.completedLines = 0;
-    for (const id of ids)
-      this.queue.push(...(this.mission.events.find((event) => event.id === id)?.lines ?? []));
+    for (const id of ids) {
+      const event = this.mission.events.find((event) => event.id === id);
+      if (event)
+        this.queue.push(
+          ...event.lines.map((line) => localizedDialogueLine(event, line, this.localeId)),
+        );
+    }
   }
   public present(): void {
     if (!this.disposed) this.visible = this.blocked;

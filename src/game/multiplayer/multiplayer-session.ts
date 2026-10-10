@@ -1,6 +1,7 @@
 import type { GameAction } from "../../core/actions/game-actions";
 import type { MapDefinition } from "../../core/maps/map-definition";
 import type { GameState, SideId } from "../../core/model/game-state";
+import { t } from "../localization/runtime";
 import {
   type MultiplayerPacket,
   type MultiplayerRole,
@@ -90,11 +91,12 @@ export class MultiplayerSession {
   }
 
   private connectSignaling(initialMessage: object): void {
-    this.events.onStatus?.("CONNECTING TO SIGNALING…");
+    this.events.onStatus?.(t("multiplayer-session.connecting.to.signaling"));
     this.signaling = new WebSocket(SIGNALING_URL);
     this.signaling.onopen = () => this.sendSignaling(initialMessage);
     this.signaling.onmessage = (event) => this.handleSignaling(event.data);
-    this.signaling.onerror = () => this.events.onStatus?.("SIGNALING CONNECTION FAILED");
+    this.signaling.onerror = () =>
+      this.events.onStatus?.(t("multiplayer-session.signaling.connection.failed"));
   }
 
   private handleSignaling(raw: unknown): void {
@@ -124,7 +126,11 @@ export class MultiplayerSession {
         void this.addCandidate(message.payload);
         return;
       case "error":
-        this.events.onStatus?.(`NETWORK ERROR: ${String(message.reason ?? "unknown")}`);
+        this.events.onStatus?.(
+          t("multiplayer-session.network.error", {
+            value1: String(String(message.reason ?? "unknown")),
+          }),
+        );
     }
   }
 
@@ -134,7 +140,9 @@ export class MultiplayerSession {
     this.reconnectToken = typeof message.token === "string" ? message.token : this.reconnectToken;
     if (message.type === "room-created") this.events.onRoomCreated?.(this.roomCode);
     this.events.onStatus?.(
-      message.type === "room-created" ? "SHARE ROOM CODE" : "WAITING FOR PEER…",
+      message.type === "room-created"
+        ? t("multiplayer-session.share.room.code")
+        : t("multiplayer-session.waiting.for.peer"),
     );
   }
 
@@ -160,7 +168,7 @@ export class MultiplayerSession {
   private attachDataChannel(channel: RTCDataChannel): void {
     this.dataChannel = channel;
     channel.onopen = () => {
-      this.events.onStatus?.("PEER CONNECTED");
+      this.events.onStatus?.(t("multiplayer-session.peer.connected"));
       this.events.onPeerConnected?.();
     };
     channel.onclose = () => this.handlePeerDisconnect();
@@ -169,7 +177,7 @@ export class MultiplayerSession {
   private handlePacket(raw: unknown): void {
     const packet = parseMultiplayerPacket(parseJson(raw));
     if (!packet) {
-      this.events.onStatus?.("INVALID NETWORK PACKET");
+      this.events.onStatus?.(t("multiplayer-session.invalid.network.packet"));
       return;
     }
     this.dispatchPacket(packet);
@@ -183,7 +191,8 @@ export class MultiplayerSession {
       this.events.onAcceptedAction?.(packet.sequence, packet.action);
     if (packet.type === "state-snapshot") this.events.onSnapshot?.(packet.sequence, packet.state);
     if (packet.type === "resync-request" && this.role === "host") this.events.onResyncRequest?.();
-    if (packet.type === "match-complete") this.events.onStatus?.("MATCH COMPLETE");
+    if (packet.type === "match-complete")
+      this.events.onStatus?.(t("multiplayer-session.match.complete"));
   }
   private sendPacket(packet: MultiplayerPacket): void {
     if (this.dataChannel?.readyState === "open") this.dataChannel.send(JSON.stringify(packet));

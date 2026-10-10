@@ -1,5 +1,6 @@
 import type { MapDefinition } from "../../core/maps/map-definition";
 import { getBuiltInMaps } from "../../core/scenarios/built-in-maps";
+import { t } from "../localization/runtime";
 import { type BrowserMapLibrary, getBrowserMapLibrary } from "./map-library";
 
 export type MapSource = "built-in" | "local";
@@ -43,5 +44,5 @@ export function getBrowserMapCatalog(): MapCatalog {
 }
 
 export function formatCatalogMap(entry: CatalogMap): string {
-  return `${entry.map.name} [${entry.source === "built-in" ? "BUILT-IN" : "LOCAL"}]`;
+  return `${entry.map.name} [${entry.source === "built-in" ? t("map-catalog.built.in") : t("map-catalog.local")}]`;
 }

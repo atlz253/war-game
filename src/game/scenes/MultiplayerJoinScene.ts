@@ -1,9 +1,9 @@
 import Phaser from "phaser";
-
 import type { MapDefinition } from "../../core/maps/map-definition";
 import type { GameState } from "../../core/model/game-state";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import { t } from "../localization/runtime";
 import { MultiplayerSession } from "../multiplayer/multiplayer-session";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -37,20 +37,30 @@ export class MultiplayerJoinScene extends Phaser.Scene {
       .rectangle(0, 0, 0, 0, uiTheme.colors.background)
       .setOrigin(0);
     const title = this.add
-      .text(CENTER_X, TITLE_Y, "JOIN MULTIPLAYER — RED", style(uiTheme.font.titleSize))
+      .text(
+        CENTER_X,
+        TITLE_Y,
+        t("multiplayer-join.join.multiplayer.red"),
+        style(uiTheme.font.titleSize),
+      )
       .setOrigin(CENTER);
     this.inputText = this.add
-      .text(CENTER_X, INPUT_Y, "ROOM CODE: _", style(uiTheme.font.titleSize))
+      .text(CENTER_X, INPUT_Y, t("multiplayer-join.room.code"), style(uiTheme.font.titleSize))
       .setOrigin(CENTER);
     this.statusText = this.add
-      .text(CENTER_X, STATUS_Y, "TYPE THE HOST'S ROOM CODE", style(uiTheme.font.normalSize))
+      .text(
+        CENTER_X,
+        STATUS_Y,
+        t("multiplayer-join.type.the.host.s.room.code"),
+        style(uiTheme.font.normalSize),
+      )
       .setOrigin(CENTER);
     this.joinButton = new Button(this, {
       x: CENTER_X,
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "JOIN",
+      label: t("multiplayer-join.join"),
       enabled: false,
       onClick: () => this.join(),
     });
@@ -59,7 +69,7 @@ export class MultiplayerJoinScene extends Phaser.Scene {
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "MENU",
+      label: t("campaign-library.menu"),
       onClick: () => this.exit(),
     });
     this.presentationContainer = this.add.container(0, 0, [
@@ -72,9 +82,10 @@ export class MultiplayerJoinScene extends Phaser.Scene {
     this.input.keyboard?.on(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, this.handleKey, this);
     this.session.setEvents({
       onStatus: (status) => this.statusText.setText(status),
-      onPeerConnected: () => this.statusText.setText("CONNECTED — WAITING FOR HOST TO START"),
+      onPeerConnected: () =>
+        this.statusText.setText(t("multiplayer-join.connected.waiting.for.host.to.start")),
       onMatchStart: (mapDefinition, state) => this.startBattle(mapDefinition, state),
-      onDisconnect: () => this.statusText.setText("HOST DISCONNECTED"),
+      onDisconnect: () => this.statusText.setText(t("multiplayer-join.host.disconnected")),
     });
     this.updatePresentationViewport();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
@@ -99,7 +110,9 @@ export class MultiplayerJoinScene extends Phaser.Scene {
       this.roomCode += event.key.toUpperCase();
     else if (event.key === "Enter") this.join();
     else return;
-    this.inputText.setText(`ROOM CODE: ${this.roomCode || "_"}`);
+    this.inputText.setText(
+      t("multiplayer-host.room.code", { value1: String(this.roomCode || "_") }),
+    );
     this.joinButton.setEnabled(this.roomCode.length > 0);
   }
   private join(): void {

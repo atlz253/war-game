@@ -55,6 +55,17 @@ const COMPLETE_MOVEMENT_DELTA_MS = 10000;
 const PARTIAL_MOVEMENT_DELTA_MS = 50;
 const DESTINATION_X = 3;
 const DOUBLE_PLAYBACK_SPEED = 2;
+it("clears destroyed pause controls before a replay scene is entered again", () => {
+  const scene = new ReplayScene();
+  const state = scene as unknown as { pauseMenu?: unknown; resetRenderingState(): void };
+  state.pauseMenu = {
+    setOverlaySize: () => {
+      throw new Error("destroyed overlay");
+    },
+  };
+  state.resetRenderingState();
+  expect(state.pauseMenu).toBeUndefined();
+});
 
 it("waits for boundary-zero and action dialogues, then replays them after a seek", () => {
   const { state } = fixture();

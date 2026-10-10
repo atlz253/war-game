@@ -1,3 +1,12 @@
+import type { Position } from "../../core/model/game-state";
+import type { PresentationViewport } from "../config/presentation-layout";
+
+export function logicalPointer(pointer: Position, viewport: PresentationViewport): Position | null {
+  const x = pointer.x - viewport.x;
+  const y = pointer.y - viewport.y;
+  if (x < 0 || x >= viewport.width || y < 0 || y >= viewport.height) return null;
+  return { x: Math.floor(x / viewport.scale), y: Math.floor(y / viewport.scale) };
+}
 export interface CameraCenterLimitsOptions {
   readonly requestedCenterX: number;
   readonly requestedCenterY: number;

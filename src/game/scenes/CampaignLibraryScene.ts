@@ -7,6 +7,8 @@ import { exportCampaignDefinition } from "../campaigns/campaign-file-format";
 import { isDevCampaignEditorAvailable } from "../campaigns/dev-campaign-api";
 import { browserCampaignLibrary } from "../campaigns/library";
 import { launchMission, startRun } from "../campaigns/playthrough";
+import { translateCoreReason } from "../localization/core-reasons";
+import { getLocaleId, t } from "../localization/runtime";
 import { campaignUi as ui } from "../ui/theme/campaign-ui";
 import { CampaignScene } from "./CampaignScene";
 import {
@@ -43,12 +45,12 @@ export class CampaignLibraryScene extends CampaignScene {
     const items = [...builtins, ...loaded.value];
     this.selected = Math.min(this.selected, Math.max(0, items.length - 1));
     const selected = items[this.selected];
-    this.text(ui.leftX, ui.titleY, "CAMPAIGNS");
+    this.text(ui.leftX, ui.titleY, t("campaign-library.campaigns"));
     items.slice(this.offset, this.offset + ui.listRows).forEach((item, index) => {
       this.button(
         ui.leftX,
         ui.bodyY + index * ui.rowHeight,
-        `${this.offset + index < builtins.length ? "[Built-in] " : ""}${item.name || "Unnamed draft"}`,
+        `${this.offset + index < builtins.length ? t("campaign-library.built.in") : ""}${item.name || t("campaign-library.unnamed.draft")}`,
         () => {
           this.selected = this.offset + index;
           this.refresh();
@@ -57,14 +59,19 @@ export class CampaignLibraryScene extends CampaignScene {
         ui.listWidth,
       );
     });
-    this.button(ui.leftX, ui.footerY - ui.rowHeight, "LIST UP", () => {
+    this.button(ui.leftX, ui.footerY - ui.rowHeight, t("campaign-editor.list.up"), () => {
       this.offset = Math.max(0, this.offset - 1);
       this.refresh();
     });
-    this.button(ui.leftX + ui.controlGap, ui.footerY - ui.rowHeight, "LIST DOWN", () => {
-      this.offset = Math.min(Math.max(0, items.length - ui.listRows), this.offset + 1);
-      this.refresh();
-    });
+    this.button(
+      ui.leftX + ui.controlGap,
+      ui.footerY - ui.rowHeight,
+      t("campaign-editor.list.down"),
+      () => {
+        this.offset = Math.min(Math.max(0, items.length - ui.listRows), this.offset + 1);
+        this.refresh();
+      },
+    );
     this.controls(selected, this.selected < builtins.length);
     this.fileControls(selected);
     const errors = selected ? validateCampaignReadiness(selected, getBuiltInMaps()) : [];
@@ -72,23 +79,34 @@ export class CampaignLibraryScene extends CampaignScene {
       ui.rightX,
       ui.bodyY + ui.rowHeight * 2,
       selected
-        ? `${selected.name}\n${selected.missions.length} missions\nBlue: human · Red: Heuristic\nProgress lasts for this session.\n\n${errors.join("\n") || "Ready to play"}`
-        : "Create a campaign to begin.",
+        ? t("campaign-library.missions.blue.human.red.heuristic.progress.lasts.for.this.session", {
+            value1: String(selected.name),
+            value2: String(selected.missions.length),
+            value3: String(
+              errors.map(translateCoreReason).join("\n") || t("campaign-editor.ready.to.play"),
+            ),
+          })
+        : t("campaign-library.create.a.campaign.to.begin"),
       true,
     );
     this.text(ui.rightX, ui.footerY - ui.rowHeight, this.message || loaded.error || "", true);
   }
   private controls(selected: CampaignDefinition | undefined, builtIn: boolean): void {
-    this.button(ui.rightX, ui.bodyY, "CREATE", () =>
+    this.button(ui.rightX, ui.bodyY, t("campaign-library.create"), () =>
       this.scene.start(CAMPAIGN_EDITOR_SCENE_KEY, {
-        campaign: { schemaVersion: 1, id: crypto.randomUUID(), name: "New campaign", missions: [] },
+        campaign: {
+          schemaVersion: 1,
+          id: crypto.randomUUID(),
+          name: t("campaign-library.new.campaign"),
+          missions: [],
+        },
         isNew: true,
       }),
     );
     this.button(
       ui.rightX + ui.controlGap,
       ui.bodyY,
-      "OPEN / RENAME",
+      t("campaign-library.open.rename"),
       () => this.scene.start(CAMPAIGN_EDITOR_SCENE_KEY, { campaign: selected, builtIn }),
       Boolean(selected) && (!builtIn || isDevCampaignEditorAvailable()),
     );
@@ -98,10 +116,10 @@ export class CampaignLibraryScene extends CampaignScene {
     this.button(
       ui.rightX + ui.controlGap * 2,
       ui.bodyY,
-      "DELETE",
+      t("common.delete"),
       () => {
         if (!selected) return;
-        this.message = browserCampaignLibrary().delete(selected.id).error ?? "Deleted.";
+        this.message = browserCampaignLibrary().delete(selected.id).error ?? t("common.deleted");
         this.refresh();
       },
       Boolean(selected) && !builtIn,
@@ -109,32 +127,36 @@ export class CampaignLibraryScene extends CampaignScene {
     this.button(
       ui.rightX,
       ui.footerY,
-      "PLAY",
+      t("campaign-library.play"),
       () => {
         if (selected)
-          this.scene.start(BATTLE_SCENE_KEY, launchMission(startRun(selected, getBuiltInMaps())));
+          this.scene.start(
+            BATTLE_SCENE_KEY,
+            launchMission(startRun(selected, getBuiltInMaps(), getLocaleId())),
+          );
       },
       Boolean(selected) &&
         validateCampaignReadiness(selected as CampaignDefinition, getBuiltInMaps()).length === 0,
     );
-    this.button(ui.rightX + ui.controlGap, ui.footerY, "MENU", () =>
+    this.button(ui.rightX + ui.controlGap, ui.footerY, t("campaign-library.menu"), () =>
       this.scene.start(MAIN_MENU_SCENE_KEY),
     );
   }
   private fileControls(selected?: CampaignDefinition): void {
     const y = ui.bodyY + ui.rowHeight;
-    this.button(ui.rightX, y, "IMPORT", () => void this.importCampaign());
+    this.button(ui.rightX, y, t("campaign-library.import"), () => void this.importCampaign());
     this.button(
       ui.rightX + ui.controlGap,
       y,
-      "EXPORT",
+      t("campaign-editor.export"),
       () => {
         if (!selected) return;
         try {
           downloadCampaignFile(selected.name, exportCampaignDefinition(selected));
-          this.message = "Export started.";
+          this.message = t("campaign-library.export.started");
         } catch (error) {
-          this.message = error instanceof Error ? error.message : "Export failed.";
+          this.message =
+            error instanceof Error ? error.message : t("campaign-editor.export.failed");
         }
         this.refresh();
       },
@@ -144,8 +166,8 @@ export class CampaignLibraryScene extends CampaignScene {
       ui.rightX + ui.controlGap * 2,
       y,
       isDevCampaignEditorAvailable()
-        ? "DEV: source editing enabled"
-        : "Built-ins: play / export only",
+        ? t("campaign-library.dev.source.editing.enabled")
+        : t("campaign-library.built.ins.play.export.only"),
       true,
       ui.listWidth,
     );
@@ -164,7 +186,7 @@ export class CampaignLibraryScene extends CampaignScene {
         serialized,
         builtins.map((c) => c.id),
       );
-      this.message = result.error ?? "Campaign imported.";
+      this.message = result.error ?? t("campaign-library.campaign.imported");
       if (result.value) {
         this.selected =
           builtins.length + library.list().value.findIndex((c) => c.id === result.value?.id);
@@ -172,7 +194,7 @@ export class CampaignLibraryScene extends CampaignScene {
       }
     } catch (error) {
       if (abort.signal.aborted || generation !== this.generation) return;
-      this.message = error instanceof Error ? error.message : "Import failed.";
+      this.message = error instanceof Error ? error.message : t("campaign-library.import.failed");
     }
     if (generation === this.generation) this.refresh();
   }

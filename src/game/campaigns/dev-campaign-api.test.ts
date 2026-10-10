@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { serializeCampaign } from "../../core/campaigns/definition";
 import { campaign } from "../../core/campaigns/test-fixtures";
 import { saveBuiltInCampaign } from "./dev-campaign-api";
 
@@ -13,7 +14,7 @@ it("sends a validated definition only in DEV and reports failed responses", asyn
   await expect(saveBuiltInCampaign(campaign)).rejects.toThrow(/rejected/);
   expect(fetch).toHaveBeenCalledWith(
     "/__dev-campaigns",
-    expect.objectContaining({ method: "POST", body: JSON.stringify(campaign, null, 2) }),
+    expect.objectContaining({ method: "POST", body: serializeCampaign(campaign) }),
   );
   fetch.mockResolvedValue({ ok: true });
   await expect(saveBuiltInCampaign(campaign)).resolves.toBeUndefined();

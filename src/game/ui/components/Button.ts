@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { labelScale } from "../../localization/label-fit";
 
 import { uiTheme } from "../theme/ui-theme";
 
@@ -27,6 +28,8 @@ export class Button {
   private readonly onClick: () => void;
   private enabled: boolean;
   private selected: boolean;
+  private readonly labelWidth: number;
+  private readonly labelHeight: number;
 
   public constructor(scene: Phaser.Scene, options: ButtonOptions) {
     this.container = scene.add
@@ -44,6 +47,10 @@ export class Button {
         fontSize: `${uiTheme.font.normalSize}px`,
       })
       .setOrigin(CENTER_ORIGIN);
+    this.labelWidth = options.width - uiTheme.spacing.sm;
+    this.labelHeight = options.height - uiTheme.spacing.sm;
+    this.labelText.setWordWrapWidth?.(this.labelWidth, true);
+    this.fitLabel();
     this.onClick = options.onClick;
     this.enabled = options.enabled ?? true;
     this.selected = options.selected ?? false;
@@ -59,6 +66,12 @@ export class Button {
 
   public setLabel(label: string): void {
     this.labelText.setText(label);
+    this.fitLabel();
+  }
+  private fitLabel(): void {
+    this.labelText.setScale(
+      labelScale(this.labelText.width, this.labelText.height, this.labelWidth, this.labelHeight),
+    );
   }
 
   public setSelected(selected: boolean): void {

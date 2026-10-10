@@ -1,14 +1,15 @@
 import Phaser from "phaser";
+import { t } from "../../localization/runtime";
 
 import type { EditorTool } from "../../maps/editor-map-operations";
 import {
+  getMapEditorPaletteTabs,
   MAP_EDITOR_PALETTE_HEIGHT,
   MAP_EDITOR_PALETTE_WIDTH,
   MAP_EDITOR_PALETTE_X,
   MAP_EDITOR_PALETTE_Y,
   type MapEditorPaletteItem,
   type MapEditorPaletteTabId,
-  mapEditorPaletteTabs,
 } from "../map-editor-palette";
 import { uiTheme } from "../theme/ui-theme";
 import { Button } from "./Button";
@@ -56,7 +57,7 @@ export class MapEditorPalette {
       y: MAP_EDITOR_PALETTE_Y,
       width: MAP_EDITOR_PALETTE_WIDTH,
       height: MAP_EDITOR_PALETTE_HEIGHT,
-      title: "PALETTE",
+      title: t("map-editor-palette.palette"),
     });
     this.container.add(this.panel.container);
     this.createTabs(scene);
@@ -73,7 +74,7 @@ export class MapEditorPalette {
   }
 
   private createTabs(scene: Phaser.Scene): void {
-    mapEditorPaletteTabs.forEach((tab, index) => {
+    getMapEditorPaletteTabs().forEach((tab, index) => {
       const button = new Button(scene, {
         x: TAB_X + index * (TAB_WIDTH + TAB_GAP) + TAB_WIDTH / 2,
         y: TAB_Y,
@@ -97,7 +98,7 @@ export class MapEditorPalette {
 
   private refreshCards(scene: Phaser.Scene): void {
     for (const card of this.cards.splice(0)) card.destroy();
-    const tab = mapEditorPaletteTabs.find(({ id }) => id === this.activeTabId);
+    const tab = getMapEditorPaletteTabs().find(({ id }) => id === this.activeTabId);
     if (!tab) return;
     tab.items.forEach((item, index) => {
       const card = new PaletteCard(scene, {

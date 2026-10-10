@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { t } from "../../localization/runtime";
 
 import { uiTheme } from "../theme/ui-theme";
 import { Button } from "./Button";
@@ -53,7 +54,7 @@ export class EventLogDialog {
       y: DIALOG_Y,
       width: DIALOG_WIDTH,
       height: DIALOG_HEIGHT,
-      title: "EVENT LOG",
+      title: t("event-log-dialog.event.log"),
     });
     this.text = scene.add
       .text(CONTENT_X, CONTENT_Y, "", {
@@ -85,7 +86,7 @@ export class EventLogDialog {
       y: CLOSE_BUTTON_Y,
       width: CLOSE_BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "CLOSE",
+      label: t("event-log-dialog.close"),
       onClick: () => this.close(),
     });
     this.container.add([

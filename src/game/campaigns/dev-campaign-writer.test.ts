@@ -7,6 +7,7 @@ import {
   writeCampaignDefinition,
 } from "../../../scripts/dev-campaign-writer";
 import config from "../../../vite.config";
+import { normalizeCampaign } from "../../core/campaigns/definition";
 import { campaign } from "../../core/campaigns/test-fixtures";
 
 const directories: string[] = [];
@@ -22,13 +23,17 @@ async function directory() {
 it("writes canonical JSON atomically and retains the original on a failed replacement", async () => {
   const root = await directory();
   await writeCampaignDefinition(JSON.stringify(campaign), root);
-  expect(JSON.parse(await readFile(path.join(root, "c.json"), "utf8"))).toEqual(campaign);
+  expect(JSON.parse(await readFile(path.join(root, "c.json"), "utf8"))).toEqual(
+    normalizeCampaign(campaign),
+  );
   await expect(
     writeCampaignDefinition(JSON.stringify({ ...campaign, name: "Changed" }), root, async () => {
       throw new Error("Disk full");
     }),
   ).rejects.toThrow("Disk full");
-  expect(JSON.parse(await readFile(path.join(root, "c.json"), "utf8"))).toEqual(campaign);
+  expect(JSON.parse(await readFile(path.join(root, "c.json"), "utf8"))).toEqual(
+    normalizeCampaign(campaign),
+  );
   expect(await readdir(root)).toEqual(["c.json"]);
 });
 it.each(["../escape", "..", "a/b", "C:\\escape", "UPPER"])(
@@ -53,5 +58,5 @@ it("registers the source writer for serve only", async () => {
   const development = await config({ command: "serve", mode: "development" });
   const production = await config({ command: "build", mode: "production" });
   expect(JSON.stringify(development.plugins)).toContain(createDevCampaignWriter().name);
-  expect(production.plugins).toEqual([]);
+  expect(JSON.stringify(production.plugins)).not.toContain(createDevCampaignWriter().name);
 });

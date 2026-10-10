@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-
 import {
   DEFAULT_LM_STUDIO_REQUEST_TIMEOUT_MS,
   LmStudioClient,
@@ -14,6 +13,7 @@ import {
   MAX_LM_STUDIO_TIMEOUT_MS,
   MIN_LM_STUDIO_TIMEOUT_MS,
 } from "../lm-studio/lm-studio-settings";
+import { t } from "../localization/runtime";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -63,9 +63,9 @@ const MAX_TIMEOUT_INPUT_LENGTH = 6;
 const BACKSPACE_KEY = "Backspace";
 const ENTER_KEY = "Enter";
 const ESCAPE_KEY = "Escape";
-const DISABLE_TIMEOUT_LABEL = "DISABLE TIMEOUT";
-const ENABLE_TIMEOUT_LABEL = "ENABLE TIMEOUT";
-const DISABLED_TIMEOUT_LABEL = "DISABLED";
+const DISABLE_TIMEOUT_LABEL = t("lm-studio-settings.disable.timeout");
+const ENABLE_TIMEOUT_LABEL = t("lm-studio-settings.enable.timeout");
+const DISABLED_TIMEOUT_LABEL = t("lm-studio-settings.disabled");
 
 type EditingField = "base-url" | "blue-model-id" | "red-model-id" | "timeout-ms" | null;
 const DEFAULT_EDITING_FIELD: Exclude<EditingField, null> = "blue-model-id";
@@ -115,28 +115,32 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       y: PANEL_Y,
       width: PANEL_WIDTH,
       height: PANEL_HEIGHT,
-      title: "LM STUDIO SETTINGS",
+      title: t("lm-studio-settings.lm.studio.settings"),
     });
-    const title = this.createText(CONTENT_X, TITLE_Y, "LOCAL OPENAI-COMPATIBLE SERVER");
+    const title = this.createText(
+      CONTENT_X,
+      TITLE_Y,
+      t("lm-studio-settings.local.openai.compatible.server"),
+    );
     const baseUrlLabel = this.createText(
       CONTENT_X,
       BASE_URL_Y - uiTheme.spacing.md,
-      "SERVER BASE URL",
+      t("lm-studio-settings.server.base.url"),
     );
     const blueModelLabel = this.createText(
       CONTENT_X,
       BLUE_MODEL_Y - uiTheme.spacing.md,
-      "BLUE MODEL ID",
+      t("lm-studio-settings.blue.model.id"),
     );
     const redModelLabel = this.createText(
       CONTENT_X,
       RED_MODEL_Y - uiTheme.spacing.md,
-      "RED MODEL ID",
+      t("lm-studio-settings.red.model.id"),
     );
     const timeoutLabel = this.createText(
       CONTENT_X,
       TIMEOUT_Y - uiTheme.spacing.md,
-      "REQUEST TIMEOUT (MS)",
+      t("lm-studio-settings.request.timeout.ms"),
     );
     const baseUrlField = this.createEditableField(BASE_URL_Y, "base-url");
     const blueModelField = this.createEditableField(BLUE_MODEL_Y, "blue-model-id");
@@ -149,7 +153,7 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     this.statusText = this.createText(
       CONTENT_X,
       STATUS_Y,
-      "Click a field to edit. Use /lm-studio-api/v1 with npm run dev.",
+      t("lm-studio-settings.click.a.field.to.edit.use.lm.studio.api.v1.with.npm.run.dev"),
       true,
     );
     const buttons = this.createButtons();
@@ -175,11 +179,16 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   }
 
   private createButtons(): Phaser.GameObjects.GameObject[] {
-    const refreshButton = this.createButton("REFRESH MODELS", FIRST_BUTTON_X, BUTTON_Y, () => {
-      void this.refreshModels();
-    });
+    const refreshButton = this.createButton(
+      t("lm-studio-settings.refresh.models"),
+      FIRST_BUTTON_X,
+      BUTTON_Y,
+      () => {
+        void this.refreshModels();
+      },
+    );
     const testButton = this.createButton(
-      "TEST CONNECTION",
+      t("lm-studio-settings.test.connection"),
       FIRST_BUTTON_X + BUTTON_SPACING,
       BUTTON_Y,
       () => {
@@ -187,7 +196,7 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       },
     );
     const saveButton = this.createButton(
-      "SAVE & BACK",
+      t("lm-studio-settings.save.back"),
       FIRST_BUTTON_X + BUTTON_SPACING * 2,
       BUTTON_Y,
       () => {
@@ -269,7 +278,7 @@ export class LmStudioSettingsScene extends Phaser.Scene {
   }
 
   private async refreshModels(): Promise<void> {
-    this.setStatus("Loading models from LM Studio...");
+    this.setStatus(t("lm-studio-settings.loading.models.from.lm.studio"));
     try {
       this.modelIds = await this.client.listModels(
         this.settings.baseUrl,
@@ -278,25 +287,33 @@ export class LmStudioSettingsScene extends Phaser.Scene {
       this.selectFirstAvailableModel("blue");
       this.selectFirstAvailableModel("red");
       this.refreshFields();
-      this.setStatus(this.modelIds.length > 0 ? "Models loaded." : "Server returned no models.");
+      this.setStatus(
+        this.modelIds.length > 0
+          ? t("lm-studio-settings.models.loaded")
+          : t("lm-studio-settings.server.returned.no.models"),
+      );
     } catch {
-      this.setStatus("Could not reach LM Studio. Start the server and restart npm run dev.");
+      this.setStatus(
+        t("lm-studio-settings.could.not.reach.lm.studio.start.the.server.and.restart.npm.run.de"),
+      );
     }
   }
 
   private async testConnection(): Promise<void> {
-    this.setStatus("Testing LM Studio connection...");
+    this.setStatus(t("lm-studio-settings.testing.lm.studio.connection"));
     try {
       await this.client.listModels(this.settings.baseUrl, this.settings.requestTimeoutMs);
-      this.setStatus("Connection succeeded. Save settings to use this server.");
+      this.setStatus(t("lm-studio-settings.connection.succeeded.save.settings.to.use.this.server"));
     } catch {
-      this.setStatus("Connection failed. Start LM Studio server and restart npm run dev.");
+      this.setStatus(
+        t("lm-studio-settings.connection.failed.start.lm.studio.server.and.restart.npm.run.dev"),
+      );
     }
   }
 
   private changeModel(side: SideId, direction: number): void {
     if (this.modelIds.length === 0) {
-      this.setStatus("Refresh models first, or edit the model ID manually.");
+      this.setStatus(t("lm-studio-settings.refresh.models.first.or.edit.the.model.id.manually"));
       return;
     }
     const selectedIndex = this.modelIds.indexOf(this.getModelId(side));
@@ -324,12 +341,12 @@ export class LmStudioSettingsScene extends Phaser.Scene {
 
   private startEditing(field: Exclude<EditingField, null>): void {
     if (field === "timeout-ms" && this.settings.requestTimeoutMs === null) {
-      this.setStatus("Enable the timeout before editing its value.");
+      this.setStatus(t("lm-studio-settings.enable.the.timeout.before.editing.its.value"));
       return;
     }
     this.editingField = field;
     if (field === "timeout-ms") this.timeoutInput = formatTimeout(this.settings.requestTimeoutMs);
-    this.setStatus("Type text. ENTER confirms field.");
+    this.setStatus(t("lm-studio-settings.type.text.enter.confirms.field"));
     this.refreshFields();
   }
 
@@ -384,7 +401,12 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     const timeoutMs = Number(this.timeoutInput);
 
     if (!isValidLmStudioTimeout(timeoutMs)) {
-      this.setStatus(`Timeout must be ${MIN_LM_STUDIO_TIMEOUT_MS}–${MAX_LM_STUDIO_TIMEOUT_MS} ms.`);
+      this.setStatus(
+        t("lm-studio-settings.timeout.must.be.ms", {
+          value1: String(MIN_LM_STUDIO_TIMEOUT_MS),
+          value2: String(MAX_LM_STUDIO_TIMEOUT_MS),
+        }),
+      );
       return false;
     }
 
@@ -412,8 +434,8 @@ export class LmStudioSettingsScene extends Phaser.Scene {
     this.refreshFields();
     this.setStatus(
       this.settings.requestTimeoutMs === null
-        ? "Timeout disabled. Requests may wait indefinitely."
-        : "Timeout enabled.",
+        ? t("lm-studio-settings.timeout.disabled.requests.may.wait.indefinitely")
+        : t("lm-studio-settings.timeout.enabled"),
     );
   }
 
@@ -469,7 +491,7 @@ function isPrintableCharacter(event: KeyboardEvent): boolean {
 }
 
 function formatEditableText(value: string, isEditing: boolean): string {
-  return `${value || "<empty>"}${isEditing ? "_" : ""}`;
+  return `${value || t("common.empty")}${isEditing ? "_" : ""}`;
 }
 
 function formatTimeout(timeoutMs: number | null): string {

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import { t } from "../localization/runtime";
 import type { MatchConfiguration } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
 import { MovementSlider } from "../ui/components/MovementSlider";
@@ -19,7 +20,7 @@ export class MovementSettingsScene extends Phaser.Scene {
     const layout = movementUi.settings;
     this.cameras.main.setBackgroundColor(uiTheme.colors.background);
     const title = this.add
-      .text(layout.centerX, layout.titleY, "MOVEMENT SETTINGS", {
+      .text(layout.centerX, layout.titleY, t("main-menu.movement.settings"), {
         color: uiTheme.colors.text,
         fontFamily: uiTheme.font.family,
         fontSize: `${uiTheme.font.titleSize}px`,
@@ -31,7 +32,7 @@ export class MovementSettingsScene extends Phaser.Scene {
       y: layout.backY,
       width: layout.width,
       height: layout.height,
-      label: "BACK",
+      label: t("common.back"),
       onClick: () => this.scene.start(MAIN_MENU_SCENE_KEY, data),
     });
     this.content = this.add

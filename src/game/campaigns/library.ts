@@ -3,6 +3,8 @@ import {
   deserializeCampaign,
   isRecord,
 } from "../../core/campaigns/definition";
+import { translateCoreReason } from "../localization/core-reasons";
+import { t } from "../localization/runtime";
 import type { StorageLike } from "../maps/map-library";
 import { exportCampaignDefinition } from "./campaign-file-format";
 
@@ -25,12 +27,12 @@ export class BrowserCampaignLibrary {
         envelope.schemaVersion !== LIBRARY_VERSION ||
         !Array.isArray(envelope.campaigns)
       )
-        throw new Error("Unsupported campaign library.");
+        throw new Error(t("library.unsupported.campaign.library"));
       const campaigns = envelope.campaigns.map((value) =>
         deserializeCampaign(JSON.stringify(value)),
       );
       if (new Set(campaigns.map((item) => item.id)).size !== campaigns.length)
-        throw new Error("Duplicate campaign identities.");
+        throw new Error(t("library.duplicate.campaign.identities"));
       return { value: campaigns, error: null };
     } catch (error) {
       return { value: [], error: errorMessage(error) };
@@ -70,7 +72,7 @@ export class BrowserCampaignLibrary {
     const campaign = loaded.value.find((item) => item.id === id);
     return campaign
       ? { value: exportCampaignDefinition(campaign), error: null }
-      : { value: null, error: `Campaign '${id}' does not exist.` };
+      : { value: null, error: t("library.campaign.does.not.exist", { value1: String(id) }) };
   }
   private update(
     transform: (items: readonly CampaignDefinition[]) => readonly CampaignDefinition[],
@@ -96,5 +98,5 @@ export function browserCampaignLibrary(): BrowserCampaignLibrary {
   });
 }
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return translateCoreReason(error instanceof Error ? error.message : String(error));
 }

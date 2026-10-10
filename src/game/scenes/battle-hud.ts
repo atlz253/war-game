@@ -1,6 +1,8 @@
 import type Phaser from "phaser";
 import type { GameState } from "../../core/model/game-state";
 import { getCapturableControlPointId } from "../input/capture-availability";
+import { displayToken } from "../localization/display-tokens";
+import { t } from "../localization/runtime";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { ProgressBar } from "../ui/components/ProgressBar";
@@ -45,18 +47,23 @@ export function createBattleHud(
     y: TOP_PANEL_Y,
     width: HUD_WIDTH,
     height: TOP_PANEL_HEIGHT,
-    title: "TURN",
+    title: t("battle-hud.turn"),
   });
   const selectedPanel = new Panel(scene, {
     x: HUD_X,
     y: SELECTED_PANEL_Y,
     width: HUD_WIDTH,
     height: SELECTED_PANEL_HEIGHT,
-    title: "SELECTED UNIT",
+    title: t("battle-hud.selected.unit"),
   });
   const activeTurnText = addText(scene, PANEL_CONTENT_X, TOP_TEXT_Y, "");
   const scoreText = addScoreText(scene, SCORE_TEXT_X, SCORE_TEXT_Y, "");
-  const selectedUnitText = addText(scene, PANEL_CONTENT_X, SELECTED_TEXT_Y, "Select a Blue unit.");
+  const selectedUnitText = addText(
+    scene,
+    PANEL_CONTENT_X,
+    SELECTED_TEXT_Y,
+    t("battle-hud.select.a.blue.unit"),
+  );
   const goalText = addText(
     scene,
     PANEL_CONTENT_X,
@@ -75,7 +82,7 @@ export function createBattleHud(
     y: WAIT_BUTTON_Y,
     width: BUTTON_WIDTH,
     height: BUTTON_HEIGHT,
-    label: "WAIT",
+    label: t("battle-hud.wait"),
     onClick: orders.wait,
   });
   const endTurnButton = new Button(scene, {
@@ -83,7 +90,7 @@ export function createBattleHud(
     y: END_BUTTON_Y,
     width: BUTTON_WIDTH,
     height: BUTTON_HEIGHT,
-    label: "END TURN",
+    label: t("battle-hud.end.turn"),
     onClick: orders.end,
   });
   const captureButton = new Button(scene, {
@@ -91,7 +98,7 @@ export function createBattleHud(
     y: CAPTURE_BUTTON_Y,
     width: CAPTURE_BUTTON_WIDTH,
     height: BUTTON_HEIGHT,
-    label: "CAPTURE POINT",
+    label: t("battle-hud.capture.point"),
     onClick: orders.capture,
   });
   hudContainer.add([
@@ -137,11 +144,17 @@ export function updateBattleHud(
   const policy = state.victoryPolicy;
   const goal =
     policy?.type === "standard-match-or-reach-cell"
-      ? `\nGOAL (${policy.cell.x}, ${policy.cell.y})`
+      ? t("battle-hud.goal", { value1: String(policy.cell.x), value2: String(policy.cell.y) })
       : "";
-  hud.activeTurnText.setText(`Turn ${state.turn} — ${state.activeSide.toUpperCase()}${suffix}`);
+  hud.activeTurnText.setText(
+    t("battle-hud.turn.2", {
+      value1: String(state.turn),
+      value2: String(displayToken(state.activeSide)),
+      value3: String(suffix),
+    }),
+  );
   hud.goalText.setText(goal.trim());
-  hud.scoreText.setText(`B ${state.scores.blue}  R ${state.scores.red}`);
+  hud.scoreText.setText(t("battle-hud.scores", { blue: state.scores.blue, red: state.scores.red }));
   hud.selectedUnitText.setText(formatSelectedUnit(state, selected, state.activeSide, human));
   hud.healthBar.setValue(selected?.health ?? 0, selected?.maxHealth ?? 0);
   hud.waitButton.setEnabled(

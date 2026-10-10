@@ -1,3 +1,4 @@
+import { t } from "../../localization/runtime";
 import {
   MOVEMENT_SLIDER_MAX,
   MOVEMENT_SLIDER_MIN,
@@ -24,5 +25,7 @@ export function sliderKeyValue(value: number, key: string): number | null {
 
 export function movementSpeedLabel(value: number): string {
   const duration = movementDuration(value);
-  return duration === 0 ? "No animation" : `${duration} ms / cell`;
+  return duration === 0
+    ? t("movement-slider-model.no.animation")
+    : t("movement-slider-model.ms.cell", { value1: String(duration) });
 }

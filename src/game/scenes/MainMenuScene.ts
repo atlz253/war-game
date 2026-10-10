@@ -4,6 +4,7 @@ import { isMapReadyForMatch } from "../../core/maps/map-definition";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
 import { getBrowserLmStudioSettings, isLmStudioSideReady } from "../lm-studio/lm-studio-settings";
+import { t } from "../localization/runtime";
 import { type CatalogMap, formatCatalogMap, getBrowserMapCatalog } from "../maps/map-catalog";
 import {
   createDefaultMatchConfiguration,
@@ -12,11 +13,13 @@ import {
   withLmStudioSettings,
 } from "../match/match-configuration";
 import { Button } from "../ui/components/Button";
+import { localizationUi } from "../ui/theme/localization-ui";
 import { movementUi } from "../ui/theme/movement-ui";
 import { uiTheme } from "../ui/theme/ui-theme";
 import {
   BATTLE_SCENE_KEY,
   CAMPAIGN_LIBRARY_SCENE_KEY,
+  LANGUAGE_SCENE_KEY,
   LM_STUDIO_SETTINGS_SCENE_KEY,
   MAP_EDITOR_SCENE_KEY,
   MOVEMENT_SETTINGS_SCENE_KEY,
@@ -61,6 +64,7 @@ const TOP_ORIGIN = 0;
 
 export interface MainMenuSceneData {
   readonly matchConfiguration?: ReturnType<typeof createDefaultMatchConfiguration>;
+  readonly selectedMapKey?: string | null;
 }
 
 export class MainMenuScene extends Phaser.Scene {
@@ -83,6 +87,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   public create(data: MainMenuSceneData = {}): void {
+    this.selectedMapKey = data.selectedMapKey ?? this.selectedMapKey;
     const settings = this.lmStudioSettings.load();
     this.matchConfiguration = withLmStudioSettings(
       data.matchConfiguration ?? createDefaultMatchConfiguration(settings),
@@ -119,7 +124,7 @@ export class MainMenuScene extends Phaser.Scene {
       )
       .setStrokeStyle(MENU_PANEL_BORDER_WIDTH, uiTheme.colors.panelBorder);
     const title = this.add
-      .text(MENU_CENTER_X, MENU_TITLE_Y, "AI WAR GAME", {
+      .text(MENU_CENTER_X, MENU_TITLE_Y, t("main-menu.ai.war.game"), {
         color: uiTheme.colors.text,
         fontFamily: uiTheme.font.family,
         fontSize: `${uiTheme.font.titleSize}px`,
@@ -131,7 +136,7 @@ export class MainMenuScene extends Phaser.Scene {
       y: movementUi.menuButtonY,
       width: LM_STUDIO_SETTINGS_WIDTH,
       height: MAP_BUTTON_HEIGHT,
-      label: "MOVEMENT SETTINGS",
+      label: t("main-menu.movement.settings"),
       onClick: () =>
         this.scene.start(MOVEMENT_SETTINGS_SCENE_KEY, {
           matchConfiguration: this.matchConfiguration,
@@ -142,8 +147,20 @@ export class MainMenuScene extends Phaser.Scene {
       panel,
       title,
       movementSettings.container,
-      this.createSideLabel("BLUE COMMANDER", BLUE_SIDE_Y),
-      this.createSideLabel("RED COMMANDER", RED_SIDE_Y),
+      new Button(this, {
+        x: localizationUi.menuX,
+        y: localizationUi.menuY,
+        width: localizationUi.menuWidth,
+        height: ROLE_BUTTON_HEIGHT,
+        label: t("language.title"),
+        onClick: () =>
+          this.scene.start(LANGUAGE_SCENE_KEY, {
+            matchConfiguration: this.matchConfiguration,
+            selectedMapKey: this.selectedMapKey,
+          }),
+      }).container,
+      this.createSideLabel(t("main-menu.blue.commander"), BLUE_SIDE_Y),
+      this.createSideLabel(t("main-menu.red.commander"), RED_SIDE_Y),
     ];
   }
 
@@ -168,14 +185,14 @@ export class MainMenuScene extends Phaser.Scene {
         fontSize: `${uiTheme.font.normalSize}px`,
       })
       .setOrigin(CENTER_ORIGIN);
-    const previousMapButton = this.createMapButton(MAP_PREVIOUS_X, "< MAP", -1);
-    const nextMapButton = this.createMapButton(MAP_NEXT_X, "MAP >", 1);
+    const previousMapButton = this.createMapButton(MAP_PREVIOUS_X, t("campaign-editor.map"), -1);
+    const nextMapButton = this.createMapButton(MAP_NEXT_X, t("campaign-editor.map.2"), 1);
     const editorButton = new Button(this, {
       x: MAP_EDITOR_BUTTON_X,
       y: EDITOR_BUTTON_Y,
       width: MENU_SECONDARY_BUTTON_WIDTH,
       height: ROLE_BUTTON_HEIGHT,
-      label: "MAP EDITOR",
+      label: t("main-menu.map.editor"),
       onClick: () => this.openMapEditor(),
     });
     const replayLibraryButton = new Button(this, {
@@ -183,7 +200,7 @@ export class MainMenuScene extends Phaser.Scene {
       y: EDITOR_BUTTON_Y,
       width: MENU_SECONDARY_BUTTON_WIDTH,
       height: ROLE_BUTTON_HEIGHT,
-      label: "REPLAYS",
+      label: t("main-menu.replays"),
       onClick: () => this.scene.start(REPLAY_LIBRARY_SCENE_KEY),
     });
     const lmStudioSettingsButton = new Button(this, {
@@ -191,7 +208,7 @@ export class MainMenuScene extends Phaser.Scene {
       y: LM_STUDIO_SETTINGS_Y,
       width: LM_STUDIO_SETTINGS_WIDTH,
       height: MAP_BUTTON_HEIGHT,
-      label: "LM STUDIO SETTINGS",
+      label: t("lm-studio-settings.lm.studio.settings"),
       onClick: () => this.openLmStudioSettings(),
     });
     const hostMultiplayerButton = new Button(this, {
@@ -199,7 +216,7 @@ export class MainMenuScene extends Phaser.Scene {
       y: LM_STUDIO_SETTINGS_Y,
       width: MENU_SECONDARY_BUTTON_WIDTH,
       height: MAP_BUTTON_HEIGHT,
-      label: "HOST P2P",
+      label: t("main-menu.host.p2p"),
       onClick: () => this.scene.start(MULTIPLAYER_HOST_SCENE_KEY),
     });
     const joinMultiplayerButton = new Button(this, {
@@ -207,7 +224,7 @@ export class MainMenuScene extends Phaser.Scene {
       y: LM_STUDIO_SETTINGS_Y,
       width: MENU_SECONDARY_BUTTON_WIDTH,
       height: MAP_BUTTON_HEIGHT,
-      label: "JOIN P2P",
+      label: t("main-menu.join.p2p"),
       onClick: () => this.scene.start(MULTIPLAYER_JOIN_SCENE_KEY),
     });
 
@@ -218,7 +235,7 @@ export class MainMenuScene extends Phaser.Scene {
         y: EDITOR_BUTTON_Y,
         width: MENU_SECONDARY_BUTTON_WIDTH,
         height: ROLE_BUTTON_HEIGHT,
-        label: "CAMPAIGNS",
+        label: t("campaign-library.campaigns"),
         onClick: () => this.scene.start(CAMPAIGN_LIBRARY_SCENE_KEY),
       }).container,
       previousMapButton.container,
@@ -237,14 +254,14 @@ export class MainMenuScene extends Phaser.Scene {
       y: MENU_START_BUTTON_Y,
       width: MENU_START_BUTTON_WIDTH,
       height: MENU_START_BUTTON_HEIGHT,
-      label: "START MATCH",
+      label: t("main-menu.start.match"),
       onClick: () => this.startMatch(),
     });
     this.instructionsText = this.add
       .text(
         MENU_CENTER_X,
         MENU_INSTRUCTIONS_Y,
-        "Choose commanders and a map, then start the match.",
+        t("main-menu.choose.commanders.and.a.map.then.start.the.match"),
         {
           color: uiTheme.colors.mutedText,
           fontFamily: uiTheme.font.family,
@@ -362,7 +379,9 @@ export class MainMenuScene extends Phaser.Scene {
     const usesLmStudio = this.matchConfiguration[side] === "lm-studio-ai";
     const modelId = this.matchConfiguration.lmStudioConnections[side].modelId;
 
-    text.setVisible(usesLmStudio).setText(`MODEL: ${modelId || "<not selected>"}`);
+    text
+      .setVisible(usesLmStudio)
+      .setText(t("main-menu.model", { value1: String(modelId || t("common.notSelected")) }));
   }
 
   private changeSelectedMap(direction: number): void {
@@ -387,7 +406,9 @@ export class MainMenuScene extends Phaser.Scene {
   private refreshSelectedMapText(): void {
     const selectedMap = this.getSelectedMap();
     this.selectedMapText.setText(
-      selectedMap ? `MAP: ${formatCatalogMap(selectedMap)}` : "MAP: no maps available",
+      selectedMap
+        ? t("main-menu.map", { value1: String(formatCatalogMap(selectedMap)) })
+        : t("main-menu.map.no.maps.available"),
     );
   }
 
@@ -400,12 +421,12 @@ export class MainMenuScene extends Phaser.Scene {
     this.startButton.setEnabled(isReady);
     this.instructionsText.setText(
       isReady
-        ? "Choose commanders and a map, then start the match."
+        ? t("main-menu.choose.commanders.and.a.map.then.start.the.match")
         : selectedMap
           ? isMapReadyForMatch(selectedMap.map)
-            ? "Open LM Studio Settings and select a model before starting."
-            : "Standalone matches require Blue and Red units. Open CAMPAIGNS for the tutorial."
-          : "No maps available. Add a local map or restore a built-in map file.",
+            ? t("main-menu.open.lm.studio.settings.and.select.a.model.before.starting")
+            : t("main-menu.standalone.matches.require.blue.and.red.units.open.campaigns.for")
+          : t("main-menu.no.maps.available.add.a.local.map.or.restore.a.built.in.map.file"),
     );
   }
 

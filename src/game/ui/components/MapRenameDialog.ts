@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { t } from "../../localization/runtime";
 
 import {
   appendMapNameCharacter,
@@ -69,7 +70,7 @@ export class MapRenameDialog {
       y: DIALOG_Y,
       width: DIALOG_WIDTH,
       height: DIALOG_HEIGHT,
-      title: "RENAME MAP",
+      title: t("map-editor.rename.map"),
     });
     this.inputText = scene.add
       .text(INPUT_TEXT_X, INPUT_TEXT_Y, "", {
@@ -87,17 +88,22 @@ export class MapRenameDialog {
       .rectangle(CONTENT_X, INPUT_Y, INPUT_WIDTH, INPUT_HEIGHT, uiTheme.colors.background)
       .setOrigin(TOP_LEFT_ORIGIN)
       .setStrokeStyle(INPUT_BORDER_WIDTH, uiTheme.colors.panelBorder);
-    const hintText = scene.add.text(CONTENT_X, HINT_Y, "ENTER — CONFIRM   ESC — CANCEL", {
-      color: uiTheme.colors.mutedText,
-      fontFamily: uiTheme.font.family,
-      fontSize: `${uiTheme.font.smallSize}px`,
-    });
+    const hintText = scene.add.text(
+      CONTENT_X,
+      HINT_Y,
+      t("map-rename-dialog.enter.confirm.esc.cancel"),
+      {
+        color: uiTheme.colors.mutedText,
+        fontFamily: uiTheme.font.family,
+        fontSize: `${uiTheme.font.smallSize}px`,
+      },
+    );
     const confirmButton = new Button(scene, {
       x: CONFIRM_BUTTON_X,
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "CONFIRM",
+      label: t("map-rename-dialog.confirm"),
       onClick: options.onConfirm,
     });
     const cancelButton = new Button(scene, {
@@ -105,7 +111,7 @@ export class MapRenameDialog {
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "CANCEL",
+      label: t("common.cancel"),
       onClick: options.onCancel,
     });
 

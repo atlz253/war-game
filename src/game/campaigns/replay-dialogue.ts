@@ -4,7 +4,11 @@ export class ReplayDialogue {
   public readonly controller: MissionDialogueController;
   private boundary = -1;
   public constructor(private readonly narrative: CampaignNarrative) {
-    this.controller = new MissionDialogueController(narrative.mission, () => {});
+    this.controller = new MissionDialogueController(
+      narrative.mission,
+      () => {},
+      narrative.localeId ?? "en",
+    );
   }
   public forward(boundary: number): void {
     if (this.boundary === boundary) return;

@@ -1,7 +1,8 @@
 import Phaser from "phaser";
-
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import { displayToken } from "../localization/display-tokens";
+import { t } from "../localization/runtime";
 import { chooseReplayFile, downloadReplayFile } from "../replays/browser-replay-file";
 import { getBrowserReplayLibrary } from "../replays/replay-library";
 import { Button } from "../ui/components/Button";
@@ -54,10 +55,15 @@ export class ReplayLibraryScene extends Phaser.Scene {
       y: CENTER_Y - PANEL_HEIGHT / 2,
       width: PANEL_WIDTH,
       height: PANEL_HEIGHT,
-      title: "REPLAY LIBRARY",
+      title: t("replay-library.replay.library"),
     });
     const title = this.add
-      .text(CENTER_X, TITLE_Y, "SAVED MATCHES", this.textStyle(uiTheme.font.titleSize))
+      .text(
+        CENTER_X,
+        TITLE_Y,
+        t("replay-library.saved.matches"),
+        this.textStyle(uiTheme.font.titleSize),
+      )
       .setOrigin(CENTER_ORIGIN);
     this.listText = this.add
       .text(LIST_X, LIST_Y, "", {
@@ -69,32 +75,40 @@ export class ReplayLibraryScene extends Phaser.Scene {
     this.statusText = this.add
       .text(CENTER_X, STATUS_Y, "", this.textStyle(uiTheme.font.smallSize))
       .setOrigin(CENTER_ORIGIN);
-    this.watchButton = this.createButton(WATCH_X, "WATCH", () => this.watchSelected());
-    this.exportButton = this.createButton(EXPORT_X, "EXPORT", () => this.exportSelected());
-    const importButton = this.createButton(IMPORT_X, "IMPORT", () => void this.importReplay());
-    this.deleteButton = this.createButton(DELETE_X, "DELETE", () => this.deleteSelected());
+    this.watchButton = this.createButton(WATCH_X, t("replay-library.watch"), () =>
+      this.watchSelected(),
+    );
+    this.exportButton = this.createButton(EXPORT_X, t("campaign-editor.export"), () =>
+      this.exportSelected(),
+    );
+    const importButton = this.createButton(
+      IMPORT_X,
+      t("campaign-library.import"),
+      () => void this.importReplay(),
+    );
+    this.deleteButton = this.createButton(DELETE_X, t("common.delete"), () =>
+      this.deleteSelected(),
+    );
     const previousButton = this.createButton(
       SELECT_PREVIOUS_X,
-      "< PREVIOUS",
+      t("replay-library.previous"),
       () => this.changeSelection(-1),
       SELECT_Y,
     );
     const nextButton = this.createButton(
       SELECT_NEXT_X,
-      "NEXT >",
+      t("replay-library.next"),
       () => this.changeSelection(1),
       SELECT_Y,
     );
     const backButton = this.createButton(
       BACK_X,
-      "BACK",
+      t("common.back"),
       () => this.scene.start(MAIN_MENU_SCENE_KEY),
       ACTION_Y + BUTTON_HEIGHT + uiTheme.spacing.md,
     );
 
-    this.safeAreaBackground = this.add
-      .rectangle(0, 0, 0, 0, uiTheme.colors.background)
-      .setOrigin(0);
+    this.createSafeAreaBackground();
     this.presentationContainer = this.add.container(0, 0, [
       panel.container,
       title,
@@ -137,7 +151,9 @@ export class ReplayLibraryScene extends Phaser.Scene {
     else if (this.selectedIndex < 0 || this.selectedIndex >= replays.length) this.selectedIndex = 0;
 
     this.listText.setText(
-      replays.length === 0 ? "No completed matches saved yet." : this.formatReplayList(),
+      replays.length === 0
+        ? t("replay-library.no.completed.matches.saved.yet")
+        : this.formatReplayList(),
     );
     const enabled = Boolean(this.selectedReplay());
     this.watchButton.setEnabled(enabled);
@@ -150,7 +166,15 @@ export class ReplayLibraryScene extends Phaser.Scene {
       .list()
       .map((replay, index) => {
         const marker = index === this.selectedIndex ? ">" : " ";
-        return `${marker} ${replay.name}\n   ${replay.mapDefinition.name} · ${replay.winner.toUpperCase()} · Turn ${replay.turn}\n   BLUE: ${replay.matchConfiguration.blue} | RED: ${replay.matchConfiguration.red}`;
+        return t("replay-library.turn.blue.red", {
+          value1: String(marker),
+          value2: String(replay.name),
+          value3: String(replay.mapDefinition.name),
+          value4: String(displayToken(replay.winner)),
+          value5: String(replay.turn),
+          value6: String(replay.matchConfiguration.blue),
+          value7: String(replay.matchConfiguration.red),
+        });
       })
       .join("\n\n");
   }
@@ -171,7 +195,7 @@ export class ReplayLibraryScene extends Phaser.Scene {
     const replay = this.selectedReplay();
     if (!replay) return;
     downloadReplayFile(replay.name, this.library.export(replay.id));
-    this.statusText.setText("Replay export started.");
+    this.statusText.setText(t("replay-library.replay.export.started"));
   }
 
   private async importReplay(): Promise<void> {
@@ -180,10 +204,10 @@ export class ReplayLibraryScene extends Phaser.Scene {
     try {
       const replay = this.library.import(serialized);
       this.selectedIndex = this.library.list().findIndex((item) => item.id === replay.id);
-      this.statusText.setText("Replay imported.");
+      this.statusText.setText(t("replay-library.replay.imported"));
       this.refresh();
     } catch {
-      this.statusText.setText("Import failed: invalid replay file.");
+      this.statusText.setText(t("replay-library.import.failed.invalid.replay.file"));
     }
   }
 
@@ -191,10 +215,15 @@ export class ReplayLibraryScene extends Phaser.Scene {
     const replay = this.selectedReplay();
     if (!replay) return;
     this.library.delete(replay.id);
-    this.statusText.setText("Replay deleted.");
+    this.statusText.setText(t("replay-library.replay.deleted"));
     this.refresh();
   }
 
+  private createSafeAreaBackground(): void {
+    this.safeAreaBackground = this.add
+      .rectangle(0, 0, 0, 0, uiTheme.colors.background)
+      .setOrigin(0);
+  }
   private updatePresentationViewport(): void {
     const { width, height, scale, contentX, contentY } = calculatePresentationViewport(
       this.scale.width,

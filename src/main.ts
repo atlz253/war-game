@@ -5,6 +5,7 @@ import { BattleScene } from "./game/scenes/BattleScene";
 import { BootScene } from "./game/scenes/BootScene";
 import { CampaignEditorScene } from "./game/scenes/CampaignEditorScene";
 import { CampaignLibraryScene } from "./game/scenes/CampaignLibraryScene";
+import { LanguageScene } from "./game/scenes/LanguageScene";
 import { LmStudioSettingsScene } from "./game/scenes/LmStudioSettingsScene";
 import { MainMenuScene } from "./game/scenes/MainMenuScene";
 import { MapEditorScene } from "./game/scenes/MapEditorScene";
@@ -32,6 +33,7 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   scene: [
     BootScene,
     MainMenuScene,
+    LanguageScene,
     CampaignLibraryScene,
     CampaignEditorScene,
     MultiplayerHostScene,

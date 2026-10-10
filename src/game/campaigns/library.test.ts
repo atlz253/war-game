@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { deserializeCampaign, normalizeCampaign } from "../../core/campaigns/definition";
 import { campaign } from "../../core/campaigns/test-fixtures";
 import { BrowserCampaignLibrary } from "./library";
 
@@ -15,7 +16,7 @@ it("imports local copies collision-safely, preserves nested IDs and exports sing
   expect(imported.value?.missions).toEqual(campaign.missions);
   expect(library.import(JSON.stringify(campaign), [campaign.id]).value?.id).toBe("c-3");
   const exported = library.export("c-2");
-  expect(JSON.parse(exported.value ?? "{}")).toEqual({ ...campaign, id: "c-2" });
+  expect(JSON.parse(exported.value ?? "{}")).toEqual({ ...normalizeCampaign(campaign), id: "c-2" });
   const before = raw;
   for (const input of [
     "invalid",
@@ -46,7 +47,7 @@ it("returns import storage failures without a false success or changing existing
     },
   });
   expect(library.import(JSON.stringify(campaign))).toMatchObject({ value: null, error: "quota" });
-  expect(library.list().value).toEqual([campaign]);
+  expect(library.list().value).toEqual([normalizeCampaign(campaign)]);
 });
 
 it("persists CRUD and preserves corrupt data on save", () => {
@@ -59,7 +60,7 @@ it("persists CRUD and preserves corrupt data on save", () => {
   };
   const library = new BrowserCampaignLibrary(storage);
   expect(library.save(campaign).error).toBeNull();
-  expect(new BrowserCampaignLibrary(storage).list().value).toEqual([campaign]);
+  expect(new BrowserCampaignLibrary(storage).list().value).toEqual([normalizeCampaign(campaign)]);
   library.delete(campaign.id);
   expect(library.list().value).toEqual([]);
   stored = "corrupt";
@@ -108,6 +109,6 @@ it("round-trips Unicode dialogue and strips runtime metadata from definition exp
   expect(imported.error).toBeNull();
   const exported = JSON.parse(library.export(campaign.id).value ?? "{}");
   expect(exported.name).toBe(definition.name);
-  expect(exported.missions).toEqual(definition.missions);
+  expect(exported.missions).toEqual(deserializeCampaign(JSON.stringify(definition)).missions);
   expect(Object.keys(exported).sort()).toEqual(["id", "missions", "name", "schemaVersion"]);
 });

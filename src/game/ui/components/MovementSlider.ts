@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { t } from "../../localization/runtime";
 import { getMovementSettings, MOVEMENT_SLIDER_MAX } from "../../presentation/movement-settings";
 import { movementUi } from "../theme/movement-ui";
 import { uiTheme } from "../theme/ui-theme";
@@ -50,11 +51,12 @@ export class MovementSlider {
       uiTheme.colors.primary,
     );
     this.label = this.text(layout.trackWidth / 2, -layout.labelOffset, "");
-    const slow = this.text(0, layout.labelOffset, "Slow").setOrigin(0, CENTER_ORIGIN);
-    const instant = this.text(layout.trackWidth, layout.labelOffset, "No animation").setOrigin(
-      1,
-      CENTER_ORIGIN,
-    );
+    const slow = this.text(0, layout.labelOffset, t("common.slow")).setOrigin(0, CENTER_ORIGIN);
+    const instant = this.text(
+      layout.trackWidth,
+      layout.labelOffset,
+      t("movement-slider-model.no.animation"),
+    ).setOrigin(1, CENTER_ORIGIN);
     this.container.add([track, this.thumb, hit, this.label, slow, instant]);
     hit.on(
       "pointerdown",
@@ -81,7 +83,9 @@ export class MovementSlider {
   public refresh(): void {
     this.value = this.store.load();
     this.thumb.setPosition((this.value / MOVEMENT_SLIDER_MAX) * movementUi.trackWidth, 0);
-    this.label.setText(`Movement: ${movementSpeedLabel(this.value)}`);
+    this.label.setText(
+      t("movement-slider.movement", { value1: String(movementSpeedLabel(this.value)) }),
+    );
   }
 
   public blur(): void {

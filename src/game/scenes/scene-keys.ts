@@ -2,6 +2,7 @@ export const BOOT_SCENE_KEY = "boot";
 export const CAMPAIGN_LIBRARY_SCENE_KEY = "campaign-library";
 export const CAMPAIGN_EDITOR_SCENE_KEY = "campaign-editor";
 export const MAIN_MENU_SCENE_KEY = "main-menu";
+export const LANGUAGE_SCENE_KEY = "language";
 export const BATTLE_SCENE_KEY = "battle";
 export const RESULT_SCENE_KEY = "result";
 export const MAP_EDITOR_SCENE_KEY = "map-editor";

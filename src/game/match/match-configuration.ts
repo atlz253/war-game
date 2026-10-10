@@ -8,6 +8,7 @@ import {
   createLmStudioConnection,
   type LmStudioSettings,
 } from "../lm-studio/lm-studio-settings";
+import { localeKey, t } from "../localization/runtime";
 
 export type ParticipantKind = "human" | "heuristic-ai" | "lm-studio-ai";
 
@@ -29,9 +30,9 @@ const DEFAULT_MATCH_CONFIGURATION: MatchConfiguration = {
 };
 
 const PARTICIPANT_LABELS: Readonly<Record<ParticipantKind, string>> = {
-  human: "HUMAN",
-  "heuristic-ai": "HEURISTIC AI",
-  "lm-studio-ai": "LM STUDIO AI",
+  human: localeKey("match-configuration.human"),
+  "heuristic-ai": localeKey("match-configuration.heuristic.ai"),
+  "lm-studio-ai": localeKey("match-configuration.lm.studio.ai"),
 };
 
 const NEXT_PARTICIPANT: Readonly<Record<ParticipantKind, ParticipantKind>> = {
@@ -81,5 +82,5 @@ export function isHumanTurn(configuration: MatchConfiguration, side: SideId): bo
 }
 
 export function getParticipantLabel(participant: ParticipantKind): string {
-  return PARTICIPANT_LABELS[participant];
+  return t(PARTICIPANT_LABELS[participant]);
 }

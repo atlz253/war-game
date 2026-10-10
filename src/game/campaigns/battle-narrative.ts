@@ -11,6 +11,7 @@ export function narrativeSnapshot(narrative?: MissionDialogueController, run?: C
         narrative: {
           campaignId: run.campaign.id,
           campaignName: run.campaign.name,
+          localeId: run.localeId ?? "en",
           mission: narrative.mission,
           occurrences: narrative.journal.occurrences,
         },
@@ -22,8 +23,9 @@ export function createBattleNarrative(
   mission: MissionDefinition,
   state: GameState,
   continuation: () => void,
+  localeId = "en",
 ) {
-  const narrative = new MissionDialogueController(mission, continuation);
+  const narrative = new MissionDialogueController(mission, continuation, localeId);
   const modal = new CampaignModal(scene, narrative);
   scene.cameras.main.ignore(modal.container);
   for (const signal of initialSignals(state)) narrative.signal(signal, 0);

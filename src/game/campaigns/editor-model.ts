@@ -1,3 +1,4 @@
+import { normalizeCampaign } from "../../core/campaigns/definition";
 import { changeMissionMap, rebindMission, removeAt, reorder } from "../../core/campaigns/draft";
 import type {
   CampaignDefinition,
@@ -8,6 +9,8 @@ import type {
   Position,
   UnitSelector,
 } from "../../core/campaigns/editor-types";
+import { t } from "../localization/runtime";
+import { localizedDialogueLine } from "./localized-dialogue";
 export const TRIGGER_TYPES = [
   "mission-start",
   "turn",
@@ -21,10 +24,11 @@ export class CampaignEditorModel {
   public missionIndex = 0;
   public eventIndex = 0;
   public lineIndex = 0;
+  public dialogueLocaleId = "en";
   private saved: string;
   public constructor(campaign: CampaignDefinition) {
-    this.draft = structuredClone(campaign);
-    this.saved = JSON.stringify(campaign);
+    this.draft = normalizeCampaign(campaign);
+    this.saved = JSON.stringify(this.draft);
   }
   public get dirty(): boolean {
     return this.saved !== JSON.stringify(this.draft);
@@ -40,6 +44,25 @@ export class CampaignEditorModel {
   }
   public get line(): DialogueLine | undefined {
     return this.event?.lines[this.lineIndex];
+  }
+  public get presentedLine(): DialogueLine | undefined {
+    return this.event && this.line
+      ? localizedDialogueLine(this.event, this.line, this.dialogueLocaleId)
+      : undefined;
+  }
+  public addLocalization(id: string, available: readonly string[]): void {
+    if (
+      !this.event ||
+      id === "en" ||
+      !available.includes(id) ||
+      Object.hasOwn(this.event.localizations ?? {}, id)
+    )
+      throw new Error(t("campaign-editor.error.0"));
+    this.updateEvent({ localizations: { ...this.event.localizations, [id]: {} } });
+    this.dialogueLocaleId = id;
+  }
+  private requireEnglish(): void {
+    if (this.dialogueLocaleId !== "en") throw new Error(t("campaign-editor.error.1"));
   }
   public updateMission(patch: Partial<MissionDefinition>): void {
     this.draft = {
@@ -58,6 +81,23 @@ export class CampaignEditorModel {
       });
   }
   public updateLine(patch: Partial<DialogueLine>): void {
+    if (patch.id !== undefined) throw new Error(t("campaign-editor.error.2"));
+    if (this.dialogueLocaleId !== "en") {
+      const event = this.event;
+      const id = this.line?.id;
+      if (!event || !id) return;
+      const translations = event.localizations?.[this.dialogueLocaleId] ?? {};
+      this.updateEvent({
+        localizations: {
+          ...event.localizations,
+          [this.dialogueLocaleId]: {
+            ...translations,
+            [id]: { ...translations[id], ...patch },
+          },
+        },
+      });
+      return;
+    }
     if (this.event)
       this.updateEvent({
         lines: this.event.lines.map((line, index) =>
@@ -101,6 +141,7 @@ export class CampaignEditorModel {
     if (this.mission) this.updateMission(rebindMission(this.mission));
   }
   public addEvent(id: string): void {
+    this.requireEnglish();
     if (!this.mission) return;
     this.updateMission({
       events: [
@@ -112,12 +153,14 @@ export class CampaignEditorModel {
     this.lineIndex = 0;
   }
   public deleteEvent(): void {
+    this.requireEnglish();
     if (this.mission)
       this.updateMission({ events: removeAt(this.mission.events, this.eventIndex) });
     this.eventIndex = Math.max(0, this.eventIndex - 1);
     this.lineIndex = 0;
   }
   public moveEvent(direction: number): void {
+    this.requireEnglish();
     if (!this.mission) return;
     this.updateMission({
       events: reorder(this.mission.events, this.eventIndex, this.eventIndex + direction),
@@ -125,6 +168,7 @@ export class CampaignEditorModel {
     this.eventIndex = clampIndex(this.eventIndex + direction, this.mission.events.length);
   }
   public setTrigger(type: DialogueTrigger["type"]): void {
+    this.requireEnglish();
     const binding = this.mission?.builtInMapId ?? "";
     if (type === "mission-start" || type === "mission-end")
       return void this.updateEvent({ trigger: { type } });
@@ -138,24 +182,45 @@ export class CampaignEditorModel {
     });
   }
   public setEventUnit(unit: UnitSelector): void {
+    this.requireEnglish();
     if (this.event && "unit" in this.event.trigger)
       this.updateEvent({ trigger: { ...this.event.trigger, unit } });
   }
   public setEventCell(cell: Position): void {
+    this.requireEnglish();
     if (this.event?.trigger.type === "unit-arrived")
       this.updateEvent({ trigger: { ...this.event.trigger, cell } });
   }
   public addLine(): void {
+    this.requireEnglish();
     if (this.event) {
-      this.updateEvent({ lines: [...this.event.lines, { speaker: "Character", text: "" }] });
+      let suffix = this.event.lines.length + 1;
+      while (this.event.lines.some((line) => line.id === `line-${suffix}`)) suffix++;
+      this.updateEvent({
+        lines: [...this.event.lines, { id: `line-${suffix}`, speaker: "Character", text: "" }],
+      });
       this.lineIndex = this.event.lines.length - 1;
     }
   }
   public deleteLine(): void {
-    if (this.event) this.updateEvent({ lines: removeAt(this.event.lines, this.lineIndex) });
+    this.requireEnglish();
+    if (this.event) {
+      const id = this.line?.id;
+      const localizations = Object.fromEntries(
+        Object.entries(this.event.localizations ?? {}).map(([locale, translations]) => [
+          locale,
+          Object.fromEntries(Object.entries(translations).filter(([lineId]) => lineId !== id)),
+        ]),
+      );
+      this.updateEvent({
+        lines: removeAt(this.event.lines, this.lineIndex),
+        ...(this.event.localizations ? { localizations } : {}),
+      });
+    }
     this.lineIndex = Math.max(0, this.lineIndex - 1);
   }
   public moveLine(direction: number): void {
+    this.requireEnglish();
     if (!this.event) return;
     this.updateEvent({
       lines: reorder(this.event.lines, this.lineIndex, this.lineIndex + direction),

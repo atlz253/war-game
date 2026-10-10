@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { editText, insertText, textState } from "../../campaigns/text-edit";
+import { t } from "../../localization/runtime";
 import { campaignUi as ui } from "../theme/campaign-ui";
 import { uiTheme } from "../theme/ui-theme";
 import { Button } from "./Button";
@@ -23,7 +24,12 @@ export class CanvasTextDialog {
     const overlay = scene.add
       .rectangle(0, 0, ui.width, ui.height, uiTheme.colors.background, ui.overlayAlpha)
       .setOrigin(0)
-      .setInteractive();
+      .setInteractive()
+      .on(
+        "pointerdown",
+        (_pointer: unknown, _x: number, _y: number, event?: Phaser.Types.Input.EventData) =>
+          event?.stopPropagation(),
+      );
     const title = scene.add.text(ui.modalTextX, ui.modalY, label, {
       color: uiTheme.colors.text,
       fontFamily: uiTheme.font.family,
@@ -40,16 +46,16 @@ export class CanvasTextDialog {
       fontSize: uiTheme.font.smallSize,
     });
     const buttons = [
-      this.button(0, "SAVE TEXT", () => {
+      this.button(0, t("canvas-text-dialog.save.text"), () => {
         this.confirm(this.state.value);
         this.close();
       }),
-      this.button(1, "CANCEL", close),
-      this.button(2, "SCROLL UP", () => {
+      this.button(1, t("common.cancel"), close),
+      this.button(2, t("campaign-modal.scroll.up"), () => {
         this.offset = Math.max(0, this.offset - 1);
         this.refresh();
       }),
-      this.button(ui.downButtonColumn, "SCROLL DOWN", () => {
+      this.button(ui.downButtonColumn, t("campaign-modal.scroll.down"), () => {
         this.offset++;
         this.refresh();
       }),
@@ -95,7 +101,9 @@ export class CanvasTextDialog {
       }
     } catch {
       if (!this.disposed)
-        this.error.setText("Clipboard access failed. Type text or allow clipboard access.");
+        this.error.setText(
+          t("canvas-text-dialog.clipboard.access.failed.type.text.or.allow.clipboard.access"),
+        );
     }
   }
   private refresh(followCursor = false): void {
@@ -110,7 +118,7 @@ export class CanvasTextDialog {
     this.text.setText(lines.slice(this.offset, this.offset + ui.textRows).join("\n"));
     this.error.setText(
       this.state.error ||
-        "Arrows/Home/End: cursor · Backspace/Delete · Ctrl+V: paste · Enter: new line",
+        t("canvas-text-dialog.arrows.home.end.cursor.backspace.delete.ctrl.v.paste.enter.new.li"),
     );
   }
   public destroy(): void {

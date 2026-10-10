@@ -3,6 +3,7 @@ import {
   type MapDefinition,
   serializeMapDefinition,
 } from "../../core/maps/map-definition";
+import { localeKey, t } from "../localization/runtime";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -10,7 +11,7 @@ export interface StorageLike {
 }
 
 const STORAGE_KEY = "ai-war-game.maps.v1";
-const COPY_SUFFIX = " Copy";
+const COPY_SUFFIX_KEY = localeKey("map-library.copy");
 const FIRST_DUPLICATE_SUFFIX = 2;
 const EMPTY_MAP_LIST = "[]";
 const EMPTY_NAME_LENGTH = 0;
@@ -59,7 +60,7 @@ export class BrowserMapLibrary {
     const copy = {
       ...map,
       id: createUniqueId(map.id, this.list()),
-      name: createUniqueName(`${map.name}${COPY_SUFFIX}`, this.list()),
+      name: createUniqueName(`${map.name}${t(COPY_SUFFIX_KEY)}`, this.list()),
     };
 
     this.save(copy);
@@ -91,7 +92,9 @@ export class BrowserMapLibrary {
     const map = this.list().find((item) => item.id === id);
 
     if (!map) {
-      throw new Error(`Map '${id}' does not exist in the local library.`);
+      throw new Error(
+        t("map-library.map.does.not.exist.in.the.local.library", { value1: String(id) }),
+      );
     }
 
     return map;

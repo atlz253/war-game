@@ -11,6 +11,8 @@ import {
 } from "../config/presentation-layout";
 import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
+import { displayToken } from "../localization/display-tokens";
+import { t } from "../localization/runtime";
 import { MovementPresenter } from "../presentation/MovementPresenter";
 import { getMovementSettings, movementDuration } from "../presentation/movement-settings";
 import { movementRoute } from "../presentation/movement-transition";
@@ -101,7 +103,7 @@ export class ReplayScene extends Phaser.Scene {
   private playButton!: Button;
   private speedButton!: Button;
   private eventLog = new EventLogModel(EVENT_LOG_VISIBLE_ENTRY_COUNT);
-  private pauseMenu!: PauseMenu;
+  private pauseMenu?: PauseMenu;
   private eventLogDialog?: EventLogDialog;
   private escapeKey?: Phaser.Input.Keyboard.Key;
   private resumePlaybackAfterPause = false;
@@ -136,14 +138,15 @@ export class ReplayScene extends Phaser.Scene {
       });
       this.cameras.main.ignore(this.dialogueModal.container);
       this.updatePauseMenuPresentation();
-      this.pauseMenu.container.setDepth(this.dialogueModal.container.depth + 1);
-      this.pauseMenu.overlay.setDepth(this.dialogueModal.container.depth + 1);
+      this.pauseMenu?.container.setDepth(this.dialogueModal.container.depth + 1);
+      this.pauseMenu?.overlay.setDepth(this.dialogueModal.container.depth + 1);
       this.dialogue.forward(0);
       this.dialogueModal.refresh();
     }
   }
 
   private resetRenderingState(): void {
+    this.pauseMenu = undefined;
     this.dialogue?.dispose();
     this.dialogueModal?.destroy();
     this.dialogue = undefined;
@@ -167,7 +170,7 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
-    if (this.pauseMenu.isOpen) return;
+    if (this.pauseMenu?.isOpen) return;
     this.dialogueModal?.refresh();
     if (this.dialogue?.controller.blocked) return;
     this.updateKeyboardCamera(delta);
@@ -200,7 +203,7 @@ export class ReplayScene extends Phaser.Scene {
       y: TOP_PANEL_Y,
       width: HUD_WIDTH,
       height: TOP_PANEL_HEIGHT,
-      title: "REPLAY",
+      title: t("replay.replay"),
     });
     const title = this.add
       .text(HUD_TEXT_X, TITLE_Y, name, this.textStyle(uiTheme.font.smallSize))
@@ -208,20 +211,25 @@ export class ReplayScene extends Phaser.Scene {
     this.statusText = this.add
       .text(HUD_TEXT_X, STATUS_Y, "", this.textStyle(uiTheme.font.smallSize))
       .setOrigin(TOP_LEFT_ORIGIN);
-    const start = this.createControl(START_X, CONTROL_ROW_ONE_Y, "START", () => this.showFrame(0));
+    const start = this.createControl(START_X, CONTROL_ROW_ONE_Y, t("replay.start"), () =>
+      this.showFrame(0),
+    );
     const previous = this.createControl(PREVIOUS_X, CONTROL_ROW_ONE_Y, "<", () =>
       this.showFrame(getPreviousReplayFrameIndex(this.frameIndex)),
     );
     const next = this.createControl(NEXT_X, CONTROL_ROW_ONE_Y, ">", () =>
       this.showFrame(getNextReplayFrameIndex(this.frameIndex, this.timeline.frames.length)),
     );
-    this.playButton = this.createControl(PLAY_X, CONTROL_ROW_TWO_Y, "PLAY", () =>
-      this.togglePlayback(),
+    this.playButton = this.createControl(
+      PLAY_X,
+      CONTROL_ROW_TWO_Y,
+      t("campaign-library.play"),
+      () => this.togglePlayback(),
     );
     this.speedButton = this.createControl(SPEED_X, CONTROL_ROW_TWO_Y, "1×", () =>
       this.toggleSpeed(),
     );
-    const back = this.createControl(BACK_X, CONTROL_ROW_TWO_Y, "BACK", () =>
+    const back = this.createControl(BACK_X, CONTROL_ROW_TWO_Y, t("common.back"), () =>
       this.scene.start(MAIN_MENU_SCENE_KEY),
     );
     this.hudContainer.add([
@@ -283,7 +291,7 @@ export class ReplayScene extends Phaser.Scene {
       this.handlePointerMove(pointer),
     );
     this.input.on(Phaser.Input.Events.POINTER_UP, () => {
-      if (this.pauseMenu.isOpen) return;
+      if (this.pauseMenu?.isOpen) return;
       this.dragState = null;
     });
     this.bindPauseKey();
@@ -326,7 +334,7 @@ export class ReplayScene extends Phaser.Scene {
       this.eventLogDialog.close();
       return;
     }
-    if (this.pauseMenu.isOpen) this.resumeFromPause();
+    if (this.pauseMenu?.isOpen) this.resumeFromPause();
     else this.openPauseMenu();
   }
 
@@ -337,14 +345,14 @@ export class ReplayScene extends Phaser.Scene {
     this.pausePlayback();
     this.presenter?.pause();
     this.stopCameraMotion();
-    this.pauseMenu.open();
+    this.pauseMenu?.open();
   }
 
   private resumeFromPause(): void {
     this.dialogue?.controller.pause(false);
     this.dialogueModal?.refresh();
     this.eventLogDialog?.close();
-    this.pauseMenu.close();
+    this.pauseMenu?.close();
     this.presenter?.resume();
     if (this.resumePlaybackAfterPause) this.togglePlayback();
     this.resumePlaybackAfterPause = false;
@@ -363,15 +371,15 @@ export class ReplayScene extends Phaser.Scene {
   }
 
   private handleWheel(pointer: Phaser.Input.Pointer, deltaY: number): void {
-    if (!this.pauseMenu.isOpen) this.zoom(pointer, deltaY);
+    if (!this.pauseMenu?.isOpen) this.zoom(pointer, deltaY);
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (!this.pauseMenu.isOpen) this.startDrag(pointer);
+    if (!this.pauseMenu?.isOpen) this.startDrag(pointer);
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (!this.pauseMenu.isOpen) this.updateDrag(pointer);
+    if (!this.pauseMenu?.isOpen) this.updateDrag(pointer);
   }
 
   private zoom(pointer: Phaser.Input.Pointer, deltaY: number): void {
@@ -514,7 +522,12 @@ export class ReplayScene extends Phaser.Scene {
       this.timeline.frames.slice(1, index + 1).flatMap((item) => item.events.map(formatEvent)),
     );
     this.statusText.setText(
-      `Frame ${index}/${this.timeline.frames.length - 1} · Turn ${frame.state.turn} — ${frame.state.activeSide.toUpperCase()}`,
+      t("replay.frame.turn", {
+        value1: String(index),
+        value2: String(this.timeline.frames.length - 1),
+        value3: String(frame.state.turn),
+        value4: String(displayToken(frame.state.activeSide)),
+      }),
     );
     if (index >= this.timeline.frames.length - 1) this.stopPlayback();
   }
@@ -542,7 +555,7 @@ export class ReplayScene extends Phaser.Scene {
     else {
       this.presenter?.resume();
       this.isPlaying = true;
-      this.playButton.setLabel("PAUSE");
+      this.playButton.setLabel(t("replay.pause"));
     }
   }
 
@@ -553,7 +566,7 @@ export class ReplayScene extends Phaser.Scene {
 
   private stopPlayback(): void {
     this.isPlaying = false;
-    this.playButton.setLabel("PLAY");
+    this.playButton.setLabel(t("campaign-library.play"));
   }
 
   private toggleSpeed(): void {

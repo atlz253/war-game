@@ -1,3 +1,4 @@
+import { t } from "../localization/runtime";
 import type { StorageLike } from "../maps/map-library";
 import {
   deserializeRecordedMatch,
@@ -65,7 +66,10 @@ export class BrowserReplayLibrary {
   public export(id: string): string {
     const replay = this.get(id);
 
-    if (!replay) throw new Error(`Replay '${id}' does not exist in the local library.`);
+    if (!replay)
+      throw new Error(
+        t("replay-library.replay.does.not.exist.in.the.local.library", { value1: String(id) }),
+      );
 
     return serializeRecordedMatch(replay);
   }

@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-
 import { HeuristicAgent } from "../../ai/agents/HeuristicAgent";
 import type { GameAction } from "../../core/actions/game-actions";
 import { actionSignals, selectionSignal } from "../../core/campaigns/signals";
@@ -23,6 +22,8 @@ import { calculateInertialCameraVelocity } from "../input/camera-inertia";
 import { calculateInertialZoom, calculateNextZoom, INITIAL_MAP_ZOOM } from "../input/camera-zoom";
 import { getCapturableControlPointId } from "../input/capture-availability";
 import { getMovementHighlightPositions } from "../input/movement-highlights";
+import { displayToken } from "../localization/display-tokens";
+import { t } from "../localization/runtime";
 import type { AiActionDecision } from "../match/choose-ai-action";
 import { decideAiAction } from "../match/choose-ai-action";
 import {
@@ -55,12 +56,13 @@ import {
 } from "./battle-hud";
 import { calculateWorldViewportWidth } from "./battle-presentation";
 import {
+  aiThinkingSuffix,
   findUnitAt,
   formatActionRejection,
   formatEvent,
   toContainerPosition,
 } from "./battle-view-helpers";
-import { calculateCameraCenterLimits } from "./camera-presentation";
+import { calculateCameraCenterLimits, logicalPointer } from "./camera-presentation";
 import { MAIN_MENU_SCENE_KEY, RESULT_SCENE_KEY } from "./scene-keys";
 
 const TILE_SIZE = 512;
@@ -148,7 +150,7 @@ export class BattleScene extends Phaser.Scene {
       data.initialState ??
       (this.mapDefinition ? createGameStateFromMap(this.mapDefinition) : createSkirmishGameState());
     this.replayMapDefinition =
-      this.mapDefinition ?? createMapDefinitionFromState(this.gameState, "Skirmish 12×8");
+      this.mapDefinition ?? createMapDefinitionFromState(this.gameState, t("battle.skirmish.12.8"));
     this.multiplayerSession = data.multiplayerSession ?? null;
     this.matchConfiguration = this.multiplayerSession
       ? { ...createDefaultMatchConfiguration(), red: "human" }
@@ -620,7 +622,7 @@ export class BattleScene extends Phaser.Scene {
     if (!this.canHumanIssueOrders()) return;
     if (this.multiplayerSession?.role === "client") {
       this.multiplayerSession.requestAction(action);
-      this.eventLog.push("ORDER SENT TO HOST.");
+      this.eventLog.push(t("battle.order.sent.to.host"));
       return;
     }
     this.applyAcceptedAction(action, true);
@@ -680,7 +682,7 @@ export class BattleScene extends Phaser.Scene {
     const result = applyAction(this.gameState, decision.action);
 
     if (!result.accepted) {
-      throw new Error("AI returned an invalid action.");
+      throw new Error(t("battle.ai.returned.an.invalid.action"));
     }
 
     const previousState = this.gameState;
@@ -689,7 +691,9 @@ export class BattleScene extends Phaser.Scene {
     this.replayActions = [...this.replayActions, decision.action];
     if (decision.usedFallback && participant === "lm-studio-ai") {
       this.eventLog.push(
-        `${this.gameState.activeSide.toUpperCase()} LM Studio unavailable — Heuristic AI order used.`,
+        t("battle.lm.studio.unavailable.heuristic.ai.order.used", {
+          value1: String(displayToken(this.gameState.activeSide)),
+        }),
       );
     }
     this.presentAcceptedAction(previousState, decision.action, result.events);
@@ -800,7 +804,7 @@ export class BattleScene extends Phaser.Scene {
       onDisconnect: () => {
         this.disconnected = true;
         this.inputLocked = true;
-        this.eventLog?.push("CONNECTION LOST — MATCH PAUSED.");
+        this.eventLog?.push(t("battle.connection.lost.match.paused"));
         this.time.delayedCall(MULTIPLAYER_RECONNECT_TIMEOUT_MS, () => {
           if (!this.multiplayerSession?.isConnected) this.exitToMainMenu();
         });
@@ -811,7 +815,7 @@ export class BattleScene extends Phaser.Scene {
   private applyRemoteAcceptedAction(sequence: number, action: GameAction): void {
     if (sequence !== this.actionSequence + 1) {
       this.multiplayerSession?.requestResync();
-      this.eventLog.push("OUT OF SYNC — REQUESTING SNAPSHOT.");
+      this.eventLog.push(t("battle.out.of.sync.requesting.snapshot"));
       return;
     }
     this.actionSequence = sequence;
@@ -836,7 +840,10 @@ export class BattleScene extends Phaser.Scene {
     const replay = createRecordedMatch({
       ...narrativeSnapshot(this.narrative, this.campaignRun),
       id: `replay-${Date.now()}`,
-      name: `${this.gameState.winner.toUpperCase()} victory — ${this.replayMapDefinition.name}`,
+      name: t("battle.victory", {
+        value1: String(displayToken(this.gameState.winner)),
+        value2: String(this.replayMapDefinition.name),
+      }),
       savedAt: new Date().toISOString(),
       mapDefinition: this.replayMapDefinition,
       matchConfiguration: this.matchConfiguration,
@@ -868,11 +875,17 @@ export class BattleScene extends Phaser.Scene {
   private createNarrative(): void {
     const mission = this.campaignRun?.campaign.missions[this.campaignRun.index];
     if (!mission) return;
-    const created = createBattleNarrative(this, mission, this.gameState, () => {
-      if (this.exited || this.pauseMenu?.isOpen) return;
-      this.resumeFromPause();
-      if (!this.checkForResult()) this.startAiTurnIfNeeded();
-    });
+    const created = createBattleNarrative(
+      this,
+      mission,
+      this.gameState,
+      () => {
+        if (this.exited || this.pauseMenu?.isOpen) return;
+        this.resumeFromPause();
+        if (!this.checkForResult()) this.startAiTurnIfNeeded();
+      },
+      this.campaignRun?.localeId ?? "en",
+    );
     this.narrative = created.narrative;
     this.dialogueModal = created.modal;
     this.updatePauseMenuPresentation();
@@ -957,15 +970,12 @@ export class BattleScene extends Phaser.Scene {
       this.selectedUnitId,
       this.isActiveSideHuman(),
       this.canHumanIssueOrders(),
-      this.getAiThinkingSuffix(),
+      aiThinkingSuffix(
+        this.isActiveSideHuman(),
+        this.inputLocked,
+        this.matchConfiguration[this.gameState.activeSide],
+      ),
     );
-  }
-
-  private getAiThinkingSuffix(): string {
-    if (this.isActiveSideHuman() || !this.inputLocked) return "";
-    return this.matchConfiguration[this.gameState.activeSide] === "lm-studio-ai"
-      ? " — LM STUDIO THINKING..."
-      : " — AI THINKING";
   }
 
   private toScreenPosition(position: Position): Position {
@@ -985,14 +995,6 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private toLogicalPointer(pointer: Phaser.Input.Pointer): Position | null {
-    const { x, y, width, height, scale } = this.presentationViewport;
-    const pointerX = pointer.x - x;
-    const pointerY = pointer.y - y;
-
-    if (pointerX < 0 || pointerX >= width || pointerY < 0 || pointerY >= height) {
-      return null;
-    }
-
-    return { x: Math.floor(pointerX / scale), y: Math.floor(pointerY / scale) };
+    return logicalPointer(pointer, this.presentationViewport);
   }
 }

@@ -1,10 +1,11 @@
 import Phaser from "phaser";
-
 import type { MapDefinition } from "../../core/maps/map-definition";
 import type { SideId } from "../../core/model/game-state";
 import { advanceRun, type CampaignRun, launchMission } from "../campaigns/playthrough";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
+import { displayToken } from "../localization/display-tokens";
+import { t } from "../localization/runtime";
 import {
   createDefaultMatchConfiguration,
   type MatchConfiguration,
@@ -59,7 +60,9 @@ export class ResultScene extends Phaser.Scene {
       .text(
         CENTER_X,
         TITLE_Y,
-        continued?.complete ? "CAMPAIGN COMPLETE" : `${data.winner.toUpperCase()} VICTORY`,
+        continued?.complete
+          ? t("result.campaign.complete")
+          : t("result.victory", { value1: String(displayToken(data.winner)) }),
         {
           color: uiTheme.colors.text,
           fontFamily: uiTheme.font.family,
@@ -68,7 +71,7 @@ export class ResultScene extends Phaser.Scene {
       )
       .setOrigin(CENTER_ORIGIN);
     const stats = this.add
-      .text(CENTER_X, STATS_Y, `Turns: ${data.turn}`, {
+      .text(CENTER_X, STATS_Y, t("result.turns", { value1: String(data.turn) }), {
         color: uiTheme.colors.mutedText,
         fontFamily: uiTheme.font.family,
         fontSize: `${uiTheme.font.normalSize}px`,
@@ -81,11 +84,11 @@ export class ResultScene extends Phaser.Scene {
       height: BUTTON_HEIGHT,
       label: continued
         ? continued.complete
-          ? "COMPLETE"
+          ? t("result.complete")
           : data.winner === "blue"
-            ? "NEXT MISSION"
-            : "RETRY"
-        : "PLAY AGAIN",
+            ? t("result.next.mission")
+            : t("result.retry")
+        : t("result.play.again"),
       enabled: !continued?.complete,
       onClick: () =>
         this.scene.start(
@@ -103,7 +106,7 @@ export class ResultScene extends Phaser.Scene {
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "MENU",
+      label: t("campaign-library.menu"),
       onClick: () => this.scene.start(MAIN_MENU_SCENE_KEY),
     });
     const watchButton = new Button(this, {
@@ -111,15 +114,13 @@ export class ResultScene extends Phaser.Scene {
       y: BUTTON_Y,
       width: BUTTON_WIDTH,
       height: BUTTON_HEIGHT,
-      label: "WATCH REPLAY",
+      label: t("result.watch.replay"),
       enabled: Boolean(data.replayId),
       onClick: () => this.scene.start(REPLAY_SCENE_KEY, { replayId: data.replayId }),
     });
 
     this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
-    this.safeAreaBackground = this.add
-      .rectangle(0, 0, 0, 0, uiTheme.colors.background)
-      .setOrigin(0);
+    this.createSafeAreaBackground();
     this.presentationContainer = this.add.container(0, 0, [
       panel.container,
       title,
@@ -133,6 +134,11 @@ export class ResultScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.unbindPresentationResize, this);
   }
 
+  private createSafeAreaBackground(): void {
+    this.safeAreaBackground = this.add
+      .rectangle(0, 0, 0, 0, uiTheme.colors.background)
+      .setOrigin(0);
+  }
   private updatePresentationViewport(): void {
     const { width, height, scale, contentX, contentY } = calculatePresentationViewport(
       this.scale.width,

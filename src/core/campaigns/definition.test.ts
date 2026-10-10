@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DialogueTrigger } from "./definition";
-import { deserializeCampaign, serializeCampaign } from "./definition";
+import { deserializeCampaign, normalizeCampaign, serializeCampaign } from "./definition";
 import { campaign, map, mission } from "./test-fixtures";
 
 it("round-trips all six trigger forms, stable IDs and empty dialogue drafts", () => {
@@ -30,7 +30,7 @@ it("round-trips all six trigger forms, stable IDs and empty dialogue drafts", ()
       },
     ],
   };
-  expect(deserializeCampaign(serializeCampaign(draft))).toEqual(draft);
+  expect(deserializeCampaign(serializeCampaign(draft))).toEqual(normalizeCampaign(draft));
   const invalid = structuredClone(draft);
   Object.assign(invalid.missions[0]?.events[0] ?? {}, { type: "unknown" });
   expect(() => deserializeCampaign(JSON.stringify(invalid))).toThrow();
@@ -39,10 +39,10 @@ it("round-trips all six trigger forms, stable IDs and empty dialogue drafts", ()
 describe("campaign format", () => {
   it("round-trips incomplete drafts without replacing identities", () => {
     const draft = { schemaVersion: 1, id: "draft", name: "", missions: [] };
-    expect(deserializeCampaign(serializeCampaign(draft))).toEqual(draft);
+    expect(deserializeCampaign(serializeCampaign(draft))).toEqual(normalizeCampaign(draft));
   });
   it.each([
-    { schemaVersion: 2, id: "draft", name: "", missions: [] },
+    { schemaVersion: 3, id: "draft", name: "", missions: [] },
     {
       schemaVersion: 1,
       id: "draft",

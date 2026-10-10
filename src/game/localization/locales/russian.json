@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "russian",
+  "name": "russian",
+  "strings": {
+    "battle-hud.capture.point": "ЗАХВАТИТЬ ТОЧКУ",
+    "battle-hud.end.turn": "КОНЕЦ ХОДА",
+    "battle-hud.turn": "ХОД",
+    "battle-hud.wait": "ЖДАТЬ",
+    "battle-view-helpers.the.match.is.finished": "матч завершен"
+  }
+}

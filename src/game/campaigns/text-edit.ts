@@ -1,3 +1,4 @@
+import { t } from "../localization/runtime";
 export const NAME_LIMIT = 120;
 export const DIALOGUE_TEXT_LIMIT = 12000;
 export interface TextEditState {
@@ -18,11 +19,14 @@ export function textState(value: string, multiline: boolean): TextEditState {
 }
 export function insertText(state: TextEditState, inserted: string): TextEditState {
   if (!state.multiline && /[\r\n]/.test(inserted))
-    return { ...state, error: "This field is a single line." };
+    return { ...state, error: t("text-edit.this.field.is.a.single.line") };
   const points = Array.from(state.value);
   const addition = Array.from(inserted.replace(/\r\n?/g, "\n"));
   if (points.length + addition.length > state.limit)
-    return { ...state, error: `Maximum ${state.limit} characters. Text retained.` };
+    return {
+      ...state,
+      error: t("text-edit.maximum.characters.text.retained", { value1: String(state.limit) }),
+    };
   points.splice(state.cursor, 0, ...addition);
   return { ...state, value: points.join(""), cursor: state.cursor + addition.length, error: "" };
 }
