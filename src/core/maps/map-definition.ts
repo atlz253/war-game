@@ -295,7 +295,7 @@ function addTerrainConflictErrors(map: MapDefinition, errors: MapValidationError
   }
 }
 
-function createUnits(placements: readonly MapUnitPlacement[]): Record<string, UnitState> {
+export function createUnits(placements: readonly MapUnitPlacement[]): Record<string, UnitState> {
   const counters: Record<string, number> = {};
   const units: Record<string, UnitState> = {};
 

@@ -18,6 +18,7 @@ import {
 import { QuickMatchView } from "../menu/QuickMatchView";
 import { Button } from "../ui/components/Button";
 import { MovementSlider } from "../ui/components/MovementSlider";
+import { menuBattleUi } from "../ui/theme/menu-battle-ui";
 import { menuUi as ui } from "../ui/theme/menu-ui";
 import { uiTheme } from "../ui/theme/ui-theme";
 import {
@@ -75,7 +76,14 @@ export class MainMenuScene extends Phaser.Scene {
         : (MAIN_MENU_ENTRIES.find((entry) => entry.view === view)?.label ??
           "main-menu.ai.war.game");
     const panel = this.add
-      .rectangle(ui.centerX, ui.panelY, ui.panelWidth, ui.panelHeight, uiTheme.colors.panel)
+      .rectangle(
+        ui.centerX,
+        ui.panelY,
+        ui.panelWidth,
+        ui.panelHeight,
+        uiTheme.colors.panel,
+        menuBattleUi.panelAlpha,
+      )
       .setStrokeStyle(ui.borderWidth, uiTheme.colors.panelBorder);
     this.presentationContainer.add([panel, this.text(titleKey, ui.titleY, uiTheme.font.titleSize)]);
     if (view === "main") this.buildRoot();

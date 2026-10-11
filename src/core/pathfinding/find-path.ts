@@ -175,11 +175,24 @@ function isOccupiedOrBlocked(
   position: Position,
 ): boolean {
   return (
+    isOpposingDeploymentStrip(board, movingUnit, position) ||
     board.blockedCells.some((cell) => positionsEqual(cell, position)) ||
     isMountainImpassableFor(movingUnit, board, position) ||
     Object.values(units).some(
       (unit) => unit.id !== movingUnit.id && positionsEqual(unit.position, position),
     )
+  );
+}
+
+function isOpposingDeploymentStrip(
+  board: BoardState,
+  unit: UnitState,
+  position: Position,
+): boolean {
+  const strip = board.menuDeploymentWidth;
+  return (
+    strip !== undefined &&
+    (unit.side === "blue" ? position.x >= board.width - strip : position.x < strip)
   );
 }
 

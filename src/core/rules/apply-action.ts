@@ -1,5 +1,6 @@
 import type { GameAction } from "../actions/game-actions";
 import { calculateDamage } from "../combat/calculate-damage";
+import { reinforceMenuSide } from "../menu-battle/menu-battle";
 import type { GameEvent } from "../model/game-events";
 import type { GameState, SideId, UnitState } from "../model/game-state";
 import { findPath, positionsEqual } from "../pathfinding/find-path";
@@ -78,7 +79,7 @@ function applyAttack(state: GameState, unitId: string, targetUnitId: string): Ap
   const target = requireUnit(state, targetUnitId);
   const committedAttacker = {
     ...attacker,
-    ammo: attacker.ammo - 1,
+    ammo: state.menuBattle ? attacker.ammo : attacker.ammo - 1,
     hasTakenMainAction: true,
   };
   const damage = calculateDamage(state, attacker, target);
@@ -127,7 +128,10 @@ function applyCounterattack(
   target: UnitState,
   events: GameEvent[],
 ): ApplyActionResult {
-  const committedCounterattacker = { ...counterattacker, ammo: counterattacker.ammo - 1 };
+  const committedCounterattacker = {
+    ...counterattacker,
+    ammo: state.menuBattle ? counterattacker.ammo : counterattacker.ammo - 1,
+  };
   const damage = calculateDamage(state, counterattacker, target);
   const score = calculateAttackScore(target.health, damage);
   const remainingHealth = target.health - damage;
@@ -263,6 +267,13 @@ function completeVictoryIfNeeded(
 
   if (hasEnemyUnits) {
     return { accepted: true, state, events };
+  }
+
+  if (state.menuBattle) {
+    const side = oppositeSide(winner);
+    const reinforced = reinforceMenuSide(state, side);
+    events.push({ type: "menu-reinforced", side, wave: state.menuBattle.waves[side] + 1 });
+    return { accepted: true, state: reinforced, events };
   }
 
   const victoriousState = { ...state, winner };

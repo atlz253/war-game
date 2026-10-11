@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { GameState } from "../../core/model/game-state";
 import { createSkirmishGameState } from "../../core/scenarios/skirmish-12x8";
@@ -140,6 +140,31 @@ const STATE = {
 } as unknown as GameState;
 
 describe("BattleMapRenderer movement", () => {
+  it("renders ambient units without overlays and removes destroyed views across waves", () => {
+    const scene = createScene();
+    const healthText = vi.spyOn(scene.add, "text");
+    const world = createWorldContainer();
+    const renderer = new BattleMapRenderer(scene, world as never, {
+      boardOriginX: 0,
+      boardOriginY: 0,
+      tileSize: TILE_SIZE,
+      initialZoom: INITIAL_ZOOM,
+      ambient: true,
+    });
+    renderer.renderState(STATE);
+    expect(healthText).not.toHaveBeenCalled();
+    const first = world.list.find((object) => object.kind === "image");
+    if (!first) throw new Error("Missing unit view");
+    const destroy = vi.spyOn(first, "destroy");
+    renderer.renderState({ ...STATE, units: {} });
+    expect(destroy).toHaveBeenCalledOnce();
+    const views = renderer as unknown as {
+      unitViews: Map<string, unknown>;
+      unitHealthViews: Map<string, unknown>;
+    };
+    expect(views.unitViews.size).toBe(0);
+    expect(views.unitHealthViews.size).toBe(0);
+  });
   it("moves image and label together, preserves overrides through refresh and clears on reset", () => {
     const world = createWorldContainer();
     const renderer = new BattleMapRenderer(createScene(), world as never, {

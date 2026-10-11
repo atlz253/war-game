@@ -79,6 +79,7 @@ export interface VictoryAchievedEvent {
 }
 
 export type GameEvent =
+  | { readonly type: "menu-reinforced"; readonly side: SideId; readonly wave: number }
   | UnitMovedEvent
   | UnitAttackedEvent
   | UnitCounterattackedEvent

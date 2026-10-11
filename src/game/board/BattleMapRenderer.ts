@@ -28,6 +28,7 @@ const DOUBLE_SIZE_MULTIPLIER = 2;
 const CENTER_ORIGIN = 0.5;
 
 export interface BattleMapRendererOptions {
+  readonly ambient?: boolean;
   readonly boardOriginX: number;
   readonly boardOriginY: number;
   readonly tileSize: number;
@@ -85,7 +86,10 @@ export class BattleMapRenderer {
 
   public renderState(state: GameState): void {
     this.updateControlPointViews(state);
-    this.updateUnitViews(state, getUnitsWithAvailableMainActions(state));
+    this.updateUnitViews(
+      state,
+      this.options.ambient ? new Set() : getUnitsWithAvailableMainActions(state),
+    );
     this.bringHealthLabelsToFront();
   }
 
@@ -156,7 +160,7 @@ export class BattleMapRenderer {
     this.updateUnitTint(view, unit, activeSide, unitsWithAvailableMainActions);
     this.unitViews.set(unit.id, view);
     if (!view.parentContainer) this.worldContainer.add(view);
-    this.upsertUnitHealthView(unit, point);
+    if (!this.options.ambient) this.upsertUnitHealthView(unit, point);
   }
 
   private updateUnitTint(
@@ -165,7 +169,7 @@ export class BattleMapRenderer {
     activeSide: GameState["activeSide"],
     unitsWithAvailableMainActions: ReadonlySet<string>,
   ): void {
-    if (unit.side !== activeSide) {
+    if (this.options.ambient || unit.side !== activeSide) {
       view.clearTint();
       return;
     }

@@ -73,6 +73,8 @@ export function formatSelectedUnit(
 
 export function formatEvent(event: GameEvent): string {
   switch (event.type) {
+    case "menu-reinforced":
+      return "";
     case "unit-moved":
       return t("battle-view-helpers.moved", { value1: String(event.unitId) });
     case "unit-attacked":

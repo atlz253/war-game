@@ -1,5 +1,7 @@
 # Menu navigation
 
+All menu views and the Language, LM Studio, Host/Join, CampaignLibrary and ReplayLibrary screens share a continuous isolated Heuristic background battle. Gameplay, result screens, map/campaign editing and replay playback suspend and hide it; returning resumes the same session. Reload starts a fresh session. See [menu-background-battle.md](menu-background-battle.md) for core rules, infinite ammunition and lifecycle details.
+
 AI WAR GAME opens with six buttons, in order:
 
 1. **CAMPAIGNS** opens the existing campaign library.

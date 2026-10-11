@@ -1,4 +1,5 @@
 import type { VictoryPolicy } from "../campaigns/definition";
+import type { MenuBattlePolicy } from "../menu-battle/menu-battle";
 
 export type SideId = "blue" | "red";
 
@@ -17,6 +18,7 @@ export interface Position {
 }
 
 export interface BoardState {
+  readonly menuDeploymentWidth?: number;
   readonly width: number;
   readonly height: number;
   readonly blockedCells: readonly Position[];
@@ -54,6 +56,7 @@ export interface ControlPointState {
 }
 
 export interface GameState {
+  readonly menuBattle?: MenuBattlePolicy;
   readonly victoryPolicy?: VictoryPolicy;
   readonly scenarioId: string;
   readonly board: BoardState;
