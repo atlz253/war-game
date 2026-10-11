@@ -57,6 +57,7 @@ describe("Canvas language selector", () => {
     const fixture = canvasFixture();
     const scene = Object.assign(new LanguageScene(), fixture.props);
     const data = {
+      view: "settings" as const,
       selectedMapKey: "local:map",
       matchConfiguration: { blue: "human", red: "heuristic-ai" },
     };
@@ -74,6 +75,13 @@ describe("Canvas language selector", () => {
     const scene = Object.assign(new LanguageScene(), fixture.props);
     scene.create({ editLocaleId: "en" });
     expect(fixture.start).toHaveBeenCalledWith("language", {});
+  });
+  it("retains the SETTINGS return when production rejects direct authoring", () => {
+    const fixture = canvasFixture();
+    const scene = Object.assign(new LanguageScene(), fixture.props);
+    const data = { view: "settings" as const, selectedMapKey: "local:pending" };
+    scene.create({ ...data, editLocaleId: "en" });
+    expect(fixture.start).toHaveBeenCalledWith("language", data);
   });
   it("resets a previous dirty confirmation when the scene is entered again", () => {
     const fixture = canvasFixture();

@@ -3,6 +3,9 @@
   "id": "russian",
   "name": "russian",
   "strings": {
+    "main-menu.quick.match": "БЫСТРЫЙ БОЙ",
+    "main-menu.multiplayer": "МУЛЬТИПЛЕЕР",
+    "main-menu.settings": "НАСТРОЙКИ",
     "battle-hud.capture.point": "ЗАХВАТИТЬ ТОЧКУ",
     "battle-hud.end.turn": "КОНЕЦ ХОДА",
     "battle-hud.turn": "ХОД",

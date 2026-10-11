@@ -14,6 +14,12 @@ vi.mock("phaser", () => ({
     },
   },
 }));
+vi.mock("../ui/components/MovementSlider", () => ({
+  MovementSlider: class {
+    container = { list: [], destroy: vi.fn() };
+    blur = vi.fn();
+  },
+}));
 
 import { getBuiltInMaps } from "../../core/scenarios/built-in-maps";
 import { canvasFixture } from "../campaigns/canvas-test-fixture";
@@ -56,7 +62,21 @@ it("offers a translated menu entry and carries commander/map configuration throu
   scene.create({ selectedMapKey, matchConfiguration });
   const root = (scene as unknown as { presentationContainer: Parameters<typeof fixture.click>[0] })
     .presentationContainer;
+  fixture.click(root, "SETTINGS");
   fixture.click(root, "ЯЗЫК");
-  expect(fixture.start).toHaveBeenCalledWith("language", { selectedMapKey, matchConfiguration });
+  expect(fixture.start).toHaveBeenCalledWith("language", {
+    selectedMapKey,
+    matchConfiguration,
+    view: "settings",
+  });
+  fixture.click(root, "BACK");
+  fixture.click(root, "QUICK MATCH");
   expect(fixture.descendants(root).some((object) => object.text === "НАЧАТЬ БОЙ")).toBe(true);
+});
+it("provides Russian navigation labels with per-string English fallback", () => {
+  selectLocale("russian");
+  const strings = getLocaleCatalog().locales.find((locale) => locale.id === "russian")?.strings;
+  expect(strings?.["main-menu.quick.match"]).toBe("БЫСТРЫЙ БОЙ");
+  expect(strings?.["main-menu.multiplayer"]).toBe("МУЛЬТИПЛЕЕР");
+  expect(strings?.["main-menu.settings"]).toBe("НАСТРОЙКИ");
 });

@@ -6,6 +6,7 @@ class CanvasObject {
   public parentContainer?: CanvasObject;
   public text = "";
   public visible = true;
+  public active = true;
   public depth = 0;
   public x = 0;
   public y = 0;
@@ -17,19 +18,36 @@ class CanvasObject {
     }
     return this;
   }
-  public removeAll(): this {
+  public removeAll(destroy = false): this {
+    if (destroy) for (const child of [...this.list]) child.destroy();
     this.list = [];
     return this;
   }
-  public on(event: string, handler: Handler): this {
-    this.handlers.set(event, handler);
+  public on(event: string, handler: Handler, context?: unknown): this {
+    this.handlers.set(event, context ? handler.bind(context) : handler);
     return this;
+  }
+  public once(event: string, handler: Handler, context?: unknown): this {
+    return this.on(event, (...args) => {
+      this.handlers.delete(event);
+      handler.apply(context, args);
+    });
   }
   public emit(event: string, ...args: unknown[]): void {
     this.handlers.get(event)?.(...args);
   }
   public destroy(): void {
+    this.emit("destroy");
+    for (const child of [...this.list]) child.destroy();
+    this.active = false;
+    this.handlers.clear();
     this.list = [];
+  }
+  public willRender(): boolean {
+    return this.active && this.visible && (this.parentContainer?.willRender() ?? true);
+  }
+  public getWorldTransformMatrix() {
+    return { applyInverse: (x: number, y: number) => ({ x, y }) };
   }
   public setText(value: string): this {
     this.text = value;

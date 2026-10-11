@@ -4,6 +4,7 @@ import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
 import { t } from "../localization/runtime";
 import { type CatalogMap, formatCatalogMap, getBrowserMapCatalog } from "../maps/map-catalog";
+import type { MainMenuSceneData, MultiplayerMenuData } from "../menu/menu-navigation";
 import { MultiplayerSession } from "../multiplayer/multiplayer-session";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -35,11 +36,15 @@ export class MultiplayerHostScene extends Phaser.Scene {
   private safeAreaBackground!: Phaser.GameObjects.Rectangle;
   private presentationContainer!: Phaser.GameObjects.Container;
   private transferringToBattle = false;
+  private returnMenu?: MainMenuSceneData;
 
   public constructor() {
     super("multiplayer-host");
   }
-  public create(): void {
+  public create(data: MultiplayerMenuData = {}): void {
+    this.returnMenu = data.returnMenu;
+    this.transferringToBattle = false;
+    this.peerConnected = false;
     this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
     this.safeAreaBackground = this.add
       .rectangle(0, 0, 0, 0, uiTheme.colors.background)
@@ -114,10 +119,11 @@ export class MultiplayerHostScene extends Phaser.Scene {
     this.session.host();
     this.updatePresentationViewport();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.scale.off(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
-      if (!this.transferringToBattle) this.session.close();
-    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+  }
+  private shutdown(): void {
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.updatePresentationViewport, this);
+    if (!this.transferringToBattle) this.session.close();
   }
   private bindSessionEvents(): void {
     this.session.setEvents({
@@ -186,7 +192,8 @@ export class MultiplayerHostScene extends Phaser.Scene {
   }
   private exit(): void {
     this.session.close();
-    this.scene.start(MAIN_MENU_SCENE_KEY);
+    if (this.returnMenu) this.scene.start(MAIN_MENU_SCENE_KEY, this.returnMenu);
+    else this.scene.start(MAIN_MENU_SCENE_KEY);
   }
 }
 function catalogMapKey(entry: CatalogMap): string {

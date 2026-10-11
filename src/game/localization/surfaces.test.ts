@@ -3,6 +3,8 @@ import { afterEach, expect, it, vi } from "vitest";
 vi.mock("phaser", () => ({
   default: {
     Scene: class {},
+    Scale: { Events: { RESIZE: "resize" } },
+    Scenes: { Events: { SHUTDOWN: "shutdown" } },
     Input: {
       Events: {
         POINTER_DOWN: "pointerdown",
@@ -14,14 +16,15 @@ vi.mock("phaser", () => ({
 }));
 vi.mock("../ui/components/MovementSlider", () => ({
   MovementSlider: class {
-    container = { list: [] };
+    container = { list: [], destroy: vi.fn() };
+    blur = vi.fn();
   },
 }));
 
 import { mission } from "../../core/campaigns/test-fixtures";
 import { canvasFixture } from "../campaigns/canvas-test-fixture";
 import { ReplayDialogue } from "../campaigns/replay-dialogue";
-import { MovementSettingsScene } from "../scenes/MovementSettingsScene";
+import { MainMenuScene } from "../scenes/MainMenuScene";
 import { CampaignModal } from "../ui/components/CampaignModal";
 import { translateCoreReason } from "./core-reasons";
 import { getLocaleCatalog, replaceLocaleCatalog, selectLocale } from "./runtime";
@@ -53,13 +56,15 @@ function translatedViewer() {
 }
 it("translates settings and core error presentation without altering the underlying reasons", () => {
   translatedViewer();
+  vi.stubGlobal("window", { localStorage: { getItem: () => null, setItem: vi.fn() } });
   const fixture = canvasFixture();
-  const scene = Object.assign(new MovementSettingsScene(), fixture.props);
-  scene.create();
-  const root = (scene as unknown as { content: Parameters<typeof fixture.click>[0] }).content;
+  const scene = Object.assign(new MainMenuScene(), fixture.props);
+  scene.create({ view: "settings" });
+  const root = (scene as unknown as { presentationContainer: Parameters<typeof fixture.click>[0] })
+    .presentationContainer;
   expect(fixture.descendants(root).some((o) => o.text === "Настройки движения")).toBe(true);
   fixture.click(root, "Назад");
-  expect(fixture.start).toHaveBeenCalledWith("main-menu", {});
+  expect(fixture.descendants(root).some((o) => o.text === "AI WAR GAME")).toBe(true);
   const reason = "missions[0].events: dialogue is empty";
   expect(translateCoreReason(reason)).toBe("missions[0].events: Диалог пуст");
   expect(reason).toBe("missions[0].events: dialogue is empty");

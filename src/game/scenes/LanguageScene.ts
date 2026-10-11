@@ -10,11 +10,11 @@ import {
   selectLocale,
   t,
 } from "../localization/runtime";
+import type { MainMenuSceneData } from "../menu/menu-navigation";
 import { Button } from "../ui/components/Button";
 import { CanvasTextDialog } from "../ui/components/CanvasTextDialog";
 import { localizationUi as ui } from "../ui/theme/localization-ui";
 import { uiTheme } from "../ui/theme/ui-theme";
-import type { MainMenuSceneData } from "./MainMenuScene";
 import { LANGUAGE_SCENE_KEY, MAIN_MENU_SCENE_KEY } from "./scene-keys";
 
 const CENTER_ORIGIN = 0.5;
@@ -36,7 +36,8 @@ export class LanguageScene extends Phaser.Scene {
   }
   public create(data: MainMenuSceneData & { editLocaleId?: string } = {}): void {
     if (data.editLocaleId && !import.meta.env.DEV) {
-      this.scene.start(LANGUAGE_SCENE_KEY, {});
+      const { editLocaleId: _editLocaleId, ...menuData } = data;
+      this.scene.start(LANGUAGE_SCENE_KEY, menuData);
       return;
     }
     this.menuData = data;

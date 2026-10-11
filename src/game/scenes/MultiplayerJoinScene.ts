@@ -4,6 +4,7 @@ import type { GameState } from "../../core/model/game-state";
 import { GAME_CANVAS_BACKGROUND_COLOR } from "../config/game-config";
 import { calculatePresentationViewport } from "../config/presentation-layout";
 import { t } from "../localization/runtime";
+import type { MainMenuSceneData, MultiplayerMenuData } from "../menu/menu-navigation";
 import { MultiplayerSession } from "../multiplayer/multiplayer-session";
 import { Button } from "../ui/components/Button";
 import { uiTheme } from "../ui/theme/ui-theme";
@@ -28,10 +29,14 @@ export class MultiplayerJoinScene extends Phaser.Scene {
   private safeAreaBackground!: Phaser.GameObjects.Rectangle;
   private presentationContainer!: Phaser.GameObjects.Container;
   private transferringToBattle = false;
+  private returnMenu?: MainMenuSceneData;
   public constructor() {
     super("multiplayer-join");
   }
-  public create(): void {
+  public create(data: MultiplayerMenuData = {}): void {
+    this.returnMenu = data.returnMenu;
+    this.transferringToBattle = false;
+    this.roomCode = "";
     this.cameras.main.setBackgroundColor(GAME_CANVAS_BACKGROUND_COLOR);
     this.safeAreaBackground = this.add
       .rectangle(0, 0, 0, 0, uiTheme.colors.background)
@@ -130,7 +135,8 @@ export class MultiplayerJoinScene extends Phaser.Scene {
   }
   private exit(): void {
     this.session.close();
-    this.scene.start(MAIN_MENU_SCENE_KEY);
+    if (this.returnMenu) this.scene.start(MAIN_MENU_SCENE_KEY, this.returnMenu);
+    else this.scene.start(MAIN_MENU_SCENE_KEY);
   }
 }
 function style(fontSize: number): Phaser.Types.GameObjects.Text.TextStyle {

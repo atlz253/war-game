@@ -14,10 +14,10 @@ import {
   MIN_LM_STUDIO_TIMEOUT_MS,
 } from "../lm-studio/lm-studio-settings";
 import { t } from "../localization/runtime";
+import type { MainMenuSceneData } from "../menu/menu-navigation";
 import { Button } from "../ui/components/Button";
 import { Panel } from "../ui/components/Panel";
 import { uiTheme } from "../ui/theme/ui-theme";
-import type { MainMenuSceneData } from "./MainMenuScene";
 import { MAIN_MENU_SCENE_KEY } from "./scene-keys";
 
 const PANEL_X = 520;
