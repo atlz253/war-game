@@ -76,11 +76,15 @@ After a won mission the system SHALL offer the next mission, or campaign complet
 - **THEN** the result announces campaign completion without offering a nonexistent next mission
 
 ### Requirement: Stable playthrough snapshot
-A playthrough SHALL use a snapshot of the authored campaign, resolved mission maps and participant configuration taken at start. Later editor changes SHALL NOT affect that playthrough. Version one SHALL keep progression within the current session without requiring mid-mission or cross-reload resume.
+A playthrough SHALL use a snapshot of the authored campaign including dialogue translations, selected narrative language ID, resolved mission maps and participant configuration taken at start. Later editor, locale catalog, or language preference changes SHALL NOT affect that playthrough, including retry and next mission. Progression SHALL remain within the current session without requiring mid-mission or cross-reload resume.
 
 #### Scenario: Campaign edited during a run
 - **WHEN** a stored campaign or map changes after a playthrough starts
 - **THEN** continuing or retrying the playthrough uses its original definitions
+
+#### Scenario: Language changes during a run
+- **WHEN** locale files or the stored preferred language change after launch
+- **THEN** subsequent dialogue, retry, and next mission retain the run's original language and translation content
 
 ### Requirement: Existing match compatibility
 Standalone matches, multiplayer matches and action-only replays SHALL retain their existing behavior. Campaign progression SHALL NOT run while watching a replay or playing a standalone match.
