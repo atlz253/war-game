@@ -1,6 +1,6 @@
 # AI War Game
 
-AI War Game is a small, turn-based 2D strategy prototype. A human player and a programmatic AI command compact armies on a grid map. The project is designed for rapid, informal iteration: add a rule, play a few matches, adjust the scenario data, and repeat.
+AI War Game is a small, turn-based 2D strategy game. A human player and a programmatic AI command compact armies on a grid map. The project is designed for rapid, informal iteration: add a rule, play a few matches, adjust the scenario data, and repeat.
 
 All presentation and interaction live in one Phaser Canvas. The rules engine is deterministic and can run without graphics for simulations, AI evaluation, and replay verification.
 
