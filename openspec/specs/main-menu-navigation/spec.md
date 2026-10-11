@@ -70,7 +70,7 @@ SETTINGS SHALL show a movement settings section with an inline speed slider, LM 
 - **THEN** the main menu opens
 
 ### Requirement: Pending quick match continuity
-The system SHALL preserve pending commander choices and selected map during navigation between the main menu, QUICK MATCH, MULTIPLAYER, SETTINGS, and the settings and multiplayer child screens. Settings returns SHALL refresh saved LM Studio connections without resetting commander choices. Navigation data SHALL remain session-local and SHALL NOT create or modify a match.
+The system SHALL preserve pending commander choices and selected map during navigation between the main menu, QUICK MATCH, MULTIPLAYER, SETTINGS, and the settings and multiplayer child screens. Settings returns SHALL refresh saved LM Studio connections without resetting commander choices. Navigation data SHALL remain session-local and SHALL NOT create or modify a player match. The isolated menu background demonstration SHALL continue independently of pending setup.
 
 #### Scenario: Settings round trip
 - **WHEN** a player chooses commanders and a map, returns to the main menu, edits LM Studio settings or selects a language through SETTINGS, and reopens QUICK MATCH
@@ -80,6 +80,11 @@ The system SHALL preserve pending commander choices and selected map during navi
 #### Scenario: Multiplayer round trip
 - **WHEN** a player leaves pending QUICK MATCH setup to visit MULTIPLAYER and returns without starting a multiplayer match
 - **THEN** reopening QUICK MATCH restores the pending commanders and map
+
+#### Scenario: Background battle independence
+- **WHEN** the player changes pending commanders or the selected map while the background battle runs
+- **THEN** those choices affect only future player matches
+- **AND** the existing background battle continues with its own generated map and Heuristic commanders
 
 ### Requirement: Canvas submenu presentation and lifecycle
 All navigation and submenu controls SHALL remain inside Canvas, use localized text with per-string English fallback, and stay readable and reachable at supported viewport sizes. Only the active menu screen SHALL accept input. Leaving SETTINGS SHALL release slider drag and keyboard focus so input on another screen cannot alter movement speed.
